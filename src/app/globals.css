@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Promofy — Design System tokens
+   (ajustar com Figma Inspect quando a marca oficial chegar)
+   ============================================================ */
+:root {
+  --promofy-blue: #1414dc;
+  --promofy-blue-dark: #0f0fa8;
+  --promofy-yellow: #fac81e;
+  --promofy-yellow-soft: #fff3cc;
+
+  --surface: #ffffff;
+  --bg-app: #f5f6fb;
+  --muted-bg: #eef0f7;
+
+  --text-primary: #1a1a2e;
+  --text-muted: #6b7280;
+
+  --border: #e6e8f0;
+
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+
+  --radius: 12px;
+
+  /* RGB channels — consumidos pelo Tailwind para suportar opacidade
+     (ex.: bg-primary/10). Espelham os tokens hex acima. */
+  --c-primary: 20 20 220;
+  --c-primary-dark: 15 15 168;
+  --c-yellow: 250 200 30;
+  --c-surface: 255 255 255;
+  --c-bg-app: 245 246 251;
+  --c-muted-bg: 238 240 247;
+  --c-muted-fg: 107 114 128;
+  --c-foreground: 26 26 46;
+  --c-border: 230 232 240;
+  --c-success: 22 163 74;
+  --c-danger: 220 38 38;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--promofy-yellow);
+    color: var(--text-primary);
+  }
+
+  /* Quality floor: visible keyboard focus everywhere */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(20, 20, 220, 0.22);
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  /* Subtle dotted texture used behind hero / app surfaces */
+  .bg-dots {
+    background-image: radial-gradient(
+      rgba(20, 20, 60, 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Hide scrollbar for horizontal chip rows */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Respect reduced motion globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
