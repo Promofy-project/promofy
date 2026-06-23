@@ -10,6 +10,8 @@ import { TutorialDialog } from "@/components/tutorial-dialog";
 import { SideMenu } from "@/components/side-menu";
 
 const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
+// Abas com bottom nav (todas as outras telas de /m são telas cheias)
+const NAV_ROUTES = ["/m", "/m/buscar", "/m/favoritos", "/m/perfil"];
 
 /**
  * Simula um aparelho de ~390px. Em telas grandes vira um "device" centralizado;
@@ -21,18 +23,20 @@ const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isEntry = ENTRY_ROUTES.some((r) => pathname.startsWith(r));
-  // Detalhe do cupom é tela cheia (header + rodapé próprios), sem bottom nav
-  const hideNav = isEntry || pathname.startsWith("/m/cupom");
+  // Filtros é uma tela amarela (como as de entrada)
+  const isYellow = isEntry || pathname.startsWith("/m/filtros");
+  // Bottom nav só nas abas principais; demais telas de /m são telas cheias
+  const showNav = NAV_ROUTES.includes(pathname);
 
   return (
     <div className="flex min-h-screen justify-center bg-[#e9eaf3] lg:items-center lg:py-10">
       <div
         className={cn(
           "relative flex min-h-screen w-full max-w-[440px] flex-col overflow-hidden lg:h-[884px] lg:min-h-0 lg:max-w-[390px] lg:rounded-[2.75rem] lg:border-[10px] lg:border-[#14141f] lg:shadow-2xl",
-          isEntry ? "bg-yellow" : "bg-background",
+          isYellow ? "bg-yellow" : "bg-background",
         )}
       >
-        {isEntry && <WaveBackground className="absolute inset-0 z-0 h-full w-full" />}
+        {isYellow && <WaveBackground className="absolute inset-0 z-0 h-full w-full" />}
 
         {/* coluna de conteúdo acima das ondas */}
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
@@ -51,7 +55,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
             {children}
           </div>
 
-          {!hideNav && <BottomNav />}
+          {showNav && <BottomNav />}
         </div>
 
         {/* overlays contidos no aparelho */}

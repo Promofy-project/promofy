@@ -52,6 +52,7 @@ export interface Plano {
   destaque?: boolean; // plano em evidência
   bloqueado?: boolean; // VIP — em breve
   badge?: string;
+  legenda?: string; // nota abaixo do botão (ex.: regra do plano VIP)
 }
 
 export interface Estabelecimento {
