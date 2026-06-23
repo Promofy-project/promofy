@@ -9,6 +9,11 @@ interface MobileFlowState {
   triggerTutorial: () => void;
   /** consome o tutorial (ao fechar) */
   consumeTutorial: () => void;
+
+  /** menu lateral (drawer) aberto */
+  menuOpen: boolean;
+  openMenu: () => void;
+  closeMenu: () => void;
 }
 
 const MobileFlowContext = React.createContext<MobileFlowState | null>(null);
@@ -24,14 +29,18 @@ export function MobileFlowProvider({
   children: React.ReactNode;
 }) {
   const [tutorialPending, setTutorialPending] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   const value = React.useMemo<MobileFlowState>(
     () => ({
       tutorialPending,
       triggerTutorial: () => setTutorialPending(true),
       consumeTutorial: () => setTutorialPending(false),
+      menuOpen,
+      openMenu: () => setMenuOpen(true),
+      closeMenu: () => setMenuOpen(false),
     }),
-    [tutorialPending],
+    [tutorialPending, menuOpen],
   );
 
   return (
@@ -49,6 +58,9 @@ export function useMobileFlow(): MobileFlowState {
       tutorialPending: false,
       triggerTutorial: () => {},
       consumeTutorial: () => {},
+      menuOpen: false,
+      openMenu: () => {},
+      closeMenu: () => {},
     };
   }
   return ctx;

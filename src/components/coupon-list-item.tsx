@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Cupom } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatBRLValue } from "@/lib/utils";
@@ -6,9 +8,11 @@ import { FavoriteButton } from "@/components/favorite-button";
 
 export function CouponListItem({
   cupom,
+  href,
   className,
 }: {
   cupom: Cupom;
+  href?: string;
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
@@ -17,10 +21,18 @@ export function CouponListItem({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-card border border-border bg-card p-3 shadow-card transition-shadow hover:shadow-card-hover",
+        "relative flex items-center gap-3 rounded-card border border-border bg-card p-3 shadow-card transition-shadow hover:shadow-card-hover",
         className,
       )}
     >
+      {href && (
+        <Link
+          href={href}
+          aria-label={`Ver detalhes: ${cupom.titulo}`}
+          className="absolute inset-0 z-[1]"
+        />
+      )}
+
       {/* Avatar / thumb */}
       <div
         className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl"
@@ -61,7 +73,7 @@ export function CouponListItem({
         </p>
       </div>
 
-      <FavoriteButton className="shadow-none" />
+      <FavoriteButton className="relative z-[2] shadow-none" />
     </div>
   );
 }

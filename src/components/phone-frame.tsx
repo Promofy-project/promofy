@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/bottom-nav";
 import { WaveBackground } from "@/components/wave-background";
 import { TutorialDialog } from "@/components/tutorial-dialog";
+import { SideMenu } from "@/components/side-menu";
 
 const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 
@@ -20,6 +21,8 @@ const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isEntry = ENTRY_ROUTES.some((r) => pathname.startsWith(r));
+  // Detalhe do cupom é tela cheia (header + rodapé próprios), sem bottom nav
+  const hideNav = isEntry || pathname.startsWith("/m/cupom");
 
   return (
     <div className="flex min-h-screen justify-center bg-[#e9eaf3] lg:items-center lg:py-10">
@@ -48,10 +51,11 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
             {children}
           </div>
 
-          {!isEntry && <BottomNav />}
+          {!hideNav && <BottomNav />}
         </div>
 
         {/* overlays contidos no aparelho */}
+        {!isEntry && <SideMenu />}
         <TutorialDialog />
       </div>
     </div>
