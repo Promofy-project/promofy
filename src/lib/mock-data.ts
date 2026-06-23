@@ -447,6 +447,66 @@ export const planos: Plano[] = [
   },
 ];
 
+// Planos com os textos completos do Figma (usados na tela /m/planos).
+// Mantido separado de `planos` para não alterar a landing.
+export const planosMobile: Plano[] = [
+  {
+    id: "basico",
+    nome: "Plano Básico",
+    preco: 9.9,
+    periodo: "/mês",
+    descricao: "",
+    beneficios: [
+      "Acesso a todas as ofertas disponíveis na cidade",
+      "Possibilidade de resgatar até 5 cupons por mês",
+      "Participação no ranking de pontuação para premiações",
+      "Notificações personalizadas de ofertas na sua região",
+    ],
+  },
+  {
+    id: "plus",
+    nome: "Plano Plus",
+    preco: 19.9,
+    periodo: "/mês",
+    descricao: "",
+    beneficios: [
+      "Acesso a todas as ofertas disponíveis na cidade e regiões próximas",
+      "Cupons ilimitados por mês",
+      "Participação no ranking de pontuação para premiações",
+      "Notificações personalizadas de ofertas na sua região",
+    ],
+  },
+  {
+    id: "familia",
+    nome: "Plano Família",
+    preco: 29.9,
+    periodo: "/mês",
+    descricao: "",
+    beneficios: [
+      "Acesso a todas as ofertas para até 4 perfis cadastrados",
+      "Cupons ilimitados por mês, compartilhados entre os membros",
+      "Participação de todos os membros no ranking de pontuação",
+      "Benefícios exclusivos como cupons bônus a cada 3 meses",
+    ],
+  },
+  {
+    id: "vip",
+    nome: "Plano VIP",
+    preco: 0,
+    periodo: "",
+    descricao: "",
+    bloqueado: true,
+    beneficios: [
+      "Acesso antecipado às ofertas mais exclusivas",
+      "Cupons ilimitados e sem restrições geográficas (cidades da mesma rede Promofy)",
+      "Participação no ranking de pontuação para premiações (com pontuação dobrada)",
+      "Convites para eventos e promoções especiais com parceiros",
+    ],
+    legenda:
+      "Plano exclusivo — liberado apenas para membros convidados ou por conquista. Saiba mais.",
+  },
+];
+
 // ============================================================
 // USUÁRIOS — ranking (8)
 // ============================================================

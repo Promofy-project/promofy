@@ -7,20 +7,22 @@ import { Badge } from "@/components/ui/badge";
 
 export function PlanCard({
   plano,
+  actionTone = "brand",
   className,
 }: {
   plano: Plano;
+  /** cor do botão de ação: brand (landing, azul/outline) | yellow (app /m) */
+  actionTone?: "brand" | "yellow";
   className?: string;
 }) {
   const { destaque, bloqueado } = plano;
+  const yellow = actionTone === "yellow";
 
   return (
     <div
       className={cn(
         "relative flex flex-col rounded-card border bg-card p-6 shadow-card transition",
-        destaque
-          ? "border-primary ring-2 ring-primary"
-          : "border-border",
+        destaque ? "border-primary ring-2 ring-primary" : "border-border",
         bloqueado && "opacity-95",
         className,
       )}
@@ -35,7 +37,9 @@ export function PlanCard({
       )}
 
       <h3 className="text-lg font-extrabold">{plano.nome}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{plano.descricao}</p>
+      {plano.descricao && (
+        <p className="mt-1 text-sm text-muted-foreground">{plano.descricao}</p>
+      )}
 
       <div className="mt-4 flex items-end gap-1">
         {bloqueado ? (
@@ -68,19 +72,31 @@ export function PlanCard({
         ))}
       </ul>
 
-      <Button
-        className="mt-6 w-full"
-        variant={destaque ? "default" : "outline"}
-        disabled={bloqueado}
-      >
-        {bloqueado ? (
-          <>
-            <Lock className="h-4 w-4" /> Em breve
-          </>
-        ) : (
-          "Assinar plano"
-        )}
-      </Button>
+      {bloqueado ? (
+        <Button
+          className={cn(
+            "mt-6 w-full",
+            yellow && "bg-muted text-muted-foreground hover:bg-muted",
+          )}
+          variant={yellow ? "ghost" : destaque ? "default" : "outline"}
+          disabled
+        >
+          <Lock className="h-4 w-4" /> {yellow ? "Plano bloqueado" : "Em breve"}
+        </Button>
+      ) : (
+        <Button
+          className="mt-6 w-full"
+          variant={yellow ? "secondary" : destaque ? "default" : "outline"}
+        >
+          Assinar plano
+        </Button>
+      )}
+
+      {plano.legenda && (
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {plano.legenda}
+        </p>
+      )}
     </div>
   );
 }

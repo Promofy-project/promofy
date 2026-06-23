@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MapPin, CalendarClock } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
@@ -11,21 +12,42 @@ import { FavoriteButton } from "@/components/favorite-button";
 
 export function CouponCard({
   cupom,
+  href,
+  ctaLabel = "Usar agora",
+  economiaTone = "yellow",
+  compact = false,
   className,
 }: {
   cupom: Cupom;
+  /** quando definido (e disponível), o card inteiro vira link para o detalhe */
+  href?: string;
+  ctaLabel?: string;
+  /** cor da linha "Economize": yellow (landing) | blue (home Figma) */
+  economiaTone?: "yellow" | "blue";
+  /** meta compacta (rating · distância numa linha) usada na home; default mostra estabelecimento + distância */
+  compact?: boolean;
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
   const indisponivel = cupom.status === "indisponivel";
+  const linkable = Boolean(href) && !indisponivel;
 
   return (
     <article
       className={cn(
-        "group flex flex-col overflow-hidden rounded-card border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover",
+        "group relative isolate flex flex-col overflow-hidden rounded-card border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover",
         className,
       )}
     >
+      {/* stretched link — torna o card inteiro clicável (só quando disponível) */}
+      {linkable && (
+        <Link
+          href={href!}
+          aria-label={`Ver detalhes: ${cupom.titulo}`}
+          className="absolute inset-0 z-[1]"
+        />
+      )}
+
       {/* Thumbnail */}
       <div className="relative h-36 w-full overflow-hidden">
         <div
@@ -39,11 +61,11 @@ export function CouponCard({
         />
 
         {cupom.destaque && (
-          <Badge variant="yellow" className="absolute left-3 top-3 shadow-sm">
+          <Badge variant="yellow" className="absolute left-3 top-3 z-[2] shadow-sm">
             Oferta exclusiva
           </Badge>
         )}
-        <FavoriteButton className="absolute right-3 top-3" />
+        <FavoriteButton className="absolute right-3 top-3 z-[2]" />
 
         {indisponivel && (
           <div className="absolute inset-0 grid place-items-center bg-foreground/55">
@@ -60,33 +82,60 @@ export function CouponCard({
           {cupom.titulo}
         </h3>
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="truncate">{cupom.estabelecimento}</span>
-          <span aria-hidden>·</span>
-          <StarRating rating={cupom.rating} />
-        </div>
+        {compact ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <StarRating rating={cupom.rating} />
+            <span aria-hidden>·</span>
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              {formatDistance(cupom.distanciaKm)}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="truncate">{cupom.estabelecimento}</span>
+              <span aria-hidden>·</span>
+              <StarRating rating={cupom.rating} />
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
+              {formatDistance(cupom.distanciaKm)}
+            </div>
+          </>
+        )}
 
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <MapPin className="h-3.5 w-3.5" />
-          {formatDistance(cupom.distanciaKm)}
-        </div>
-
-        <p className="mt-1 inline-flex w-fit items-center rounded-md bg-yellow-soft px-2 py-1 text-sm font-extrabold text-[#8a6d0b]">
-          Economize R$ {formatBRLValue(cupom.economia)} hoje!
-        </p>
+        {economiaTone === "blue" ? (
+          <p className="mt-1 text-sm font-extrabold text-primary">
+            Economize R$ {formatBRLValue(cupom.economia)} hoje!
+          </p>
+        ) : (
+          <p className="mt-1 inline-flex w-fit items-center rounded-md bg-yellow-soft px-2 py-1 text-sm font-extrabold text-[#8a6d0b]">
+            Economize R$ {formatBRLValue(cupom.economia)} hoje!
+          </p>
+        )}
 
         <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
           <CalendarClock className="h-3.5 w-3.5" />
           Válido até {formatShortDate(cupom.validade)}
         </div>
 
-        <Button
-          className="mt-3 w-full"
-          disabled={indisponivel}
-          variant={indisponivel ? "outline" : "default"}
-        >
-          {indisponivel ? "Indisponível" : "Usar agora"}
-        </Button>
+        {linkable ? (
+          <Button asChild className="relative z-[2] mt-3 w-full">
+            {/* visual/mouse apenas — o link acessível é o stretched link */}
+            <Link href={href!} tabIndex={-1} aria-hidden>
+              {ctaLabel}
+            </Link>
+          </Button>
+        ) : (
+          <Button
+            className="relative z-[2] mt-3 w-full"
+            disabled={indisponivel}
+            variant={indisponivel ? "outline" : "default"}
+          >
+            {indisponivel ? "Indisponível" : ctaLabel}
+          </Button>
+        )}
       </div>
     </article>
   );
