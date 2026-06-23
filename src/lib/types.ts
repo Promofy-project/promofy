@@ -1,0 +1,97 @@
+// ============================================================
+// Promofy — domain types (protótipo, dados 100% mockados)
+// ============================================================
+
+export type CategoriaId =
+  | "alimentacao"
+  | "fitness"
+  | "beleza"
+  | "eletronicos"
+  | "educacao"
+  | "pet";
+
+export type CupomStatus = "ativo" | "indisponivel";
+
+export interface Categoria {
+  id: CategoriaId;
+  label: string;
+  /** lucide-react icon name, mapped to a component in the UI layer */
+  icon: string;
+  /** CSS gradient used for image placeholders + chips */
+  gradiente: string;
+}
+
+export interface Cupom {
+  id: string;
+  titulo: string;
+  estabelecimento: string;
+  estabelecimentoId: string;
+  categoria: CategoriaId;
+  economia: number; // R$ economizado
+  precoDe?: number;
+  precoPor?: number;
+  distanciaKm: number;
+  rating: number; // 0–5
+  avaliacoes: number;
+  validade: string; // ISO date
+  status: CupomStatus;
+  imagem: string; // placeholder path (mock)
+  beneficio: string; // linha curta de destaque
+  regras: string[];
+  horarios: string;
+  destaque?: boolean; // "Oferta exclusiva"
+}
+
+export interface Plano {
+  id: string;
+  nome: string;
+  preco: number; // mensal
+  periodo: string; // "/mês"
+  descricao: string;
+  beneficios: string[];
+  destaque?: boolean; // plano em evidência
+  bloqueado?: boolean; // VIP — em breve
+  badge?: string;
+}
+
+export interface Estabelecimento {
+  id: string;
+  nome: string;
+  categoria: CategoriaId;
+  cidade: string;
+  rating: number;
+  avaliacoes: number;
+  cuponsAtivos: number;
+  resgatesMes: number;
+  status: "ativo" | "pendente" | "suspenso";
+}
+
+export interface Usuario {
+  id: string;
+  nome: string;
+  cidade: string;
+  pontos: number;
+  economiaTotal: number;
+  cuponsUsados: number;
+  nivel: "Bronze" | "Prata" | "Ouro" | "Diamante";
+}
+
+export interface Avaliacao {
+  id: string;
+  usuario: string;
+  rating: number;
+  comentario: string;
+  data: string; // ISO date
+  estabelecimento: string;
+}
+
+export interface FunilEtapa {
+  etapa: string;
+  valor: number;
+  cor: string;
+}
+
+export interface SerieMensal {
+  mes: string;
+  valor: number;
+}
