@@ -19,6 +19,9 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:brightness-95",
         link: "text-primary underline-offset-4 hover:underline",
+        // Botão das telas amarelas: fundo branco, borda fina, texto laranja
+        onYellow:
+          "border border-cta/30 bg-white text-cta shadow-sm hover:bg-cta-soft",
       },
       size: {
         default: "h-11 px-5 py-2",

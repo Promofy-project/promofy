@@ -63,6 +63,11 @@ const config: Config = {
           DEFAULT: "rgb(var(--c-danger) / <alpha-value>)",
           foreground: "#FFFFFF",
         },
+        // CTA laranja das telas amarelas (botões "onYellow")
+        cta: {
+          DEFAULT: "#F5A623",
+          soft: "#FFF3D6",
+        },
       },
       borderRadius: {
         // Brand radii: cards 16px, buttons 12px
