@@ -23,7 +23,7 @@ export default function MobileHome() {
 
       {/* Grid de cupons */}
       <section className="px-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
           {grid.map((c, i) => (
             <CouponCard
               key={c.id}

@@ -92,12 +92,13 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
         <section>
           <h3 className="mb-2 text-base font-bold">Regras de Uso</h3>
           <div className="overflow-hidden rounded-card border-2 border-primary">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[340px] text-sm">
               <thead>
                 <tr className="bg-primary text-left text-xs font-semibold text-white">
-                  <th className="px-3 py-2">Dia</th>
-                  <th className="px-3 py-2">Manhã/Tarde</th>
-                  <th className="px-3 py-2">Noite</th>
+                  <th className="whitespace-nowrap px-3 py-2">Dia</th>
+                  <th className="whitespace-nowrap px-3 py-2">Manhã/Tarde</th>
+                  <th className="whitespace-nowrap px-3 py-2">Noite</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,13 +113,14 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
                       i % 2 === 1 && !row.hoje && "bg-muted/40",
                     )}
                   >
-                    <td className="px-3 py-2.5">{row.dia}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{row.manha}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{row.noite}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{row.dia}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{row.manha}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{row.noite}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
 

@@ -77,8 +77,13 @@ export function CouponCard({
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <h3 className="line-clamp-2 text-base font-bold leading-snug">
+      <div className={cn("flex flex-1 flex-col gap-2", compact ? "p-3" : "p-4")}>
+        <h3
+          className={cn(
+            "line-clamp-2 font-bold leading-snug",
+            compact ? "text-sm" : "text-base",
+          )}
+        >
           {cupom.titulo}
         </h3>
 
@@ -106,7 +111,13 @@ export function CouponCard({
         )}
 
         {economiaTone === "blue" ? (
-          <p className="mt-1 text-sm font-extrabold text-primary">
+          <p
+            className={cn(
+              "mt-1 font-extrabold leading-tight text-primary",
+              // device desktop (lg) tem cards estreitos de 390px → volta a text-xs
+              compact ? "text-xs sm:text-sm lg:text-xs" : "text-sm",
+            )}
+          >
             Economize R$ {formatBRLValue(cupom.economia)} hoje!
           </p>
         ) : (

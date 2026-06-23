@@ -35,7 +35,7 @@ export function FeedbackCarousel({ items }: { items: Avaliacao[] }) {
         <ChevronLeft className="h-4 w-4" />
       </button>
 
-      <figure className="flex-1 rounded-card border border-border bg-card p-4 shadow-card">
+      <figure className="min-w-0 flex-1 rounded-card border border-border bg-card p-4 shadow-card">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary/10 text-primary">
@@ -50,7 +50,7 @@ export function FeedbackCarousel({ items }: { items: Avaliacao[] }) {
               {formatShortDate(a.data)}
             </p>
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
                 key={i}
