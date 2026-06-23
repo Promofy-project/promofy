@@ -32,7 +32,9 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen justify-center bg-[#e9eaf3] lg:items-center lg:py-10">
       <div
         className={cn(
-          "relative flex min-h-screen w-full max-w-[440px] flex-col overflow-hidden lg:h-[884px] lg:min-h-0 lg:max-w-[390px] lg:rounded-[2.75rem] lg:border-[10px] lg:border-[#14141f] lg:shadow-2xl",
+          // mobile-first: full-width fluido em telas reais (< lg);
+          // "device" centralizado com moldura só no lg+ (desktop)
+          "relative flex min-h-screen w-full flex-col overflow-hidden lg:h-[884px] lg:min-h-0 lg:max-w-[390px] lg:rounded-[2.75rem] lg:border-[10px] lg:border-[#14141f] lg:shadow-2xl",
           isYellow ? "bg-yellow" : "bg-background",
         )}
       >
