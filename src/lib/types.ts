@@ -92,6 +92,17 @@ export interface FunilEtapa {
   cor: string;
 }
 
+/** Métricas de desempenho de um cupom (visão do estabelecimento, no /portal). */
+export interface MetricasCupom {
+  visualizacoes: number;
+  cliques: number;
+  ativacoes: number;
+  resgates: number;
+}
+
+/** Status de um cupom na visão do lojista. */
+export type StatusCupomPortal = "ativo" | "expirado" | "esgotado";
+
 export interface SerieMensal {
   mes: string;
   valor: number;
