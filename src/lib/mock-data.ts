@@ -5,6 +5,7 @@ import type {
   Cupom,
   Estabelecimento,
   FunilEtapa,
+  MetricasCupom,
   Plano,
   SerieMensal,
   Usuario,
@@ -385,6 +386,16 @@ export function getCupom(id: string): Cupom | undefined {
 }
 
 export const cuponsEmDestaque = cupons.filter((c) => c.destaque);
+
+/**
+ * Métricas de desempenho por cupom (visão do estabelecimento no /portal).
+ * Aditivo — não altera o tipo Cupom nem afeta /m, landing ou /admin.
+ * Coerentes: visualizações > cliques > ativações > resgates.
+ */
+export const metricasCupom: Record<string, MetricasCupom> = {
+  c01: { visualizacoes: 4820, cliques: 1960, ativacoes: 740, resgates: 482 },
+  c02: { visualizacoes: 3110, cliques: 1180, ativacoes: 410, resgates: 233 },
+};
 
 // ============================================================
 // PLANOS (4)
