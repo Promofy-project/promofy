@@ -25,7 +25,7 @@ export default function FiltrosPage() {
   return (
     <div className="flex min-h-full flex-col">
       {/* Header amarelo */}
-      <header className="flex items-center gap-2 px-3 py-4">
+      <header className="sticky top-0 z-30 flex items-center gap-2 bg-yellow/90 px-3 py-4 backdrop-blur">
         <Link
           href="/m"
           aria-label="Voltar"

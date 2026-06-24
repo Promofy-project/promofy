@@ -36,7 +36,7 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
   return (
     <div className="flex min-h-full flex-col bg-background">
       {/* Header azul */}
-      <header className="sticky top-0 z-20 flex items-center gap-2 bg-primary px-3 py-3 text-white">
+      <header className="sticky top-0 z-30 flex items-center gap-2 bg-primary px-3 py-3 text-white">
         <Link
           href="/m"
           aria-label="Voltar"

@@ -8,7 +8,7 @@ import { useMobileFlow } from "@/components/mobile-flow-provider";
 export function HomeHeader() {
   const { openMenu } = useMobileFlow();
   return (
-    <header className="flex items-center px-4 pt-4">
+    <header className="sticky top-0 z-30 flex items-center bg-background/90 px-4 pb-3 pt-4 backdrop-blur">
       <button
         type="button"
         onClick={openMenu}

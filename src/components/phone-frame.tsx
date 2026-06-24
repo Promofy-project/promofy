@@ -29,12 +29,13 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
   const showNav = NAV_ROUTES.includes(pathname);
 
   return (
-    <div className="flex min-h-screen justify-center bg-[#e9eaf3] lg:items-center lg:py-10">
+    <div className="flex min-h-[100dvh] justify-center bg-[#e9eaf3] lg:items-center lg:py-10">
       <div
         className={cn(
-          // mobile-first: full-width fluido em telas reais (< lg);
-          // "device" centralizado com moldura só no lg+ (desktop)
-          "relative flex min-h-screen w-full flex-col overflow-hidden lg:h-[884px] lg:min-h-0 lg:max-w-[390px] lg:rounded-[2.75rem] lg:border-[10px] lg:border-[#14141f] lg:shadow-2xl",
+          // mobile-first: ocupa exatamente a viewport (< lg) p/ virar shell de app —
+          // header e bottom nav ficam fora do scroll e só o conteúdo do meio rola.
+          // "device" centralizado com moldura só no lg+ (desktop).
+          "relative flex h-[100dvh] w-full flex-col overflow-hidden lg:h-[884px] lg:max-w-[390px] lg:rounded-[2.75rem] lg:border-[10px] lg:border-[#14141f] lg:shadow-2xl",
           isYellow ? "bg-yellow" : "bg-background",
         )}
       >
