@@ -16,7 +16,7 @@ export function MobilePageHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-surface/95 px-3 py-3 backdrop-blur",
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-surface/95 px-3 py-3 backdrop-blur",
         className,
       )}
     >
