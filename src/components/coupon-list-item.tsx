@@ -73,7 +73,7 @@ export function CouponListItem({
         </p>
       </div>
 
-      <FavoriteButton className="relative z-[2] shadow-none" />
+      <FavoriteButton cupomId={cupom.id} className="relative z-[2] shadow-none" />
     </div>
   );
 }

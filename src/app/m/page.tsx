@@ -7,6 +7,7 @@ import { HomeSearchBar } from "@/components/home-search-bar";
 import { HomeCategoryChips } from "@/components/home-category-chips";
 import { CouponCard } from "@/components/coupon-card";
 import { RankingBlock } from "@/components/ranking-block";
+import { PointsSummary } from "@/components/points-summary";
 
 export default function MobileHome() {
   const grid = cupons.slice(0, 6);
@@ -16,6 +17,10 @@ export default function MobileHome() {
       <HomeHeader />
       <BannerCarousel />
       <HomeSearchBar />
+
+      <div className="px-4">
+        <PointsSummary />
+      </div>
 
       <div className="px-4">
         <HomeCategoryChips />
