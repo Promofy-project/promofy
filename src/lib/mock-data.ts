@@ -521,6 +521,16 @@ export const usuarios: Usuario[] = [
   { id: "u8", nome: "Pedro Martins", cidade: "Diadema, SP", pontos: 2190, economiaTotal: 320, cuponsUsados: 41, nivel: "Bronze" },
 ];
 
+/**
+ * Usuário "logado" no app do consumidor (mock). É o mesmo que aparece no menu
+ * lateral; usado na conferência de identidade do cupom ativo. CPF mascarado —
+ * NUNCA um CPF real.
+ */
+export const usuarioAtual = {
+  nome: "Lucas Orladi",
+  cpfMascarado: "123.***.***-09",
+} as const;
+
 // ============================================================
 // AVALIAÇÕES (6)
 // ============================================================
