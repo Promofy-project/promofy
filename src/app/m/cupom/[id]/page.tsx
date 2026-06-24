@@ -11,9 +11,9 @@ import {
 
 import { cupons, getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
 import { cn, formatBRL } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
+import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
 
 export function generateStaticParams() {
   return cupons.map((c) => ({ id: c.id }));
@@ -71,9 +71,7 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
             <h2 className="text-xl font-extrabold leading-snug">
               {cupom.titulo}
             </h2>
-            <Button size="sm" className="shrink-0">
-              Utilizar
-            </Button>
+            <CupomAcaoUsar cupom={cupom} size="sm" className="shrink-0" />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             Estou economizando {formatBRL(cupom.economia)}
@@ -161,9 +159,7 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
 
       {/* Rodapé fixo */}
       <div className="sticky bottom-0 z-20 border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <Button className="w-full" size="lg">
-          Usar cupom
-        </Button>
+        <CupomAcaoUsar cupom={cupom} size="lg" full />
       </div>
     </div>
   );

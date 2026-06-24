@@ -8,6 +8,8 @@ import { BottomNav } from "@/components/bottom-nav";
 import { WaveBackground } from "@/components/wave-background";
 import { TutorialDialog } from "@/components/tutorial-dialog";
 import { SideMenu } from "@/components/side-menu";
+import { CupomAtivoSheet } from "@/components/cupom-ativo-sheet";
+import { NpsDialog } from "@/components/nps-dialog";
 
 const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 // Abas com bottom nav (todas as outras telas de /m são telas cheias)
@@ -63,6 +65,8 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
 
         {/* overlays contidos no aparelho */}
         {!isEntry && <SideMenu />}
+        {!isEntry && <CupomAtivoSheet />}
+        {!isEntry && <NpsDialog />}
         <TutorialDialog />
       </div>
     </div>

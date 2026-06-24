@@ -1,5 +1,6 @@
 import { PhoneFrame } from "@/components/phone-frame";
 import { MobileFlowProvider } from "@/components/mobile-flow-provider";
+import { CouponStateProvider } from "@/components/coupon-state-provider";
 
 export default function MobileLayout({
   children,
@@ -8,7 +9,9 @@ export default function MobileLayout({
 }) {
   return (
     <MobileFlowProvider>
-      <PhoneFrame>{children}</PhoneFrame>
+      <CouponStateProvider>
+        <PhoneFrame>{children}</PhoneFrame>
+      </CouponStateProvider>
     </MobileFlowProvider>
   );
 }
