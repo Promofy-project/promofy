@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { SALDO_BASE, PONTOS_POR_ACAO } from "@/lib/gamification";
+
 /** Ciclo de vida de um cupom na sessão (mockado, em memória). */
 export type StatusCupom = "disponivel" | "ativo" | "validado";
 
@@ -15,6 +17,13 @@ export interface EstadoCupom {
 interface CouponStateValue {
   getStatus: (id: string) => StatusCupom;
   getEstado: (id: string) => EstadoCupom | null;
+  /**
+   * Saldo de pontos do consumidor, DERIVADO do estado dos cupons (leitura pura,
+   * não muta nada): saldo base + pontos por cupom validado + por NPS respondido.
+   * Assim validar um cupom / responder o NPS reflete nos pontos exibidos, sem
+   * tocar nas ações de escrita do ciclo da Onda 1.
+   */
+  getPontos: () => number;
   /** ativa o cupom (gera código + carimbo) e abre o cupom ativo em tela cheia */
   ativarCupom: (id: string) => void;
   /** reabre o cupom ativo já existente */
@@ -65,6 +74,15 @@ export function CouponStateProvider({
     () => ({
       getStatus: (id) => estados[id]?.status ?? "disponivel",
       getEstado: (id) => estados[id] ?? null,
+
+      getPontos: () => {
+        let pontos = SALDO_BASE;
+        for (const e of Object.values(estados)) {
+          if (e.status === "validado") pontos += PONTOS_POR_ACAO.resgate;
+          if (e.nps !== null) pontos += PONTOS_POR_ACAO.nps;
+        }
+        return pontos;
+      },
 
       ativarCupom: (id) => {
         setEstados((prev) =>
@@ -131,6 +149,7 @@ export function useCouponState(): CouponStateValue {
     return {
       getStatus: () => "disponivel",
       getEstado: () => null,
+      getPontos: () => SALDO_BASE,
       ativarCupom: () => {},
       verCupomAtivo: () => {},
       fecharCupomAtivo: () => {},
