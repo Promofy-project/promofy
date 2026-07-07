@@ -54,11 +54,17 @@ const config: Config = {
           soft: "var(--promofy-yellow-soft)",
           foreground: "var(--text-primary)",
         },
+        // Azul-marinho escuro (footer do consumidor)
+        navy: {
+          DEFAULT: "rgb(var(--c-navy) / <alpha-value>)",
+          foreground: "#FFFFFF",
+        },
         promofy: {
           blue: "var(--promofy-blue)",
           "blue-dark": "var(--promofy-blue-dark)",
           yellow: "var(--promofy-yellow)",
           "yellow-soft": "var(--promofy-yellow-soft)",
+          navy: "var(--promofy-navy)",
         },
         // Status
         success: {

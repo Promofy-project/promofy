@@ -12,6 +12,7 @@
   --promofy-yellow: #fac81e;
   --promofy-yellow-soft: #fff3cc;
   --promofy-orange: #f5a623; /* CTA das telas amarelas */
+  --promofy-navy: #0a1633; /* azul-marinho escuro — footer do consumidor */
 
   --surface: #ffffff;
   --bg-app: #f5f6fb;
@@ -33,6 +34,7 @@
      (ex.: bg-primary/10). Espelham os tokens hex acima. */
   --c-primary: 20 20 220;
   --c-primary-dark: 15 15 168;
+  --c-navy: 10 22 51;
   --c-yellow: 250 200 30;
   --c-surface: 255 255 255;
   --c-bg-app: 245 246 251;
