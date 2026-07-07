@@ -14,6 +14,7 @@ const secoes = [
   { id: "frequencia", label: "Frequência de uso", opcoes: ["Todos", "Diária", "Semanal", "Mensal"] },
   { id: "valor", label: "Valor de compra (mínimo)", opcoes: ["Todos", "Até R$ 50", "R$ 50 – R$ 150", "Acima de R$ 150"] },
   { id: "relevancia", label: "Por relevância ou afinidade", opcoes: ["Todos", "Relevância", "Afinidade", "Mais recentes"] },
+  { id: "diaSemana", label: "Dia da semana", opcoes: ["Todos", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"] },
 ];
 
 export default function FiltrosPage() {

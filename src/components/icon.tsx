@@ -8,10 +8,12 @@ import {
   Ticket,
   Eye,
   TrendingUp,
+  TrendingDown,
   Star,
   DollarSign,
   Users,
   Store,
+  HeartHandshake,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,10 +31,12 @@ const registry: Record<string, LucideIcon> = {
   Ticket,
   Eye,
   TrendingUp,
+  TrendingDown,
   Star,
   DollarSign,
   Users,
   Store,
+  HeartHandshake,
 };
 
 export function Icon({

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { CouponCard } from "@/components/coupon-card";
 import {
   ESTABELECIMENTO_ID,
@@ -52,6 +53,8 @@ export function NovoCupomForm({
   const [categoria, setCategoria] = React.useState<CategoriaId>("alimentacao");
   const [economia, setEconomia] = React.useState("");
   const [validade, setValidade] = React.useState("");
+  const [dataInicio, setDataInicio] = React.useState("");
+  const [ocultarAteInicio, setOcultarAteInicio] = React.useState(false);
   const [prazoAtivacao, setPrazoAtivacao] = React.useState("24");
   const [dias, setDias] = React.useState<string[]>(["Sex", "Sáb", "Dom"]);
   const [horaInicio, setHoraInicio] = React.useState("18:00");
@@ -93,6 +96,8 @@ export function NovoCupomForm({
       statusPortal: "ativo",
       metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
       limiteTotal: Number(limiteTotal) || 1000,
+      dataInicio,
+      ocultarAteInicio,
     });
   };
 
@@ -144,17 +149,18 @@ export function NovoCupomForm({
             </div>
           </Field>
 
+          <Field label="Economia (R$)" htmlFor="f-economia">
+            <Input
+              id="f-economia"
+              type="number"
+              min={0}
+              value={economia}
+              onChange={(e) => setEconomia(e.target.value)}
+              placeholder="45"
+            />
+          </Field>
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Economia (R$)" htmlFor="f-economia">
-              <Input
-                id="f-economia"
-                type="number"
-                min={0}
-                value={economia}
-                onChange={(e) => setEconomia(e.target.value)}
-                placeholder="45"
-              />
-            </Field>
             <Field label="Validade da oferta" htmlFor="f-validade">
               <Input
                 id="f-validade"
@@ -163,7 +169,34 @@ export function NovoCupomForm({
                 onChange={(e) => setValidade(e.target.value)}
               />
             </Field>
+            <Field label="Data de início" htmlFor="f-inicio">
+              <Input
+                id="f-inicio"
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
+            </Field>
           </div>
+
+          <label
+            htmlFor="f-ocultar"
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-foreground">
+                Ocultar cupom até a data de início
+              </span>
+              <span className="text-xs text-muted-foreground">
+                O cupom só aparece a partir do início da campanha.
+              </span>
+            </span>
+            <Switch
+              id="f-ocultar"
+              checked={ocultarAteInicio}
+              onCheckedChange={setOcultarAteInicio}
+            />
+          </label>
 
           <Field label="Prazo de ativação (horas)" htmlFor="f-prazo">
             <Input
@@ -258,6 +291,16 @@ export function NovoCupomForm({
         <Card className="mt-4 p-4">
           <h3 className="text-sm font-bold">Resumo da campanha</h3>
           <dl className="mt-2 space-y-1.5 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Início</dt>
+              <dd className="font-medium">{dataInicio || "—"}</dd>
+            </div>
+            {ocultarAteInicio && dataInicio && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Visibilidade</dt>
+                <dd className="font-medium">Oculto até {dataInicio}</dd>
+              </div>
+            )}
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Dias</dt>
               <dd className="text-right font-medium">

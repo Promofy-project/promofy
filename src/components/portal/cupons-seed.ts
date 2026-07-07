@@ -10,6 +10,10 @@ export interface ItemCupomPortal {
   metricas: MetricasCupom;
   /** limite total de resgates da campanha (para o status "esgotado") */
   limiteTotal: number;
+  /** data de início da campanha (protótipo — só UI) */
+  dataInicio?: string;
+  /** ocultar o cupom até a data de início (protótipo — sem lógica real) */
+  ocultarAteInicio?: boolean;
 }
 
 // Cupons reais do estabelecimento (e1) vindos do mock global — ativos.

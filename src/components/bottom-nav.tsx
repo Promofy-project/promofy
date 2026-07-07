@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, Heart, User, type LucideIcon } from "lucide-react";
+import { Home, Search, Store, Heart, User, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const items: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/m", label: "Início", icon: Home },
   { href: "/m/buscar", label: "Buscar", icon: Search },
+  { href: "/m/estabelecimentos", label: "Locais", icon: Store },
   { href: "/m/favoritos", label: "Favoritos", icon: Heart },
   { href: "/m/perfil", label: "Perfil", icon: User },
 ];

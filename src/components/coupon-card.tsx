@@ -16,6 +16,7 @@ export function CouponCard({
   ctaLabel = "Usar agora",
   economiaTone = "yellow",
   compact = false,
+  showcase = false,
   className,
 }: {
   cupom: Cupom;
@@ -26,11 +27,13 @@ export function CouponCard({
   economiaTone?: "yellow" | "blue";
   /** meta compacta (rating · distância numa linha) usada na home; default mostra estabelecimento + distância */
   compact?: boolean;
+  /** vitrine da landing: mantém o visual, mas troca o resgate por um CTA "Baixe o app" (→ /m) */
+  showcase?: boolean;
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
   const indisponivel = cupom.status === "indisponivel";
-  const linkable = Boolean(href) && !indisponivel;
+  const linkable = Boolean(href) && !indisponivel && !showcase;
 
   return (
     <article
@@ -131,7 +134,12 @@ export function CouponCard({
           Válido até {formatShortDate(cupom.validade)}
         </div>
 
-        {linkable ? (
+        {showcase ? (
+          /* Vitrine da landing: sem resgate — CTA leva ao app */
+          <Button asChild variant="secondary" className="relative z-[2] mt-3 w-full">
+            <Link href="/m">Baixe o app para resgatar</Link>
+          </Button>
+        ) : linkable ? (
           <Button asChild className="relative z-[2] mt-3 w-full">
             {/* visual/mouse apenas — o link acessível é o stretched link */}
             <Link href={href!} tabIndex={-1} aria-hidden>

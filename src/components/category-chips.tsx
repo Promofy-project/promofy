@@ -8,8 +8,21 @@ import { Icon } from "@/components/icon";
 
 const chips = [{ id: "todos", label: "Todos", icon: "" }, ...categorias];
 
-export function CategoryChips() {
-  const [active, setActive] = React.useState("todos");
+export function CategoryChips({
+  value,
+  onChange,
+}: {
+  /** id da categoria selecionada — torna o componente controlado (default: uncontrolled) */
+  value?: string;
+  onChange?: (id: string) => void;
+} = {}) {
+  const [internal, setInternal] = React.useState("todos");
+  const active = value ?? internal;
+
+  const select = (id: string) => {
+    onChange?.(id);
+    if (value === undefined) setInternal(id);
+  };
 
   return (
     <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
@@ -18,7 +31,7 @@ export function CategoryChips() {
         return (
           <button
             key={c.id}
-            onClick={() => setActive(c.id)}
+            onClick={() => select(c.id)}
             aria-pressed={selected}
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold transition-colors",

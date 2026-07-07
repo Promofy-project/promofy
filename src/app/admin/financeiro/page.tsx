@@ -31,7 +31,7 @@ export default function AdminFinanceiro() {
         description="Receita, ticket médio e assinaturas da plataforma."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard label="MRR" value="R$ 81,9k" delta={13.1} icon="DollarSign" />
         <MetricCard
           label="Receita do mês"
@@ -46,6 +46,8 @@ export default function AdminFinanceiro() {
           delta={9.7}
           icon="Users"
         />
+        <MetricCard label="LTV" value="R$ 312" delta={5.1} icon="HeartHandshake" />
+        <MetricCard label="Churn" value="4,2%" delta={-0.8} icon="TrendingDown" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
