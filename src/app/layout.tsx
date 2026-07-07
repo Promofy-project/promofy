@@ -12,11 +12,7 @@ export const metadata: Metadata = {
   title: "Promofy — Cupons e promoções locais",
   description:
     "A plataforma que conecta pessoas a ofertas exclusivas de estabelecimentos perto de você. Protótipo de demonstração.",
-  icons: {
-    icon: "/lp/marca/favicon.png",
-    shortcut: "/lp/marca/favicon.png",
-    apple: "/lp/marca/favicon.png",
-  },
+  // Favicon: convenção de arquivo do App Router (src/app/icon.png + src/app/favicon.ico).
 };
 
 export default function RootLayout({
