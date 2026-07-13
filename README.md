@@ -1,11 +1,12 @@
 # Promofy
 
-Plataforma SaaS de **cupons e promoções locais**. A partir da **Fase 1**, o
-projeto tem fundação real: **Supabase local** (Postgres + Auth + RLS) com
-migrations versionadas, autenticação por papel e as primeiras telas lendo do
-banco. O restante das telas ainda usa os dados mockados de
-`src/lib/mock-data.ts` (migração gradual — ver
-`_promofy_handoff/FASE-1-RELATORIO.md`).
+Plataforma SaaS de **cupons e promoções locais** com fundação real em
+**Supabase local** (Postgres + Auth + RLS). Na **Fase 2**, o servidor virou a
+única fonte de verdade do **ciclo do cupom** (ativar → validar → NPS → pontos)
+e da **criação de cupom** — via RPCs `security definer` chamadas por Server
+Actions. O front consome, não decide; nenhuma regra vive só no cliente. As
+demais telas ainda usam mocks de `src/lib/mock-data.ts` (migração gradual —
+ver `_promofy_handoff/FASE-1-RELATORIO.md` e `FASE-2-RELATORIO.md`).
 
 ## Stack
 
@@ -35,15 +36,18 @@ Scripts úteis:
 | --- | --- |
 | `npm run db:reset` | `supabase db reset` (migrations + seed) **+** usuários de teste |
 | `npm run db:types` | regenera `src/lib/supabase/database.types.ts` |
-| `npm run test:rls` | 23 asserções de RLS por papel (anon/consumidor/lojista/admin) |
-| `npm run verify:fase1` | reset + testes de RLS + build (validação completa) |
+| `npm run test:rls` | 25 asserções de RLS por papel (anon/consumidor/lojista/admin) |
+| `npm run test:fase2` | 27 asserções de fluxo do ciclo do cupom (RPCs) |
+| `npm run verify` | reset + RLS + fase 2 + build (validação completa do zero) |
+| `npm run verify:fase1` | reset + RLS + build (subset da Fase 1) |
 
 ### Credenciais de teste (apenas local)
 
 | E-mail | Senha | Papel | Acessa |
 | --- | --- | --- | --- |
-| `consumidor@promofy.test` | `promofy123` | consumidor | `/m` (app do consumidor) |
-| `lojista@promofy.test` | `promofy123` | lojista | `/portal` (Sabor & Cia) |
+| `consumidor@promofy.test` | `promofy123` | consumidor | `/m` (app do consumidor; começa com 1250 pts de bônus) |
+| `lojista@promofy.test` | `promofy123` | lojista | `/portal` (Sabor & Cia — e1) |
+| `lojista2@promofy.test` | `promofy123` | lojista | `/portal` (PowerFit — e2; prova isolamento) |
 | `admin@promofy.test` | `promofy123` | admin | `/admin` |
 
 Todo `npm run db:reset` recria os usuários (o banco é zerado).
