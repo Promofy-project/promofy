@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { cupons } from "@/lib/mock-data";
+import { buscarCuponsHome } from "@/lib/data/cupons";
 import { HomeHeader } from "@/components/home-header";
 import { BannerCarousel } from "@/components/banner-carousel";
 import { HomeSearchBar } from "@/components/home-search-bar";
@@ -9,8 +9,12 @@ import { CouponCard } from "@/components/coupon-card";
 import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
 
-export default function MobileHome() {
-  const grid = cupons.slice(0, 6);
+// Dados agora vêm do Supabase: nada de prerender estático no build
+// (o banco não precisa estar de pé para `next build` passar).
+export const dynamic = "force-dynamic";
+
+export default async function MobileHome() {
+  const grid = await buscarCuponsHome();
 
   return (
     <div className="flex flex-col gap-5 pb-6">
