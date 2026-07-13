@@ -11,7 +11,9 @@
     "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
     "seed:users": "tsx scripts/seed-users.ts",
     "test:rls": "tsx scripts/test-rls.ts",
-    "verify:fase1": "npm run db:reset && npm run test:rls && npm run build"
+    "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
+    "test:fase2": "tsx scripts/test-fase2.ts",
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",

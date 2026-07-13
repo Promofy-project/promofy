@@ -41,8 +41,16 @@ interface UsuarioTeste {
 const USUARIOS: UsuarioTeste[] = [
   { email: "consumidor@promofy.test", role: "consumidor", nome: "Lucas Orladi" },
   { email: "lojista@promofy.test", role: "lojista", nome: "Sabor & Cia" },
+  { email: "lojista2@promofy.test", role: "lojista", nome: "PowerFit Academia" },
   { email: "admin@promofy.test", role: "admin", nome: "Equipe Promofy" },
 ];
+
+/** CPF fictício do consumidor de demo — máscara vira 123.***.***-09. */
+const CPF_DEMO = "123.456.789-09";
+
+/** Bônus de boas-vindas (Fase 2): mantém o saldo da demo (era o
+ * SALDO_BASE mockado). Novos usuários reais começam em 0. */
+const BONUS_DEMO = 1250;
 
 const SENHA = "promofy123";
 
@@ -77,31 +85,76 @@ async function garantirUsuario(u: UsuarioTeste): Promise<string> {
 async function main() {
   const ids: Record<string, string> = {};
   for (const u of USUARIOS) {
-    ids[u.role] = await garantirUsuario(u);
+    ids[u.email] = await garantirUsuario(u);
   }
+  // atalhos por papel (lojista = dono do e1; lojista2 = dono do e2)
+  ids.consumidor = ids["consumidor@promofy.test"];
+  ids.lojista = ids["lojista@promofy.test"];
+  ids.lojista2 = ids["lojista2@promofy.test"];
+  ids.admin = ids["admin@promofy.test"];
 
   // O GoTrue insere o usuário (disparando handle_new_user) ANTES de
   // mesclar o app_metadata customizado — então o trigger vê role vazio
   // e cria o profile como consumidor. Corrigimos o role explicitamente
-  // via service_role (única via de escrita de role na Fase 1).
+  // via service_role (única via de escrita de role nesta fase).
   for (const u of USUARIOS) {
     if (u.role === "consumidor") continue;
     const { error } = await admin
       .from("profiles")
       .update({ role: u.role })
-      .eq("id", ids[u.role]);
+      .eq("id", ids[u.email]);
     if (error) throw error;
     console.log(`+ profiles.role → ${u.role} (${u.email})`);
   }
 
-  // Liga o estabelecimento e1 (Sabor & Cia) ao lojista de teste.
+  // CPF fictício do consumidor (a máscara do produto precisa de algo
+  // para mascarar) — incondicional p/ cobrir stacks já existentes.
   {
     const { error } = await admin
-      .from("estabelecimentos")
-      .update({ owner_id: ids.lojista })
-      .eq("id", "e1");
+      .from("profiles")
+      .update({ cpf: CPF_DEMO })
+      .eq("id", ids.consumidor);
     if (error) throw error;
-    console.log("+ e1.owner_id → lojista");
+    console.log("+ consumidor.cpf (demo)");
+  }
+
+  // Liga e1 (Sabor & Cia) ao lojista e e2 (PowerFit) ao lojista2 —
+  // dois donos distintos p/ provar isolamento entre estabelecimentos.
+  for (const [estId, dono] of [
+    ["e1", ids.lojista],
+    ["e2", ids.lojista2],
+  ] as const) {
+    const { error } = await admin
+      .from("estabelecimentos")
+      .update({ owner_id: dono })
+      .eq("id", estId);
+    if (error) throw error;
+    console.log(`+ ${estId}.owner_id → dono`);
+  }
+
+  // Bônus de boas-vindas do consumidor de demo (ledger; select-first
+  // idempotente — o índice único (usuario, acao, referencia) protege).
+  {
+    const referencia = `bonus:${ids.consumidor}`;
+    const { data: existente } = await admin
+      .from("pontos_transacoes")
+      .select("id")
+      .eq("usuario_id", ids.consumidor)
+      .eq("acao", "bonus")
+      .eq("referencia_id", referencia)
+      .maybeSingle();
+    if (!existente) {
+      const { error } = await admin.from("pontos_transacoes").insert({
+        usuario_id: ids.consumidor,
+        acao: "bonus",
+        pontos: BONUS_DEMO,
+        referencia_id: referencia,
+      });
+      if (error && error.code !== "23505") throw error;
+      console.log(`+ bônus de boas-vindas (${BONUS_DEMO} pts)`);
+    } else {
+      console.log("= bônus de boas-vindas já lançado");
+    }
   }
 
   // Vincula a avaliação da "Mariana Alves" ao consumidor de teste
@@ -118,6 +171,7 @@ async function main() {
 
   console.log("\nSeed de usuários OK. Credenciais (local/teste):");
   for (const u of USUARIOS) console.log(`  ${u.email} / ${SENHA} (${u.role})`);
+  console.log("  (lojista = e1 Sabor & Cia · lojista2 = e2 PowerFit)");
 }
 
 main().catch((err) => {
