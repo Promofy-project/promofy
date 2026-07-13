@@ -1,18 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, ChevronRight } from "lucide-react";
+import { Trophy, ChevronRight, LogIn } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useCouponState } from "@/components/coupon-state-provider";
 import { calcularNivel, CORES_NIVEL } from "@/lib/gamification";
 
 /**
- * Resumo compacto de pontos para a home (/m). Clicável → /m/perfil, onde fica
- * o card completo. Saldo reativo derivado do CouponStateProvider.
+ * Resumo compacto de pontos para a home (/m). Saldo REAL do consumidor
+ * logado (ledger, hidratado do servidor). Anônimo → card-convite de login.
  */
 export function PointsSummary() {
-  const { getPontos } = useCouponState();
+  const { logado, getPontos } = useCouponState();
+
+  if (!logado) {
+    return (
+      <Link
+        href="/m/login"
+        className="flex items-center gap-3 rounded-card border border-border bg-card p-3.5 shadow-card transition-shadow hover:shadow-card-hover"
+      >
+        <span
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white"
+          style={{ background: "linear-gradient(135deg, #FACC15 0%, #E6A700 100%)" }}
+        >
+          <Trophy className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-foreground">
+            Entre para acompanhar seus pontos
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Acumule pontos e troque por prêmios.
+          </p>
+        </div>
+        <LogIn className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
+    );
+  }
+
   const pontos = getPontos();
   const { nivel, proximo, faltam } = calcularNivel(pontos);
   const cor = CORES_NIVEL[nivel];

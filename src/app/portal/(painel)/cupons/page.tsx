@@ -7,6 +7,6 @@ import { CuponsClient } from "./cupons-client";
  * client. `cookies()` via client supabase já torna a rota dinâmica.
  */
 export default async function PortalCupons() {
-  const lista = await buscarCuponsPortal();
-  return <CuponsClient initialLista={lista} />;
+  const { itens } = await buscarCuponsPortal();
+  return <CuponsClient initialLista={itens} />;
 }

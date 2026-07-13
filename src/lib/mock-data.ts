@@ -388,6 +388,19 @@ export function getCupom(id: string): Cupom | undefined {
 export const cuponsEmDestaque = cupons.filter((c) => c.destaque);
 
 /**
+ * Cupons visíveis ao consumidor — espelha a RLS da Fase 1: só cupons de
+ * estabelecimento 'ativo' (esconde pendentes/suspensos como e4/e6). As
+ * telas /m ainda-no-mock (busca, favoritos) usam isto para não exibir
+ * cupons que o banco rejeitaria na ativação.
+ */
+const estabelecimentosAtivos = new Set(
+  estabelecimentos.filter((e) => e.status === "ativo").map((e) => e.id),
+);
+export const cuponsVisiveis = cupons.filter((c) =>
+  estabelecimentosAtivos.has(c.estabelecimentoId),
+);
+
+/**
  * Métricas de desempenho por cupom (visão do estabelecimento no /portal).
  * Aditivo — não altera o tipo Cupom nem afeta /m, landing ou /admin.
  * Coerentes: visualizações > cliques > ativações > resgates.

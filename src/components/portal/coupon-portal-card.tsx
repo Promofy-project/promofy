@@ -10,6 +10,7 @@ const STATUS_BADGE = {
   ativo: { variant: "success" as const, label: "Ativo" },
   esgotado: { variant: "yellow-soft" as const, label: "Esgotado" },
   expirado: { variant: "danger" as const, label: "Expirado" },
+  pendente: { variant: "yellow-soft" as const, label: "Em análise" },
 };
 
 export function CouponPortalCard({ item }: { item: ItemCupomPortal }) {

@@ -29,7 +29,7 @@ function horariosDeJson(horarios: CupomRow["horarios"]): string {
  * rating/avaliacoes/distancia_km são colunas-protótipo POR CUPOM
  * (paridade visual com o mock — ver plano D9).
  */
-function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupom {
+export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupom {
   return {
     id: row.id,
     titulo: row.titulo,
@@ -73,14 +73,27 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
     throw new Error(`Falha ao buscar cupons da home: ${error.message}`);
   }
 
-  const hojeUtc = new Date().toISOString().slice(0, 10);
+  // "hoje" no fuso de negócio (BRT), coerente com hoje_brt() no banco —
+  // um cupom válido "até dia X" não some às 21:00 UTC do dia anterior.
+  const hoje = hojeBrt();
   return (data ?? [])
+    .filter((row) => row.validade_fim >= hoje) // exibir ≡ ativável (Fase 2)
     .filter(
       (row) =>
-        !(row.ocultar_ate_inicio && row.validade_inicio && row.validade_inicio > hojeUtc),
+        !(row.ocultar_ate_inicio && row.validade_inicio && row.validade_inicio > hoje),
     )
     .slice(0, limite)
     .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? ""));
+}
+
+/** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */
+function hojeBrt(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 /**
@@ -90,32 +103,41 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
  * statusPortal deriva SÓ da coluna status (decisão D14 do plano) —
  * derivação por data/limite fica para a Fase 2.
  *
- * Sem sessão ou sem estabelecimento vinculado → lista vazia (a página
- * renderiza o estado vazio em vez de quebrar).
+ * Sem sessão ou sem estabelecimento vinculado → estabelecimento null +
+ * lista vazia (a página renderiza o estado vazio em vez de quebrar).
  */
-export async function buscarCuponsPortal(): Promise<ItemCupomPortal[]> {
+export interface PortalCupons {
+  estabelecimento: { id: string; nome: string } | null;
+  itens: ItemCupomPortal[];
+}
+
+export async function buscarCuponsPortal(): Promise<PortalCupons> {
   const supabase = createClient();
 
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
-  if (!userId) return [];
+  if (!userId) return { estabelecimento: null, itens: [] };
 
   const { data: estabelecimento } = await supabase
     .from("estabelecimentos")
     .select("id, nome")
     .eq("owner_id", userId)
     .maybeSingle();
-  if (!estabelecimento) return [];
+  if (!estabelecimento) return { estabelecimento: null, itens: [] };
 
   const { data: cupons, error } = await supabase
     .from("cupons")
     .select("*")
     .eq("estabelecimento_id", estabelecimento.id)
+    // novos cupons (criados agora) no topo; seed mantém a ordem estável
+    .order("criado_em", { ascending: false })
     .order("ordem", { ascending: true });
   if (error) {
     throw new Error(`Falha ao buscar cupons do portal: ${error.message}`);
   }
-  if (!cupons || cupons.length === 0) return [];
+  if (!cupons || cupons.length === 0) {
+    return { estabelecimento, itens: [] };
+  }
 
   const { data: metricas } = await supabase
     .from("cupom_metricas")
@@ -137,14 +159,16 @@ export async function buscarCuponsPortal(): Promise<ItemCupomPortal[]> {
     ]),
   );
 
-  return cupons.map((row) => ({
+  const itens: ItemCupomPortal[] = cupons.map((row) => ({
     cupom: linhaParaCupom(row, estabelecimento.nome),
     statusPortal:
       row.status === "esgotado"
         ? "esgotado"
         : row.status === "expirado"
           ? "expirado"
-          : "ativo",
+          : row.status === "pendente"
+            ? "pendente"
+            : "ativo",
     metricas:
       metricasPorCupom.get(row.id) ?? {
         visualizacoes: 0,
@@ -156,4 +180,6 @@ export async function buscarCuponsPortal(): Promise<ItemCupomPortal[]> {
     dataInicio: row.validade_inicio ?? undefined,
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));
+
+  return { estabelecimento, itens };
 }

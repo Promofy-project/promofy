@@ -1,17 +1,72 @@
 import { PhoneFrame } from "@/components/phone-frame";
 import { MobileFlowProvider } from "@/components/mobile-flow-provider";
-import { CouponStateProvider } from "@/components/coupon-state-provider";
+import {
+  CouponStateProvider,
+  type EstadoInicial,
+} from "@/components/coupon-state-provider";
 import { FavoritesProvider } from "@/components/favorites-provider";
+import { createClient } from "@/lib/supabase/server";
+import type { EstadoCupomDTO } from "@/lib/actions/cupons";
 
-export default function MobileLayout({
+const INICIAL_ANONIMO: EstadoInicial = {
+  logado: false,
+  usuario: null,
+  saldo: 0,
+  config: {},
+  estados: [],
+};
+
+/**
+ * Layout do app do consumidor. Lê a sessão (cookies) — o que torna todo
+ * o segmento /m dinâmico — e hidrata o CouponStateProvider a partir do
+ * servidor numa única RPC. Se o banco estiver fora, degrada para o
+ * estado anônimo (a demo pública continua de pé).
+ *
+ * `key={userId}` garante re-hidratação em login/logout (router.refresh
+ * re-renderiza o layout; sem a key o useState inicial ficaria obsoleto).
+ */
+export default async function MobileLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let inicial = INICIAL_ANONIMO;
+  let userId: string | null = null;
+
+  try {
+    const supabase = createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    userId = claims?.claims?.sub ?? null;
+
+    if (userId) {
+      const { data, error } = await supabase.rpc("meu_estado_consumidor");
+      if (!error && data) {
+        const p = data as unknown as {
+          usuario: { nome: string; cpf_mascarado: string } | null;
+          saldo: number;
+          config: Record<string, number>;
+          estados: EstadoCupomDTO[];
+        };
+        inicial = {
+          logado: true,
+          usuario: p.usuario
+            ? { nome: p.usuario.nome, cpfMascarado: p.usuario.cpf_mascarado }
+            : null,
+          saldo: p.saldo ?? 0,
+          config: p.config ?? {},
+          estados: p.estados ?? [],
+        };
+      }
+    }
+  } catch {
+    // banco indisponível → segue anônimo (não derruba /m)
+    inicial = INICIAL_ANONIMO;
+  }
+
   return (
     <MobileFlowProvider>
       <FavoritesProvider>
-        <CouponStateProvider>
+        <CouponStateProvider key={userId ?? "anon"} initial={inicial}>
           <PhoneFrame>{children}</PhoneFrame>
         </CouponStateProvider>
       </FavoritesProvider>

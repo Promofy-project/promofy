@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Heart } from "lucide-react";
 
-import { cupons } from "@/lib/mock-data";
+import { cuponsVisiveis } from "@/lib/mock-data";
 import { useFavorites } from "@/components/favorites-provider";
 import { MobilePageHeader } from "@/components/mobile-page-header";
 import { CouponListItem } from "@/components/coupon-list-item";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 
 export default function FavoritosPage() {
   const { favoriteIds } = useFavorites();
-  const favoritos = cupons.filter((c) => favoriteIds.has(c.id));
+  const favoritos = cuponsVisiveis.filter((c) => favoriteIds.has(c.id));
 
   return (
     <div className="flex flex-col">

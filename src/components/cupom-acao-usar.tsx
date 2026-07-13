@@ -1,23 +1,34 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import { BadgeCheck } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCouponState } from "@/components/coupon-state-provider";
+import { registrarEventoAction } from "@/lib/actions/cupons";
+
+// Motivos do servidor → mensagem amigável.
+const MENSAGEM_ERRO: Record<string, string> = {
+  limite_usuario: "Você já usou este cupom.",
+  esgotado: "Este cupom está esgotado.",
+  fora_da_validade: "Este cupom está fora da validade.",
+  indisponivel: "Cupom indisponível no momento.",
+  nao_encontrado: "Cupom indisponível no momento.",
+  sem_sessao: "Entre para usar o cupom.",
+};
 
 /**
  * Botão reativo de "usar cupom" no detalhe. Reflete o ciclo de vida do cupom:
  * disponível → ativar (abre o cupom em tela cheia) → ver ativo → utilizado.
  * Cupons 'indisponivel' (do mock-data) ficam desabilitados.
  *
- * Fase 1: usar cupom exige sessão — sem login, redireciona p/ /m/login.
- * Gate de UX apenas (getSession lê o storage local, sem rede); a fronteira
- * de segurança real é o RLS no banco. O ciclo em si segue mockado.
+ * Fase 2: a ativação acontece no SERVIDOR (RPC via Server Action), que
+ * aplica todas as regras (validade, limites, estabelecimento ativo).
+ * Sem sessão → /m/login. Erros viram mensagem discreta.
  */
 export function CupomAcaoUsar({
   cupom,
@@ -31,26 +42,27 @@ export function CupomAcaoUsar({
   className?: string;
 }) {
   const router = useRouter();
-  const { getStatus, ativarCupom, verCupomAtivo } = useCouponState();
+  const { logado, getStatus, ativarCupom, verCupomAtivo } = useCouponState();
   const indisponivel = cupom.status === "indisponivel";
   const status = getStatus(cupom.id);
   const width = full ? "w-full" : "";
+  const [ativando, setAtivando] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
 
   async function handleUsar() {
-    let temSessao = false;
-    try {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getSession();
-      temSessao = Boolean(data.session);
-    } catch {
-      // erro ao ler a sessão (ex.: stack parado) → trata como deslogado
-      temSessao = false;
-    }
-    if (!temSessao) {
+    if (!logado) {
       router.push("/m/login");
       return;
     }
-    ativarCupom(cupom.id);
+    setErro(null);
+    setAtivando(true);
+    // clique é métrica de app — fire-and-forget, não bloqueia o fluxo
+    void registrarEventoAction(cupom.id, "clique");
+    const r = await ativarCupom(cupom.id);
+    setAtivando(false);
+    if (!r.ok) {
+      setErro(MENSAGEM_ERRO[r.motivo] ?? "Não foi possível usar o cupom agora.");
+    }
   }
 
   if (indisponivel) {
@@ -94,12 +106,18 @@ export function CupomAcaoUsar({
   }
 
   return (
-    <Button
-      size={size}
-      onClick={handleUsar}
-      className={cn(width, className)}
-    >
-      {size === "sm" ? "Utilizar" : "Usar cupom"}
-    </Button>
+    <div className={cn(full ? "w-full" : "", "flex flex-col items-stretch gap-1")}>
+      <Button
+        size={size}
+        onClick={handleUsar}
+        disabled={ativando}
+        className={cn(width, className)}
+      >
+        {ativando ? "Ativando…" : size === "sm" ? "Utilizar" : "Usar cupom"}
+      </Button>
+      {erro && (
+        <p className="text-center text-xs font-medium text-danger">{erro}</p>
+      )}
+    </div>
   );
 }

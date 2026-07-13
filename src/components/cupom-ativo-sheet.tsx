@@ -12,7 +12,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 
-import { getCupom, usuarioAtual } from "@/lib/mock-data";
+import { getCupom } from "@/lib/mock-data";
 import {
   formatBRLValue,
   formatDistance,
@@ -25,19 +25,40 @@ import { useCouponState } from "@/components/coupon-state-provider";
 
 /**
  * Cupom ATIVO em tela cheia (overlay no nível do aparelho, como o SideMenu).
- * Mostra QR + código + identidade do usuário para a conferência no balcão e o
- * botão que simula a validação pelo estabelecimento (dispara o NPS).
+ * Mostra QR + código + identidade real do usuário para a conferência no
+ * balcão. A validação acontece de verdade no portal do estabelecimento —
+ * aqui fazemos polling (5s) e, quando o servidor marca 'validado', o NPS
+ * abre sozinho.
  */
 export function CupomAtivoSheet() {
-  const { sheetId, getEstado, fecharCupomAtivo, simularValidacao } =
+  const { sheetId, getEstado, usuario, fecharCupomAtivo, consultarCupom, abrirNps } =
     useCouponState();
   const [copiado, setCopiado] = React.useState(false);
 
   React.useEffect(() => setCopiado(false), [sheetId]);
 
+  const estadoAtual = sheetId ? getEstado(sheetId) : null;
+  const statusAtual = estadoAtual?.status;
+
+  // Polling enquanto o cupom estiver ATIVO e a tela aberta. Pausa com a
+  // aba oculta; o servidor decide a expiração (o cliente nunca compara datas).
+  React.useEffect(() => {
+    if (!sheetId || statusAtual !== "ativo") return;
+    let vivo = true;
+    const tick = () => {
+      if (!vivo || document.hidden) return;
+      void consultarCupom(sheetId);
+    };
+    const t = window.setInterval(tick, 5000);
+    return () => {
+      vivo = false;
+      window.clearInterval(t);
+    };
+  }, [sheetId, statusAtual, consultarCupom]);
+
   if (!sheetId) return null;
   const cupom = getCupom(sheetId);
-  const estado = getEstado(sheetId);
+  const estado = estadoAtual;
   if (!cupom || !estado) return null;
 
   const validado = estado.status === "validado";
@@ -126,13 +147,13 @@ export function CupomAtivoSheet() {
             <div className="flex items-center justify-between gap-3">
               <dt className="text-sm text-muted-foreground">Nome</dt>
               <dd className="text-sm font-bold text-foreground">
-                {usuarioAtual.nome}
+                {usuario?.nome || "—"}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-sm text-muted-foreground">CPF</dt>
               <dd className="font-mono text-sm font-bold text-foreground">
-                {usuarioAtual.cpfMascarado}
+                {usuario?.cpfMascarado || "***"}
               </dd>
             </div>
           </dl>
@@ -168,19 +189,24 @@ export function CupomAtivoSheet() {
       {/* Rodapé */}
       <div className="border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {validado ? (
-          <p className="flex items-center justify-center gap-2 py-1.5 text-sm font-bold text-success">
-            <BadgeCheck className="h-5 w-5" />
-            Cupom utilizado
-          </p>
+          estado.nps === null ? (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => abrirNps(sheetId)}
+            >
+              Avaliar experiência
+            </Button>
+          ) : (
+            <p className="flex items-center justify-center gap-2 py-1.5 text-sm font-bold text-success">
+              <BadgeCheck className="h-5 w-5" />
+              Cupom utilizado
+            </p>
+          )
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => simularValidacao(sheetId)}
-          >
-            Simular validação pelo estabelecimento
-          </Button>
+          <p className="py-1.5 text-center text-sm font-medium text-muted-foreground">
+            Aguardando validação do estabelecimento…
+          </p>
         )}
       </div>
     </div>
