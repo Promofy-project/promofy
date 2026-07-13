@@ -544,10 +544,15 @@ export type Database = {
       gerar_codigo_cupom: { Args: never; Returns: string }
     }
     Enums: {
-      acao_pontos: "resgate" | "nps" | "indicacao" | "visita"
+      acao_pontos: "resgate" | "nps" | "indicacao" | "visita" | "bonus"
       papel_usuario: "consumidor" | "lojista" | "admin"
       status_assinatura: "ativa" | "cancelada" | "expirada"
-      status_cupom: "ativo" | "indisponivel" | "expirado" | "esgotado"
+      status_cupom:
+        | "ativo"
+        | "indisponivel"
+        | "expirado"
+        | "esgotado"
+        | "pendente"
       status_cupom_usuario: "ativo" | "validado" | "expirado"
       status_estabelecimento: "ativo" | "pendente" | "suspenso"
       tipo_evento_cupom: "visualizacao" | "clique" | "ativacao" | "validacao"
@@ -681,10 +686,16 @@ export const Constants = {
   },
   public: {
     Enums: {
-      acao_pontos: ["resgate", "nps", "indicacao", "visita"],
+      acao_pontos: ["resgate", "nps", "indicacao", "visita", "bonus"],
       papel_usuario: ["consumidor", "lojista", "admin"],
       status_assinatura: ["ativa", "cancelada", "expirada"],
-      status_cupom: ["ativo", "indisponivel", "expirado", "esgotado"],
+      status_cupom: [
+        "ativo",
+        "indisponivel",
+        "expirado",
+        "esgotado",
+        "pendente",
+      ],
       status_cupom_usuario: ["ativo", "validado", "expirado"],
       status_estabelecimento: ["ativo", "pendente", "suspenso"],
       tipo_evento_cupom: ["visualizacao", "clique", "ativacao", "validacao"],
