@@ -1,41 +1,89 @@
-# Promofy — Protótipo
+# Promofy
 
-Protótipo de alta fidelidade de uma plataforma SaaS de **cupons e promoções
-locais**. Tudo é **mockado** (sem backend, sem autenticação, sem banco) — o foco
-é parecer real e navegar perfeitamente para uma demo com cliente.
+Plataforma SaaS de **cupons e promoções locais**. A partir da **Fase 1**, o
+projeto tem fundação real: **Supabase local** (Postgres + Auth + RLS) com
+migrations versionadas, autenticação por papel e as primeiras telas lendo do
+banco. O restante das telas ainda usa os dados mockados de
+`src/lib/mock-data.ts` (migração gradual — ver
+`_promofy_handoff/FASE-1-RELATORIO.md`).
 
 ## Stack
 
 - **Next.js 14** (App Router) + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui** (primitives em `src/components/ui`)
+- **Supabase** (Postgres 17 + Auth + RLS) via `@supabase/ssr`
 - **lucide-react** para ícones
-- Dados mockados em `src/lib/mock-data.ts` (arrays TS, sem fetch)
 
-## Como rodar
+## Como rodar (local)
+
+Pré-requisitos: Node 20+, Docker Desktop rodando, Supabase CLI 2.x.
 
 ```bash
-npm install      # já instalado no scaffold
-npm run dev      # http://localhost:3000
+npm install
+supabase start                 # sobe o stack local (portas 553xx)
+cp .env.local.example .env.local   # e preencha com as chaves do `supabase status`
+npm run db:reset               # migrations + seed + usuários de teste
+npm run dev                    # http://localhost:3000
 ```
 
-Outros scripts: `npm run build`, `npm run start`, `npm run lint`.
+> **Windows/PowerShell 5.1:** use sempre os npm scripts (rodam no cmd.exe).
+> `&&` não funciona no PowerShell 5.1 e `>` gera arquivo UTF-16 (quebra o build).
+
+Scripts úteis:
+
+| Script | O que faz |
+| --- | --- |
+| `npm run db:reset` | `supabase db reset` (migrations + seed) **+** usuários de teste |
+| `npm run db:types` | regenera `src/lib/supabase/database.types.ts` |
+| `npm run test:rls` | 23 asserções de RLS por papel (anon/consumidor/lojista/admin) |
+| `npm run verify:fase1` | reset + testes de RLS + build (validação completa) |
+
+### Credenciais de teste (apenas local)
+
+| E-mail | Senha | Papel | Acessa |
+| --- | --- | --- | --- |
+| `consumidor@promofy.test` | `promofy123` | consumidor | `/m` (app do consumidor) |
+| `lojista@promofy.test` | `promofy123` | lojista | `/portal` (Sabor & Cia) |
+| `admin@promofy.test` | `promofy123` | admin | `/admin` |
+
+Todo `npm run db:reset` recria os usuários (o banco é zerado).
 
 ## Rotas (4 frentes num só projeto)
 
-| Rota      | O que é                   | Layout                        |
-| --------- | ------------------------- | ----------------------------- |
-| `/`       | Landing page pública      | Desktop, responsiva           |
-| `/m`      | App do consumidor         | Mobile-first, frame de ~390px |
-| `/portal` | Portal do estabelecimento | Sidebar + dashboard           |
-| `/admin`  | Painel administrativo     | Sidebar + dashboard           |
+| Rota | O que é | Autenticação |
+| --------- | ------------------------- | --- |
+| `/`, `/para-voce`, `/para-empresas` | Landing pages públicas | — |
+| `/m` | App do consumidor (mobile-first) | Livre p/ navegar; `/m/perfil` e "Usar cupom" exigem login |
+| `/portal` | Portal do estabelecimento | Exige papel **lojista** (`/portal/login`) |
+| `/admin` | Painel administrativo | Exige papel **admin** (`/admin/login`) |
 
-A landing tem uma seção **“Explore as quatro frentes”** com atalhos para cada
-área. As telas internas detalhadas ainda não foram implementadas — os links de
-navegação levam a stubs (“Em construção”) para manter a navegação fluida.
+A proteção de rotas fica em `src/middleware.ts` (com `src/`, o Next ignora
+middleware na raiz do repo). A fronteira de segurança real é o **RLS** no
+banco — nenhuma regra vive só no front.
+
+## Banco de dados
+
+- Migrations versionadas em `supabase/migrations/` (schema → funções/triggers
+  → RLS → views). `supabase db reset` reproduz tudo do zero.
+- Seed em `supabase/seed.sql` (dados transcritos do mock, ids preservados) +
+  `scripts/seed-users.ts` (usuários via admin API — encadeado no `db:reset`).
+- Métricas de cupom são **derivadas** de `cupom_eventos`
+  (view `cupom_metricas`), nunca contadores soltos.
+- `config_pontos` é a fonte única da tabela de pontos (o front ainda usa as
+  constantes de `src/lib/gamification.ts` nesta fase).
+
+## O que já lê do banco (Fase 1)
+
+- Home do `/m` (grid de cupons) — server component.
+- `/portal/cupons` (lista + métricas do estabelecimento do lojista logado).
+- Login/cadastro/logout reais nas três frentes.
+
+O ciclo do cupom no `/m` (ativar → validar → NPS → pontos) segue **mockado em
+memória** nesta fase, por decisão de escopo.
 
 ## Design System
 
-Tokens cravados em `src/app/globals.css` (variáveis CSS) e `tailwind.config.ts`:
+Tokens em `src/app/globals.css` (variáveis CSS) e `tailwind.config.ts`:
 
 | Token                   | Valor     | Uso                                  |
 | ----------------------- | --------- | ------------------------------------ |
@@ -47,44 +95,44 @@ Tokens cravados em `src/app/globals.css` (variáveis CSS) e `tailwind.config.ts`
 | `--text-primary`        | `#1A1A2E` | Texto principal                      |
 | `--text-muted`          | `#6B7280` | Texto secundário                     |
 | `--success`             | `#16A34A` | Status "Ativo"                       |
-| `--danger`              | `#DC2626` | Status "Indisponível"                |
+| `--danger`              | `#DC2626` | Status "Indisponível" / erros        |
 
 - Raio: **cards 16px** (`rounded-card`), **botões 12px** (`rounded-btn`)
-- Sombra de card suave (`shadow-card` / `shadow-card-hover`)
-- Fonte **Inter** via `next/font` (fallback corporativo — trocar pela fonte
-  oficial da marca depois)
-
-> Os valores são provisórios — **ajustar com o Figma Inspect** quando a marca
-> oficial chegar. Há tokens hex (para CSS/gradientes) e tokens em canais RGB
-> (`--c-*`, para opacidade do Tailwind, ex.: `bg-primary/10`).
-
-## Componentes reutilizáveis (`src/components`)
-
-- `CouponCard` — variante grid (imagem + badge "Oferta exclusiva" + rating +
-  distância + "Economize R$ X" + validade + botão "Usar agora")
-- `CouponListItem` — variante lista (thumb + título + economia + status + ♥)
-- `PlanCard` — plano com benefícios (check amarelo) e estado bloqueado (VIP)
-- `MetricCard`, `BusinessCard`, `ReviewCard`, `FunnelChart`, `BarChart`
-- `BottomNav` (mobile) e `Sidebar` / `DashboardShell` (portal + admin)
-- Apoio: `Logo`, `StarRating`, `FavoriteButton`, `CategoryChips`,
-  `PageHeader`, `PagePlaceholder`, `PhoneFrame`, `Icon`
+- Fonte **Inter** via `next/font` (fallback — trocar pela fonte oficial depois)
 
 ## Estrutura
 
 ```
 src/
 ├── app/
-│   ├── page.tsx              # / (landing)
-│   ├── m/                    # /m (app consumidor) + buscar/favoritos/perfil
-│   ├── portal/               # /portal (dashboard) + subpáginas
-│   └── admin/                # /admin (dashboard) + subpáginas
-├── components/               # componentes reutilizáveis + ui/ (shadcn)
+│   ├── page.tsx               # / (landing) + para-voce/ para-empresas/
+│   ├── m/                     # app consumidor (login/cadastro reais)
+│   ├── portal/(painel)/       # dashboard do lojista + portal/login/
+│   └── admin/(painel)/        # painel admin + admin/login/
+├── middleware.ts              # proteção de rotas por papel
+├── components/                # componentes + ui/ (shadcn)
 └── lib/
-    ├── mock-data.ts          # cupons, planos, estabelecimentos, usuários, funil
-    ├── types.ts              # tipos do domínio
-    └── utils.ts              # cn() + formatadores (R$, distância, datas)
+    ├── supabase/              # clients ssr (browser/server/middleware) + types
+    ├── data/                  # fetchers + mappers banco -> tipos do protótipo
+    ├── mock-data.ts           # dados das telas ainda não migradas
+    ├── gamification.ts        # regras de pontos/níveis (client, Fase 1)
+    └── utils.ts               # cn() + formatadores (atenção a fuso em datas!)
+supabase/
+├── config.toml                # stack local (portas 553xx; storage/analytics off)
+├── migrations/                # schema, funções, RLS, views
+└── seed.sql                   # dados de demonstração
+scripts/
+├── seed-users.ts              # usuários de teste (service_role — só local)
+└── test-rls.ts                # suíte de asserções de RLS
 ```
+
+## Datas e fuso (importante)
+
+`new Date("2026-06-30")` é meia-noite **UTC** e desloca um dia em UTC-3 —
+divergindo entre SSR (Vercel/UTC) e navegador (BR), o que causa erro de
+hidratação. Use o padrão de `formatShortDate` em `src/lib/utils.ts` (parse dos
+componentes da string ISO, sem `Date` local) para qualquer data nova.
 
 ---
 
-Protótipo — dados meramente ilustrativos.
+Fase 1 concluída — relatório completo em `_promofy_handoff/FASE-1-RELATORIO.md`.
