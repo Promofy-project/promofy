@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { BadgeCheck } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCouponState } from "@/components/coupon-state-provider";
@@ -12,6 +14,10 @@ import { useCouponState } from "@/components/coupon-state-provider";
  * Botão reativo de "usar cupom" no detalhe. Reflete o ciclo de vida do cupom:
  * disponível → ativar (abre o cupom em tela cheia) → ver ativo → utilizado.
  * Cupons 'indisponivel' (do mock-data) ficam desabilitados.
+ *
+ * Fase 1: usar cupom exige sessão — sem login, redireciona p/ /m/login.
+ * Gate de UX apenas (getSession lê o storage local, sem rede); a fronteira
+ * de segurança real é o RLS no banco. O ciclo em si segue mockado.
  */
 export function CupomAcaoUsar({
   cupom,
@@ -24,10 +30,28 @@ export function CupomAcaoUsar({
   full?: boolean;
   className?: string;
 }) {
+  const router = useRouter();
   const { getStatus, ativarCupom, verCupomAtivo } = useCouponState();
   const indisponivel = cupom.status === "indisponivel";
   const status = getStatus(cupom.id);
   const width = full ? "w-full" : "";
+
+  async function handleUsar() {
+    let temSessao = false;
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      temSessao = Boolean(data.session);
+    } catch {
+      // erro ao ler a sessão (ex.: stack parado) → trata como deslogado
+      temSessao = false;
+    }
+    if (!temSessao) {
+      router.push("/m/login");
+      return;
+    }
+    ativarCupom(cupom.id);
+  }
 
   if (indisponivel) {
     return (
@@ -72,7 +96,7 @@ export function CupomAcaoUsar({
   return (
     <Button
       size={size}
-      onClick={() => ativarCupom(cupom.id)}
+      onClick={handleUsar}
       className={cn(width, className)}
     >
       {size === "sm" ? "Utilizar" : "Usar cupom"}

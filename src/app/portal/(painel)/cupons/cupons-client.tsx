@@ -10,13 +10,19 @@ import { MetricCard } from "@/components/metric-card";
 import { CouponPortalCard } from "@/components/portal/coupon-portal-card";
 import { NovoCupomForm } from "@/components/portal/novo-cupom-form";
 import { ValidarCupomDialog } from "@/components/portal/validar-cupom-dialog";
-import {
-  SEED_CUPONS_PORTAL,
-  type ItemCupomPortal,
-} from "@/components/portal/cupons-seed";
+import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 
-export default function PortalCupons() {
-  const [lista, setLista] = React.useState<ItemCupomPortal[]>(SEED_CUPONS_PORTAL);
+/**
+ * Corpo client da página de cupons do portal. A lista inicial vem do
+ * Supabase via server component (page.tsx); criar cupom continua apenas
+ * em memória nesta fase (Fase 2 persiste no banco).
+ */
+export function CuponsClient({
+  initialLista,
+}: {
+  initialLista: ItemCupomPortal[];
+}) {
+  const [lista, setLista] = React.useState<ItemCupomPortal[]>(initialLista);
   const [view, setView] = React.useState<"lista" | "novo">("lista");
   const [validarOpen, setValidarOpen] = React.useState(false);
   const [sucesso, setSucesso] = React.useState<string | null>(null);

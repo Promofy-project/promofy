@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { Pencil } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { BotaoSair } from "@/components/botao-sair";
 import { Field } from "@/components/field";
 import { MobilePageHeader } from "@/components/mobile-page-header";
 
@@ -36,9 +35,9 @@ export default function DadosPage() {
           ))}
         </div>
 
-        <Button asChild className="mt-2 w-full" size="lg">
-          <Link href="/m/login">Sair da conta</Link>
-        </Button>
+        <BotaoSair redirect="/m/login" className="mt-2 w-full" size="lg">
+          Sair da conta
+        </BotaoSair>
       </div>
     </div>
   );

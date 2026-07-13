@@ -17,6 +17,7 @@ import {
   Search,
   Menu,
   X,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BotaoSair } from "@/components/botao-sair";
 
 export type SidebarVariant = "portal" | "admin";
 
@@ -128,6 +130,16 @@ function UserFooter({ variant }: { variant: SidebarVariant }) {
         <p className="truncate text-sm font-semibold">{user.nome}</p>
         <p className="truncate text-xs text-muted-foreground">{user.papel}</p>
       </div>
+      <BotaoSair
+        redirect={variant === "portal" ? "/portal/login" : "/admin/login"}
+        variant="ghost"
+        size="icon"
+        aria-label="Sair da conta"
+        title="Sair da conta"
+        className="ml-auto h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        <LogOut className="h-4 w-4" />
+      </BotaoSair>
     </div>
   );
 }

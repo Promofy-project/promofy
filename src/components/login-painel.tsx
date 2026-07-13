@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +8,29 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/field";
 
-export default function LoginPage() {
+const CONFIG = {
+  portal: {
+    titulo: "Portal do estabelecimento",
+    subtitulo: "Acesse com a conta do seu estabelecimento.",
+    papel: "lojista",
+    destino: "/portal",
+  },
+  admin: {
+    titulo: "Painel administrativo",
+    subtitulo: "Acesso restrito à equipe Promofy.",
+    papel: "admin",
+    destino: "/admin",
+  },
+} as const;
+
+/**
+ * Tela de login do portal/admin (Fase 1). Após autenticar, confere o
+ * papel em profiles — conta de outro papel é deslogada com aviso.
+ * O redirect final é reforçado pelo middleware (fronteira de UX);
+ * a fronteira de segurança real é o RLS.
+ */
+export function LoginPainel({ variant }: { variant: keyof typeof CONFIG }) {
+  const { titulo, subtitulo, papel, destino } = CONFIG[variant];
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [senha, setSenha] = React.useState("");
@@ -21,35 +42,48 @@ export default function LoginPage() {
     setErro(null);
     setCarregando(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password: senha,
     });
-    if (error) {
+    if (error || !data.user) {
       setCarregando(false);
       setErro(
-        error.message === "Invalid login credentials"
+        error?.message === "Invalid login credentials"
           ? "E-mail ou senha incorretos."
           : "Não foi possível entrar agora. Tente novamente.",
       );
       return;
     }
-    router.push("/m");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (profile?.role !== papel) {
+      await supabase.auth.signOut();
+      setCarregando(false);
+      setErro("Esta conta não tem acesso a esta área.");
+      return;
+    }
+
+    router.push(destino);
     router.refresh();
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center p-5">
+    <div className="grid min-h-screen place-items-center bg-background p-5">
       <form
         onSubmit={handleLogin}
-        className="w-full max-w-[340px] rounded-[24px] bg-surface p-7 shadow-xl"
+        className="w-full max-w-[380px] rounded-card bg-surface p-8 shadow-card"
       >
         <div className="flex flex-col items-center text-center">
           <Logo />
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            A plataforma que transforma ofertas exclusivas em experiências
-            incríveis e economia de verdade!
-          </p>
+          <h1 className="mt-5 text-lg font-bold">{titulo}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitulo}</p>
         </div>
 
         <div className="mt-7 flex flex-col gap-4">
@@ -57,7 +91,7 @@ export default function LoginPage() {
             label="E-mail"
             name="email"
             type="email"
-            placeholder="seu@email.com"
+            placeholder="voce@empresa.com"
             autoComplete="email"
             required
             value={email}
@@ -81,24 +115,9 @@ export default function LoginPage() {
           </p>
         )}
 
-        <Button
-          type="submit"
-          variant="onYellow"
-          className="mt-7 w-full"
-          disabled={carregando}
-        >
-          {carregando ? "Entrando…" : "Login"}
+        <Button type="submit" className="mt-7 w-full" disabled={carregando}>
+          {carregando ? "Entrando…" : "Entrar"}
         </Button>
-
-        <p className="mt-5 text-center text-sm text-muted-foreground">
-          Não tem conta?{" "}
-          <Link
-            href="/m/cadastro"
-            className="font-bold text-primary hover:underline"
-          >
-            Cadastre-se
-          </Link>
-        </p>
       </form>
     </div>
   );
