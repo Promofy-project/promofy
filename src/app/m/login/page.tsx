@@ -1,19 +1,41 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/field";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = React.useState("");
+  const [senha, setSenha] = React.useState("");
+  const [erro, setErro] = React.useState<string | null>(null);
+  const [carregando, setCarregando] = React.useState(false);
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    // mock — sem auth real
+    setErro(null);
+    setCarregando(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: senha,
+    });
+    if (error) {
+      setCarregando(false);
+      setErro(
+        error.message === "Invalid login credentials"
+          ? "E-mail ou senha incorretos."
+          : "Não foi possível entrar agora. Tente novamente.",
+      );
+      return;
+    }
     router.push("/m");
+    router.refresh();
   }
 
   return (
@@ -31,12 +53,41 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-7 flex flex-col gap-4">
-          <Field label="E-mail" type="email" placeholder="seu@email.com" autoComplete="email" />
-          <Field label="Senha" type="password" placeholder="••••••••" autoComplete="current-password" />
+          <Field
+            label="E-mail"
+            name="email"
+            type="email"
+            placeholder="seu@email.com"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <Field
+            label="Senha"
+            name="senha"
+            type="password"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+          />
         </div>
 
-        <Button type="submit" variant="onYellow" className="mt-7 w-full">
-          Login
+        {erro && (
+          <p className="mt-4 text-center text-sm font-semibold text-danger">
+            {erro}
+          </p>
+        )}
+
+        <Button
+          type="submit"
+          variant="onYellow"
+          className="mt-7 w-full"
+          disabled={carregando}
+        >
+          {carregando ? "Entrando…" : "Login"}
         </Button>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">
