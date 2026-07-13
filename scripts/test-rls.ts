@@ -1,11 +1,16 @@
 /**
- * Testes de RLS (Fase 1) — roda contra o stack local já seedado
- * (`npm run db:reset` antes). Critério de aceite 4.
+ * Testes de RLS (Fase 1, adaptados na Fase 2) — roda contra o stack
+ * local já seedado (`npm run db:reset` antes). Critério de aceite 4.
+ *
+ * Fase 2: escrita no ciclo do cupom SÓ via RPC security definer — as
+ * asserções de escrita direta viraram NEGATIVAS (42501) e as positivas
+ * usam as RPCs. Métricas são asseridas ANTES de qualquer mutação
+ * (a ativação agora grava evento 'ativacao' e mudaria a contagem).
  *
  * Semântica do PostgREST usada nas asserções:
  * - UPDATE negado por POLICY (linha filtrada pelo USING) => sem erro,
  *   0 linhas — por isso encadeamos .select() e checamos data.length.
- * - UPDATE negado por GRANT de coluna => erro 42501 (permission denied).
+ * - Escrita negada por GRANT (tabela/coluna) => erro 42501.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -53,22 +58,6 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Checagem estrutural: NENHUMA tabela do public sem RLS.
-  console.log("\n[estrutura]");
-  {
-    const { data, error } = await svc.rpc("exec_sql" as never).then(
-      () => ({ data: null, error: { message: "rpc inexistente" } }),
-      () => ({ data: null, error: { message: "rpc inexistente" } }),
-    );
-    void data;
-    void error;
-    // Sem RPC genérica: usa a REST de pg_tables? Não exposta. Então
-    // valida via query no Postgres direto não é possível pela API —
-    // a checagem fica no SQL abaixo, executada via `supabase db query`
-    // no npm script `test:rls:estrutura` (README). Aqui, asserção
-    // aproximada: as 11 tabelas conhecidas devem NEGAR escrita anônima.
-  }
-
   const anon = novoClient();
 
   console.log("\n[anon]");
@@ -98,6 +87,26 @@ async function main() {
       .from("cupons")
       .insert({ id: "hack", estabelecimento_id: "e1", titulo: "x", categoria_id: "pet", economia: 1, validade_fim: "2027-01-01" });
     check("anon NÃO insere cupom", !!error, "insert anônimo passou!");
+  }
+
+  // Métricas derivadas ANTES de qualquer mutação (Fase 2: ativar grava evento)
+  console.log("\n[lojista — métricas pré-mutação]");
+  const lojista = await logar("lojista@promofy.test");
+  {
+    const { data, error } = await lojista.from("cupom_metricas").select("*").eq("cupom_id", "c01").single();
+    check(
+      "lojista lê métricas derivadas do c01 (4820/1960/740/482)",
+      !error &&
+        Number(data?.visualizacoes) === 4820 &&
+        Number(data?.cliques) === 1960 &&
+        Number(data?.ativacoes) === 740 &&
+        Number(data?.resgates) === 482,
+      error?.message ?? JSON.stringify(data),
+    );
+  }
+  {
+    const { data } = await lojista.from("cupom_metricas").select("cupom_id").eq("cupom_id", "c03");
+    check("lojista NÃO lê métricas de cupom alheio", (data?.length ?? 0) === 0);
   }
 
   console.log("\n[consumidor]");
@@ -146,33 +155,55 @@ async function main() {
     check("consumidor NÃO forja evento de validação", !!error, "insert de evento passou!");
   }
   {
-    // Ciclo (estrutura pronta): insert próprio só com (usuario_id, cupom_id).
-    const { data, error } = await consumidor
+    // Fase 2: ciclo SÓ via RPC — escrita direta agora é negada por grant.
+    const { error: errIns } = await consumidor
       .from("cupons_usuario")
-      .insert({ usuario_id: meuId, cupom_id: "c01" })
-      .select("codigo,status")
-      .single();
+      .insert({ usuario_id: meuId, cupom_id: "c01" });
+    check("consumidor NÃO insere cupons_usuario direto (42501)", errIns?.code === "42501", `code=${errIns?.code ?? "sem erro"}`);
+
+    const { data: rpc, error: errRpc } = await consumidor.rpc("ativar_cupom", { p_cupom_id: "c01" });
+    const estado = (rpc as { ok?: boolean; estado?: { codigo?: string } } | null)?.estado;
     check(
-      "consumidor ativa cupom próprio (código PRMF gerado)",
-      !error && /^PRMF-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(data?.codigo ?? ""),
-      error?.message ?? data?.codigo,
+      "consumidor ativa cupom via RPC (código PRMF gerado)",
+      !errRpc && (rpc as { ok?: boolean } | null)?.ok === true &&
+        /^PRMF-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(estado?.codigo ?? ""),
+      errRpc?.message ?? JSON.stringify(rpc),
     );
-    const { error: err2 } = await consumidor
+
+    const { error: errUpd } = await consumidor
       .from("cupons_usuario")
       .update({ status: "validado" })
       .eq("usuario_id", meuId)
       .eq("cupom_id", "c01");
-    check("consumidor NÃO se auto-valida (42501)", err2?.code === "42501", `code=${err2?.code ?? "sem erro"}`);
-    const { error: err3 } = await consumidor
+    check("consumidor NÃO se auto-valida direto (42501)", errUpd?.code === "42501", `code=${errUpd?.code ?? "sem erro"}`);
+
+    const { error: errNps } = await consumidor
       .from("cupons_usuario")
       .update({ nps: 9 })
       .eq("usuario_id", meuId)
       .eq("cupom_id", "c01");
-    check("consumidor responde NPS do próprio cupom", !err3, err3?.message);
+    check("consumidor NÃO grava NPS direto (42501)", errNps?.code === "42501", `code=${errNps?.code ?? "sem erro"}`);
+
+    // NPS via RPC exige cupom validado — regra de negócio no servidor.
+    const { data: rowAtiva } = await consumidor
+      .from("cupons_usuario")
+      .select("id")
+      .eq("usuario_id", meuId)
+      .eq("cupom_id", "c01")
+      .eq("status", "ativo")
+      .single();
+    const { data: npsRpc } = await consumidor.rpc("responder_nps", {
+      p_row_id: rowAtiva?.id ?? -1,
+      p_nota: 9,
+    });
+    check(
+      "RPC responder_nps recusa cupom não validado (nao_validado)",
+      (npsRpc as { ok?: boolean; motivo?: string } | null)?.motivo === "nao_validado",
+      JSON.stringify(npsRpc),
+    );
   }
 
   console.log("\n[lojista]");
-  const lojista = await logar("lojista@promofy.test");
   {
     const { data, error } = await lojista
       .from("cupons")
@@ -185,7 +216,7 @@ async function main() {
     const { data, error } = await lojista
       .from("cupons")
       .update({ beneficio: "hack" })
-      .eq("id", "c03") // cupom do e2 (outro dono)
+      .eq("id", "c05") // cupom do e3 (outro dono)
       .select();
     check("lojista NÃO edita cupom alheio (0 linhas)", !error && data?.length === 0, error?.message);
   }
@@ -195,22 +226,6 @@ async function main() {
       .update({ status: "ativo" })
       .eq("id", "e1");
     check("lojista NÃO altera o próprio status (42501)", error?.code === "42501", `code=${error?.code ?? "sem erro"}`);
-  }
-  {
-    const { data, error } = await lojista.from("cupom_metricas").select("*").eq("cupom_id", "c01").single();
-    check(
-      "lojista lê métricas derivadas do c01 (4820/1960/740/482)",
-      !error &&
-        Number(data?.visualizacoes) === 4820 &&
-        Number(data?.cliques) === 1960 &&
-        Number(data?.ativacoes) === 740 &&
-        Number(data?.resgates) === 482,
-      error?.message ?? JSON.stringify(data),
-    );
-  }
-  {
-    const { data } = await lojista.from("cupom_metricas").select("cupom_id").eq("cupom_id", "c03");
-    check("lojista NÃO lê métricas de cupom alheio", (data?.length ?? 0) === 0);
   }
 
   console.log("\n[admin]");
@@ -224,9 +239,12 @@ async function main() {
     check("admin lê todos os estabelecimentos (6)", !error && data?.length === 6, error?.message);
   }
 
-  // Limpeza dos artefatos de teste (service_role bypassa RLS).
+  // Limpeza COMPLETA dos artefatos (service_role bypassa RLS) — inclui
+  // eventos e pontos criados pelas RPCs, p/ não poluir test-fase2.
   await svc.from("avaliacoes").delete().eq("usuario_nome", "Teste RLS");
   await svc.from("cupons_usuario").delete().eq("usuario_id", meuId);
+  await svc.from("cupom_eventos").delete().eq("usuario_id", meuId);
+  await svc.from("pontos_transacoes").delete().eq("usuario_id", meuId).neq("acao", "bonus");
   await svc.from("profiles").update({ cidade: null }).eq("id", meuId);
 
   console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);

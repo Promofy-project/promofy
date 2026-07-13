@@ -541,13 +541,36 @@ export type Database = {
       }
     }
     Functions: {
+      ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
+      estado_cupom_json: {
+        Args: { p_row: Database["public"]["Tables"]["cupons_usuario"]["Row"] }
+        Returns: Json
+      }
       gerar_codigo_cupom: { Args: never; Returns: string }
+      hoje_brt: { Args: never; Returns: string }
+      mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
+      meu_estado_consumidor: { Args: never; Returns: Json }
+      registrar_evento_cupom: {
+        Args: { p_cupom_id: string; p_tipo: string }
+        Returns: undefined
+      }
+      responder_nps: {
+        Args: { p_nota: number; p_row_id: number }
+        Returns: Json
+      }
+      saldo_pontos: { Args: never; Returns: number }
+      validar_cupom: { Args: { p_codigo: string }; Returns: Json }
     }
     Enums: {
-      acao_pontos: "resgate" | "nps" | "indicacao" | "visita"
+      acao_pontos: "resgate" | "nps" | "indicacao" | "visita" | "bonus"
       papel_usuario: "consumidor" | "lojista" | "admin"
       status_assinatura: "ativa" | "cancelada" | "expirada"
-      status_cupom: "ativo" | "indisponivel" | "expirado" | "esgotado"
+      status_cupom:
+        | "ativo"
+        | "indisponivel"
+        | "expirado"
+        | "esgotado"
+        | "pendente"
       status_cupom_usuario: "ativo" | "validado" | "expirado"
       status_estabelecimento: "ativo" | "pendente" | "suspenso"
       tipo_evento_cupom: "visualizacao" | "clique" | "ativacao" | "validacao"
@@ -681,10 +704,16 @@ export const Constants = {
   },
   public: {
     Enums: {
-      acao_pontos: ["resgate", "nps", "indicacao", "visita"],
+      acao_pontos: ["resgate", "nps", "indicacao", "visita", "bonus"],
       papel_usuario: ["consumidor", "lojista", "admin"],
       status_assinatura: ["ativa", "cancelada", "expirada"],
-      status_cupom: ["ativo", "indisponivel", "expirado", "esgotado"],
+      status_cupom: [
+        "ativo",
+        "indisponivel",
+        "expirado",
+        "esgotado",
+        "pendente",
+      ],
       status_cupom_usuario: ["ativo", "validado", "expirado"],
       status_estabelecimento: ["ativo", "pendente", "suspenso"],
       tipo_evento_cupom: ["visualizacao", "clique", "ativacao", "validacao"],

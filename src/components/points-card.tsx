@@ -9,19 +9,20 @@ import { Progress } from "@/components/ui/progress";
 import {
   calcularNivel,
   CORES_NIVEL,
-  COMO_GANHAR,
+  comoGanhar,
 } from "@/lib/gamification";
 
 /**
  * Card de pontos / gamificação do consumidor (full, para /m/perfil).
- * Saldo reativo derivado do CouponStateProvider — validar cupom / responder NPS
- * incrementa os pontos exibidos aqui ao vivo.
+ * Saldo REAL do consumidor logado; valores de "como ganhar" vêm da
+ * config do banco (via provider).
  */
 export function PointsCard() {
-  const { getPontos } = useCouponState();
+  const { getPontos, config } = useCouponState();
   const pontos = getPontos();
   const { nivel, proximo, faltam, progresso } = calcularNivel(pontos);
   const cor = CORES_NIVEL[nivel];
+  const ganhos = comoGanhar(config);
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
@@ -74,7 +75,7 @@ export function PointsCard() {
           Como ganhar pontos
         </p>
         <ul className="flex flex-col divide-y divide-border">
-          {COMO_GANHAR.map((g) => {
+          {ganhos.map((g) => {
             const Icon = g.icon;
             return (
               <li

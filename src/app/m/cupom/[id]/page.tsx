@@ -14,6 +14,7 @@ import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
 import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
+import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
 
 export function generateStaticParams() {
   return cupons.map((c) => ({ id: c.id }));
@@ -35,6 +36,7 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
+      <RegistrarVisualizacao cupomId={cupom.id} />
       {/* Header azul */}
       <header className="sticky top-0 z-30 flex items-center gap-2 bg-primary px-3 py-3 text-white">
         <Link

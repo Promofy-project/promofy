@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Search, ArrowDownUp, SearchX } from "lucide-react";
 
-import { cupons } from "@/lib/mock-data";
+import { cuponsVisiveis } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { CouponListItem } from "@/components/coupon-list-item";
@@ -16,12 +16,12 @@ export default function BuscarPage() {
 
   const termo = query.trim().toLowerCase();
   const resultados = termo
-    ? cupons.filter(
+    ? cuponsVisiveis.filter(
         (c) =>
           c.titulo.toLowerCase().includes(termo) ||
           c.estabelecimento.toLowerCase().includes(termo),
       )
-    : cupons;
+    : cuponsVisiveis;
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-6 pt-5">

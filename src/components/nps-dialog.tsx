@@ -28,18 +28,29 @@ export function NpsDialog() {
   const { npsId, responderNps, fecharNps } = useCouponState();
   const [nota, setNota] = React.useState<number | null>(null);
   const [enviado, setEnviado] = React.useState(false);
+  const [enviando, setEnviando] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setNota(null);
     setEnviado(false);
+    setEnviando(false);
+    setErro(null);
   }, [npsId]);
 
   if (!npsId) return null;
 
-  const enviar = () => {
+  const enviar = async () => {
     if (nota === null) return;
-    responderNps(npsId, nota);
-    setEnviado(true);
+    setErro(null);
+    setEnviando(true);
+    const r = await responderNps(npsId, nota);
+    setEnviando(false);
+    if (r.ok) {
+      setEnviado(true);
+    } else {
+      setErro("Não foi possível enviar sua avaliação agora. Tente novamente.");
+    }
   };
 
   return (
@@ -89,12 +100,18 @@ export function NpsDialog() {
             Responda e ganhe pontos!
           </div>
 
+          {erro && (
+            <p className="mt-3 text-center text-sm font-medium text-danger">
+              {erro}
+            </p>
+          )}
+
           <Button
             className="mt-4 w-full"
-            disabled={nota === null}
+            disabled={nota === null || enviando}
             onClick={enviar}
           >
-            Enviar avaliação
+            {enviando ? "Enviando…" : "Enviar avaliação"}
           </Button>
           <button
             type="button"
