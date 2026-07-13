@@ -3,13 +3,20 @@
 import * as React from "react";
 import { X, QrCode, BadgeCheck, AlertCircle, ShieldCheck } from "lucide-react";
 
-import { usuarioAtual } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { validarCupomAction, type ValidarDadosDTO } from "@/lib/actions/cupons";
 
-const CODE_RE = /^PRMF-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
-// mesmo alfabeto do gerador do app (Onda 1): sem 0/O/1/I ambíguos
-const AMOSTRA = "PRMF-7K2Q-9XAW";
+// Mensagem amigável por motivo retornado pelo servidor.
+const MENSAGEM: Record<string, string> = {
+  nao_encontrado: "Código não encontrado. Confira e tente de novo.",
+  ja_validado: "Este cupom já foi validado.",
+  expirado: "Este cupom expirou e não pode mais ser validado.",
+  outro_estabelecimento: "Este cupom não é do seu estabelecimento.",
+  cupom_proprio: "Você não pode validar o seu próprio cupom.",
+  sem_permissao: "Sua conta não tem um estabelecimento vinculado.",
+  erro: "Não foi possível validar agora. Tente novamente.",
+};
 
 export function ValidarCupomDialog({
   open,
@@ -20,27 +27,32 @@ export function ValidarCupomDialog({
 }) {
   const [codigo, setCodigo] = React.useState("");
   const [erro, setErro] = React.useState<string | null>(null);
-  const [validado, setValidado] = React.useState<string | null>(null);
+  const [validando, setValidando] = React.useState(false);
+  const [sucesso, setSucesso] = React.useState<ValidarDadosDTO | null>(null);
 
   React.useEffect(() => {
     if (open) {
       setCodigo("");
       setErro(null);
-      setValidado(null);
+      setValidando(false);
+      setSucesso(null);
     }
   }, [open]);
 
   if (!open) return null;
 
-  const validar = (valor: string) => {
-    const code = valor.trim().toUpperCase();
-    if (!CODE_RE.test(code)) {
-      setErro("Código inválido. Use o formato PRMF-XXXX-XXXX.");
-      return;
-    }
+  async function validar(e: React.FormEvent) {
+    e.preventDefault();
     setErro(null);
-    setValidado(code);
-  };
+    setValidando(true);
+    const r = await validarCupomAction(codigo.trim().toUpperCase());
+    setValidando(false);
+    if (r.ok) {
+      setSucesso(r.dados);
+    } else {
+      setErro(MENSAGEM[r.motivo] ?? MENSAGEM.erro);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -59,24 +71,17 @@ export function ValidarCupomDialog({
           <X className="h-4 w-4" />
         </button>
 
-        {!validado ? (
+        {!sucesso ? (
           <>
             <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
               <QrCode className="h-6 w-6" />
             </div>
-            <h2 className="text-center text-lg font-extrabold">
-              Validar cupom
-            </h2>
+            <h2 className="text-center text-lg font-extrabold">Validar cupom</h2>
             <p className="mt-1.5 text-center text-sm text-muted-foreground">
-              Informe o código apresentado pelo cliente ou leia o QR Code.
+              Informe o código apresentado pelo cliente.
             </p>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                validar(codigo);
-              }}
-            >
+            <form onSubmit={validar}>
               <div className="mt-5 flex flex-col gap-1.5">
                 <label
                   htmlFor="codigo-cupom"
@@ -104,21 +109,10 @@ export function ValidarCupomDialog({
                 )}
               </div>
 
-              <Button type="submit" className="mt-5 w-full">
-                Validar cupom
+              <Button type="submit" className="mt-5 w-full" disabled={validando || !codigo.trim()}>
+                {validando ? "Validando…" : "Validar cupom"}
               </Button>
             </form>
-            <button
-              type="button"
-              onClick={() => {
-                setCodigo(AMOSTRA);
-                validar(AMOSTRA);
-              }}
-              className="mt-3 flex w-full items-center justify-center gap-2 text-sm font-bold text-primary hover:underline"
-            >
-              <QrCode className="h-4 w-4" />
-              Ler QR Code (simulação)
-            </button>
           </>
         ) : (
           <>
@@ -129,7 +123,8 @@ export function ValidarCupomDialog({
               Validação concluída
             </h2>
             <p className="mt-1 text-center text-sm text-muted-foreground">
-              Cupom <span className="font-mono font-bold">{validado}</span>{" "}
+              Cupom{" "}
+              <span className="font-mono font-bold">{sucesso.codigo}</span>{" "}
               validado com sucesso.
             </p>
 
@@ -141,25 +136,19 @@ export function ValidarCupomDialog({
               <dl className="mt-3 space-y-2.5 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Nome</dt>
-                  <dd className="font-bold">{usuarioAtual.nome}</dd>
+                  <dd className="font-bold">{sucesso.cliente_nome || "—"}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">CPF</dt>
-                  <dd className="font-mono font-bold">
-                    {usuarioAtual.cpfMascarado}
-                  </dd>
+                  <dd className="font-mono font-bold">{sucesso.cliente_cpf}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Cupom</dt>
-                  <dd className="text-right font-medium">
-                    Rodízio de pizza em dobro
-                  </dd>
+                  <dd className="text-right font-medium">{sucesso.titulo}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Benefício</dt>
-                  <dd className="text-right font-medium">
-                    2 rodízios pelo preço de 1
-                  </dd>
+                  <dd className="text-right font-medium">{sucesso.beneficio}</dd>
                 </div>
               </dl>
             </div>

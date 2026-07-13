@@ -11,10 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { CouponCard } from "@/components/coupon-card";
-import {
-  ESTABELECIMENTO_ID,
-  type ItemCupomPortal,
-} from "@/components/portal/cupons-seed";
+import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
+import { criarCupomAction } from "@/lib/actions/cupons";
 
 const DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -39,12 +37,12 @@ function Field({
   );
 }
 
-let novoSeq = 0;
-
 export function NovoCupomForm({
+  estabelecimentoNome,
   onSalvar,
   onCancelar,
 }: {
+  estabelecimentoNome: string;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
@@ -55,12 +53,14 @@ export function NovoCupomForm({
   const [validade, setValidade] = React.useState("");
   const [dataInicio, setDataInicio] = React.useState("");
   const [ocultarAteInicio, setOcultarAteInicio] = React.useState(false);
-  const [prazoAtivacao, setPrazoAtivacao] = React.useState("24");
+  const [prazoAtivacao, setPrazoAtivacao] = React.useState("5");
   const [dias, setDias] = React.useState<string[]>(["Sex", "Sáb", "Dom"]);
   const [horaInicio, setHoraInicio] = React.useState("18:00");
   const [horaFim, setHoraFim] = React.useState("23:00");
   const [limiteUsuario, setLimiteUsuario] = React.useState("1");
   const [limiteTotal, setLimiteTotal] = React.useState("500");
+  const [salvando, setSalvando] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
 
   const toggleDia = (d: string) =>
     setDias((prev) =>
@@ -70,12 +70,12 @@ export function NovoCupomForm({
   const previewCupom: Cupom = {
     id: "preview",
     titulo: titulo || "Título do seu cupom",
-    estabelecimento: "Sabor & Cia",
-    estabelecimentoId: ESTABELECIMENTO_ID,
+    estabelecimento: estabelecimentoNome,
+    estabelecimentoId: "preview",
     categoria,
     economia: Number(economia) || 0,
     distanciaKm: 1.2,
-    rating: 4.8,
+    rating: 0,
     avaliacoes: 0,
     validade: validade || "2026-12-31",
     status: "ativo",
@@ -86,19 +86,36 @@ export function NovoCupomForm({
     destaque: false,
   };
 
-  const podeSalvar = titulo.trim().length > 0 && Number(economia) > 0;
+  // validade agora é obrigatória (a coluna é NOT NULL no banco)
+  const podeSalvar =
+    titulo.trim().length > 0 && Number(economia) > 0 && validade.length > 0;
 
-  const salvar = () => {
-    if (!podeSalvar) return;
-    novoSeq += 1;
-    onSalvar({
-      cupom: { ...previewCupom, id: `novo-${novoSeq}` },
-      statusPortal: "ativo",
-      metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
-      limiteTotal: Number(limiteTotal) || 1000,
-      dataInicio,
+  const salvar = async () => {
+    if (!podeSalvar || salvando) return;
+    setErro(null);
+    setSalvando(true);
+    // estabelecimento_id é derivado no SERVIDOR (owner_id) — nunca do form
+    const r = await criarCupomAction({
+      titulo,
+      beneficio,
+      categoria,
+      economia: Number(economia),
+      validade,
+      dataInicio: dataInicio || undefined,
       ocultarAteInicio,
+      prazoAtivacao: Number(prazoAtivacao) || 5,
+      dias,
+      horaInicio,
+      horaFim,
+      limiteUsuario: Number(limiteUsuario) || 1,
+      limiteTotal: Number(limiteTotal) || 1,
     });
+    setSalvando(false);
+    if (r.ok) {
+      onSalvar(r.item);
+    } else {
+      setErro(r.erro);
+    }
   };
 
   return (
@@ -272,9 +289,13 @@ export function NovoCupomForm({
           </div>
         </div>
 
+        {erro && (
+          <p className="mt-4 text-sm font-medium text-danger">{erro}</p>
+        )}
+
         <div className="mt-6 flex items-center gap-3">
-          <Button onClick={salvar} disabled={!podeSalvar}>
-            <Check className="h-4 w-4" /> Salvar cupom
+          <Button onClick={salvar} disabled={!podeSalvar || salvando}>
+            <Check className="h-4 w-4" /> {salvando ? "Salvando…" : "Salvar cupom"}
           </Button>
           <Button variant="ghost" onClick={onCancelar}>
             Cancelar
