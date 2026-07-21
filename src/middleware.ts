@@ -16,6 +16,7 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 const LOGIN_PORTAL = "/portal/login";
 const LOGIN_ADMIN = "/admin/login";
+const LOGIN_E = "/e/login";
 const LOGIN_M = "/m/login";
 
 export async function middleware(request: NextRequest) {
@@ -59,6 +60,18 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // /e — app operacional do estabelecimento; exige lojista (mesmo padrão
+  // do /portal: a tela de login é pública). A exceção do path de login VEM
+  // ANTES do gate — senão anônimo/consumidor em /e/login entraria em loop.
+  if (pathname.startsWith("/e")) {
+    if (pathname.startsWith(LOGIN_E)) {
+      if (role === "lojista") return redirect("/e");
+      return supabaseResponse;
+    }
+    if (role !== "lojista") return redirect(LOGIN_E);
+    return supabaseResponse;
+  }
+
   // /m — só o perfil exige sessão (browsing segue público; o gate do
   // "usar cupom" é client-side, decisão D2 do plano)
   if (pathname.startsWith("/m/perfil") && !claims) {
@@ -71,5 +84,5 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // Landings (/, /para-voce, /para-empresas) ficam fora de propósito:
   // zero overhead de auth em páginas de marketing.
-  matcher: ["/m/:path*", "/portal/:path*", "/admin/:path*"],
+  matcher: ["/m/:path*", "/e/:path*", "/portal/:path*", "/admin/:path*"],
 };
