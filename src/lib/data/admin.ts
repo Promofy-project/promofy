@@ -107,3 +107,76 @@ export async function buscarEstabelecimentosAdmin(): Promise<AdminEstabeleciment
     cuponsTotal: total.get(e.id) ?? 0,
   }));
 }
+
+export interface AdminUsuario {
+  id: string;
+  nome: string;
+  cidade: string | null;
+  criadoEm: string;
+  pontos: number;
+  economiaTotal: number;
+  cuponsUsados: string[]; // títulos dos cupons validados
+  estabelecimentos: string[]; // nomes distintos frequentados
+}
+
+/**
+ * Detalhe dos consumidores para o admin (D1): cadastro, pontos (ledger),
+ * economia total (soma da economia dos cupons validados), cupons usados e
+ * estabelecimentos frequentados. Tudo sob as policies "admin le todos".
+ */
+export async function buscarUsuariosAdmin(): Promise<AdminUsuario[]> {
+  const supabase = createClient();
+
+  const { data: profiles, error } = await supabase
+    .from("profiles")
+    .select("id, nome, cidade, criado_em")
+    .eq("role", "consumidor")
+    .order("criado_em", { ascending: true });
+  if (error) throw new Error(`Falha ao buscar usuários (admin): ${error.message}`);
+
+  // pontos: SUM do ledger por usuário
+  const { data: pontos } = await supabase
+    .from("pontos_transacoes")
+    .select("usuario_id, pontos");
+  const pontosPor = new Map<string, number>();
+  (pontos ?? []).forEach((t) =>
+    pontosPor.set(t.usuario_id, (pontosPor.get(t.usuario_id) ?? 0) + t.pontos),
+  );
+
+  // validações: economia + cupons + estabelecimentos por usuário
+  const { data: usos } = await supabase
+    .from("cupons_usuario")
+    .select("usuario_id, cupons(titulo, economia, estabelecimentos(nome))")
+    .eq("status", "validado");
+  const economiaPor = new Map<string, number>();
+  const cuponsPor = new Map<string, string[]>();
+  const estabPor = new Map<string, Set<string>>();
+  (usos ?? []).forEach((u) => {
+    const cupom = u.cupons;
+    if (!cupom) return;
+    economiaPor.set(
+      u.usuario_id,
+      (economiaPor.get(u.usuario_id) ?? 0) + Number(cupom.economia),
+    );
+    const arr = cuponsPor.get(u.usuario_id) ?? [];
+    arr.push(cupom.titulo);
+    cuponsPor.set(u.usuario_id, arr);
+    const nome = cupom.estabelecimentos?.nome;
+    if (nome) {
+      const set = estabPor.get(u.usuario_id) ?? new Set<string>();
+      set.add(nome);
+      estabPor.set(u.usuario_id, set);
+    }
+  });
+
+  return (profiles ?? []).map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    cidade: p.cidade,
+    criadoEm: p.criado_em,
+    pontos: pontosPor.get(p.id) ?? 0,
+    economiaTotal: economiaPor.get(p.id) ?? 0,
+    cuponsUsados: cuponsPor.get(p.id) ?? [],
+    estabelecimentos: Array.from(estabPor.get(p.id) ?? []),
+  }));
+}
