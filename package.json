@@ -10,9 +10,12 @@
     "db:reset": "supabase db reset && tsx scripts/seed-users.ts",
     "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
     "seed:users": "tsx scripts/seed-users.ts",
+    "seed:users:hosted": "tsx scripts/seed-users.ts --hosted",
     "test:rls": "tsx scripts/test-rls.ts",
-    "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
+    "test:rls:hosted": "tsx scripts/test-rls.ts --hosted",
     "test:fase2": "tsx scripts/test-fase2.ts",
+    "test:fase2:hosted": "tsx scripts/test-fase2.ts --hosted",
+    "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
     "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run build"
   },
   "dependencies": {

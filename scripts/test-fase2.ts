@@ -10,7 +10,12 @@
  * boas-vindas e execuções anteriores não interferem.
  */
 import { config } from "dotenv";
-config({ path: ".env.local" });
+// Alvo padrão = stack local; `--hosted` roda contra o Supabase hospedado
+// (.env.hosted.local). ATENÇÃO: esta suite MUTA dados (força expiração,
+// consome cupom via service_role) — restaure o hosted após rodar.
+const hosted = process.argv.includes("--hosted");
+const envFile = hosted ? ".env.hosted.local" : ".env.local";
+config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -18,9 +23,10 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !anonKey || !serviceRole) {
-  console.error("Faltam variáveis no .env.local.");
+  console.error(`Faltam variáveis em ${envFile}.`);
   process.exit(1);
 }
+console.log(`\n[test-fase2] alvo: ${hosted ? "HOSPEDADO (muta dados!)" : "local"} (${new URL(url).host})\n`);
 const SENHA = "promofy123";
 let passed = 0;
 let failed = 0;

@@ -13,7 +13,11 @@
  * avaliação do seed ao consumidor (exercita a FK usuario_id).
  */
 import { config } from "dotenv";
-config({ path: ".env.local" }); // dotenv NÃO lê .env.local sozinho
+// Alvo padrão = stack local; `--hosted` aponta ao Supabase hospedado
+// (.env.hosted.local, gitignored). dotenv NÃO lê .env.local sozinho.
+const hosted = process.argv.includes("--hosted");
+const envFile = hosted ? ".env.hosted.local" : ".env.local";
+config({ path: envFile });
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,11 +26,14 @@ const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceRole) {
   console.error(
-    "Faltam NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY no .env.local.\n" +
-      "Rode `supabase start` e copie os valores (ver .env.local.example).",
+    `Faltam NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY em ${envFile}.\n` +
+      "Local: rode `supabase start` (ver .env.local.example). Hosted: preencha .env.hosted.local.",
   );
   process.exit(1);
 }
+
+// Alerta de alvo — este script usa service_role e ESCREVE dados.
+console.log(`\n[seed-users] alvo: ${hosted ? "HOSPEDADO" : "local"} (${envFile}) → ${new URL(url).host}\n`);
 
 const admin = createClient(url, serviceRole, {
   auth: { autoRefreshToken: false, persistSession: false },
