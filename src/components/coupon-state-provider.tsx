@@ -34,6 +34,8 @@ export interface EstadoInicial {
   logado: boolean;
   usuario: UsuarioConsumidor | null;
   saldo: number;
+  /** Total economizado (soma da economia dos cupons validados). */
+  economia: number;
   config: ConfigPontos;
   estados: EstadoCupomDTO[];
 }
@@ -52,6 +54,8 @@ interface CouponStateValue {
   getEstado: (id: string) => EstadoCupom | null;
   /** Saldo real do consumidor (SUM do ledger, hidratado do servidor). */
   getPontos: () => number;
+  /** Total economizado real (soma da economia dos cupons validados). */
+  getEconomia: () => number;
 
   /** Ativa o cupom no servidor e abre o cupom ativo. Devolve o resultado. */
   ativarCupom: (id: string) => Promise<ResultadoAtivacao>;
@@ -117,6 +121,7 @@ export function CouponStateProvider({
     () => estadosDeInicial(initial.estados),
   );
   const [saldo, setSaldo] = React.useState(initial.saldo);
+  const [economia, setEconomia] = React.useState(initial.economia);
   const [sheetId, setSheetId] = React.useState<string | null>(null);
   const [npsId, setNpsId] = React.useState<string | null>(null);
 
@@ -142,6 +147,7 @@ export function CouponStateProvider({
       getStatus: (id) => estados[id]?.status ?? "disponivel",
       getEstado: (id) => estados[id] ?? null,
       getPontos: () => saldo,
+      getEconomia: () => economia,
 
       ativarCupom: async (id) => {
         const r = await ativarCupomAction(id);
@@ -158,6 +164,7 @@ export function CouponStateProvider({
         const r = await consultarCupomAction(id);
         if (!r?.ok) return;
         setSaldo(r.saldo);
+        setEconomia(r.economia);
         const anterior = estados[id]?.status;
         aplicarDto(id, r.estado);
         // flip ativo → validado detectado no polling → abre o NPS
@@ -188,7 +195,7 @@ export function CouponStateProvider({
       sheetId,
       npsId,
     }),
-    [estados, saldo, sheetId, npsId, initial, aplicarDto],
+    [estados, saldo, economia, sheetId, npsId, initial, aplicarDto],
   );
 
   return (
@@ -211,6 +218,7 @@ export function useCouponState(): CouponStateValue {
       getStatus: () => "disponivel",
       getEstado: () => null,
       getPontos: () => 0,
+      getEconomia: () => 0,
       ativarCupom: async () => ({ ok: false, motivo: "sem_sessao" }),
       verCupomAtivo: () => {},
       fecharCupomAtivo: () => {},

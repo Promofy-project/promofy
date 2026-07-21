@@ -12,6 +12,7 @@ const INICIAL_ANONIMO: EstadoInicial = {
   logado: false,
   usuario: null,
   saldo: 0,
+  economia: 0,
   config: {},
   estados: [],
 };
@@ -39,7 +40,11 @@ export default async function MobileLayout({
     userId = claims?.claims?.sub ?? null;
 
     if (userId) {
-      const { data, error } = await supabase.rpc("meu_estado_consumidor");
+      // estado + economia (RPC própria, security definer) numa ida só
+      const [{ data, error }, { data: economiaData }] = await Promise.all([
+        supabase.rpc("meu_estado_consumidor"),
+        supabase.rpc("economia_total_consumidor"),
+      ]);
       if (!error && data) {
         const p = data as unknown as {
           usuario: { nome: string; cpf_mascarado: string } | null;
@@ -53,6 +58,7 @@ export default async function MobileLayout({
             ? { nome: p.usuario.nome, cpfMascarado: p.usuario.cpf_mascarado }
             : null,
           saldo: p.saldo ?? 0,
+          economia: Number(economiaData ?? 0),
           config: p.config ?? {},
           estados: p.estados ?? [],
         };

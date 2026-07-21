@@ -107,7 +107,7 @@ function hojeBrt(): string {
  * lista vazia (a página renderiza o estado vazio em vez de quebrar).
  */
 export interface PortalCupons {
-  estabelecimento: { id: string; nome: string } | null;
+  estabelecimento: { id: string; nome: string; categoriaId: string } | null;
   itens: ItemCupomPortal[];
 }
 
@@ -120,10 +120,15 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
 
   const { data: estabelecimento } = await supabase
     .from("estabelecimentos")
-    .select("id, nome")
+    .select("id, nome, categoria_id")
     .eq("owner_id", userId)
     .maybeSingle();
   if (!estabelecimento) return { estabelecimento: null, itens: [] };
+  const estOut = {
+    id: estabelecimento.id,
+    nome: estabelecimento.nome,
+    categoriaId: estabelecimento.categoria_id,
+  };
 
   const { data: cupons, error } = await supabase
     .from("cupons")
@@ -136,7 +141,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
     throw new Error(`Falha ao buscar cupons do portal: ${error.message}`);
   }
   if (!cupons || cupons.length === 0) {
-    return { estabelecimento, itens: [] };
+    return { estabelecimento: estOut, itens: [] };
   }
 
   const { data: metricas } = await supabase
@@ -183,5 +188,5 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));
 
-  return { estabelecimento, itens };
+  return { estabelecimento: estOut, itens };
 }

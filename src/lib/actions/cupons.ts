@@ -20,7 +20,7 @@ type AtivarResult =
   | { ok: true; ja_ativo: boolean; estado: EstadoCupomDTO }
   | { ok: false; motivo: string };
 type ConsultarResult =
-  | { ok: true; estado: EstadoCupomDTO | null; saldo: number }
+  | { ok: true; estado: EstadoCupomDTO | null; saldo: number; economia: number }
   | { ok: false };
 type NpsResult =
   | { ok: true; ja_respondido: boolean; saldo: number }
@@ -53,7 +53,13 @@ export async function ativarCupomAction(cupomId: string): Promise<AtivarResult> 
 export async function consultarCupomAction(cupomId: string): Promise<ConsultarResult> {
   try {
     const supabase = createClient();
-    const { data: estadoJson } = await supabase.rpc("meu_estado_consumidor");
+    // meu_estado_consumidor (saldo + estados) e economia (RPC própria,
+    // security definer) no mesmo ciclo do poll — pontos e economia sobem
+    // juntos ao detectar a validação.
+    const [{ data: estadoJson }, { data: economiaData }] = await Promise.all([
+      supabase.rpc("meu_estado_consumidor"),
+      supabase.rpc("economia_total_consumidor"),
+    ]);
     const parsed = estadoJson as unknown as {
       saldo?: number;
       estados?: EstadoCupomDTO[];
@@ -67,7 +73,12 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
         return rank(a.status) - rank(b.status) ||
           b.ativado_em.localeCompare(a.ativado_em);
       });
-    return { ok: true, estado: doCupom[0] ?? null, saldo: parsed?.saldo ?? 0 };
+    return {
+      ok: true,
+      estado: doCupom[0] ?? null,
+      saldo: parsed?.saldo ?? 0,
+      economia: Number(economiaData ?? 0),
+    };
   } catch {
     return { ok: false };
   }
@@ -148,7 +159,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
 
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("id, nome")
+      .select("id, nome, categoria_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
@@ -159,7 +170,10 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     const novo: Database["public"]["Tables"]["cupons"]["Insert"] = {
       estabelecimento_id: est.id,
       titulo: input.titulo.trim(),
-      categoria_id: input.categoria,
+      // D2: a categoria do cupom é SEMPRE a do estabelecimento (autoritativo no
+      // servidor). `input.categoria` do form é ignorado — o form só a exibe,
+      // pré-setada e travada. (Multi-categoria via tabela de junção = Fase 4.)
+      categoria_id: est.categoria_id,
       beneficio: input.beneficio.trim(),
       economia: input.economia,
       validade_inicio: input.dataInicio || null,

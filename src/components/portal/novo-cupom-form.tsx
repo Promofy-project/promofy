@@ -4,7 +4,7 @@ import * as React from "react";
 import { Check } from "lucide-react";
 
 import type { CategoriaId, Cupom } from "@/lib/types";
-import { categorias } from "@/lib/mock-data";
+import { getCategoria } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,16 +39,20 @@ function Field({
 
 export function NovoCupomForm({
   estabelecimentoNome,
+  categoriaId,
   onSalvar,
   onCancelar,
 }: {
   estabelecimentoNome: string;
+  categoriaId: string | null;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
   const [titulo, setTitulo] = React.useState("");
   const [beneficio, setBeneficio] = React.useState("");
-  const [categoria, setCategoria] = React.useState<CategoriaId>("alimentacao");
+  // D2: categoria pré-setada e travada — a do estabelecimento. O servidor
+  // (criarCupomAction) é autoritativo; aqui é só exibição.
+  const categoria = (categoriaId ?? "alimentacao") as CategoriaId;
   const [economia, setEconomia] = React.useState("");
   const [validade, setValidade] = React.useState("");
   const [dataInicio, setDataInicio] = React.useState("");
@@ -147,22 +151,13 @@ export function NovoCupomForm({
           </Field>
 
           <Field label="Categoria">
-            <div className="flex flex-wrap gap-2">
-              {categorias.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoria(c.id)}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors",
-                    categoria === c.id
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-surface text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="flex h-11 items-center justify-between rounded-btn border border-border bg-muted/60 px-3.5 text-sm">
+              <span className="font-medium text-foreground">
+                {getCategoria(categoria).label}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                definida pelo estabelecimento
+              </span>
             </div>
           </Field>
 
