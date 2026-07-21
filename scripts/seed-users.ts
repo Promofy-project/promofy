@@ -47,6 +47,8 @@ interface UsuarioTeste {
 
 const USUARIOS: UsuarioTeste[] = [
   { email: "consumidor@promofy.test", role: "consumidor", nome: "Lucas Orladi" },
+  // 2º consumidor de demo (cliente + esposa usando ao mesmo tempo, sessões separadas)
+  { email: "convidado@promofy.test", role: "consumidor", nome: "Convidada Demo" },
   { email: "lojista@promofy.test", role: "lojista", nome: "Sabor & Cia" },
   { email: "lojista2@promofy.test", role: "lojista", nome: "PowerFit Academia" },
   { email: "admin@promofy.test", role: "admin", nome: "Equipe Promofy" },
@@ -96,6 +98,7 @@ async function main() {
   }
   // atalhos por papel (lojista = dono do e1; lojista2 = dono do e2)
   ids.consumidor = ids["consumidor@promofy.test"];
+  ids.convidado = ids["convidado@promofy.test"];
   ids.lojista = ids["lojista@promofy.test"];
   ids.lojista2 = ids["lojista2@promofy.test"];
   ids.admin = ids["admin@promofy.test"];
@@ -123,6 +126,14 @@ async function main() {
       .eq("id", ids.consumidor);
     if (error) throw error;
     console.log("+ consumidor.cpf (demo)");
+  }
+  {
+    const { error } = await admin
+      .from("profiles")
+      .update({ cpf: "987.654.321-00" })
+      .eq("id", ids.convidado);
+    if (error) throw error;
+    console.log("+ convidado.cpf (demo)");
   }
 
   // Liga e1 (Sabor & Cia) ao lojista e e2 (PowerFit) ao lojista2 —
