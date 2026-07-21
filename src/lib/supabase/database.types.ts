@@ -541,7 +541,13 @@ export type Database = {
       }
     }
     Functions: {
+      aprovar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
+      definir_status_estabelecimento: {
+        Args: { p_est_id: string; p_status: string }
+        Returns: Json
+      }
+      economia_total_consumidor: { Args: never; Returns: number }
       estado_cupom_json: {
         Args: { p_row: Database["public"]["Tables"]["cupons_usuario"]["Row"] }
         Returns: Json
@@ -554,6 +560,7 @@ export type Database = {
         Args: { p_cupom_id: string; p_tipo: string }
         Returns: undefined
       }
+      rejeitar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       responder_nps: {
         Args: { p_nota: number; p_row_id: number }
         Returns: Json
@@ -571,6 +578,7 @@ export type Database = {
         | "expirado"
         | "esgotado"
         | "pendente"
+        | "rejeitado"
       status_cupom_usuario: "ativo" | "validado" | "expirado"
       status_estabelecimento: "ativo" | "pendente" | "suspenso"
       tipo_evento_cupom: "visualizacao" | "clique" | "ativacao" | "validacao"
@@ -713,6 +721,7 @@ export const Constants = {
         "expirado",
         "esgotado",
         "pendente",
+        "rejeitado",
       ],
       status_cupom_usuario: ["ativo", "validado", "expirado"],
       status_estabelecimento: ["ativo", "pendente", "suspenso"],
