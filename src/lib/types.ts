@@ -101,7 +101,12 @@ export interface MetricasCupom {
 }
 
 /** Status de um cupom na visão do lojista. */
-export type StatusCupomPortal = "ativo" | "expirado" | "esgotado" | "pendente";
+export type StatusCupomPortal =
+  | "ativo"
+  | "expirado"
+  | "esgotado"
+  | "pendente"
+  | "rejeitado";
 
 export interface SerieMensal {
   mes: string;

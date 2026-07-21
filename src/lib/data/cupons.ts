@@ -168,7 +168,9 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
           ? "expirado"
           : row.status === "pendente"
             ? "pendente"
-            : "ativo",
+            : row.status === "rejeitado"
+              ? "rejeitado"
+              : "ativo",
     metricas:
       metricasPorCupom.get(row.id) ?? {
         visualizacoes: 0,
