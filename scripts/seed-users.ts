@@ -150,28 +150,29 @@ async function main() {
     console.log(`+ ${estId}.owner_id → dono`);
   }
 
-  // Bônus de boas-vindas do consumidor de demo (ledger; select-first
-  // idempotente — o índice único (usuario, acao, referencia) protege).
-  {
-    const referencia = `bonus:${ids.consumidor}`;
+  // Bônus de boas-vindas dos consumidores de demo (consumidor + convidado —
+  // cliente e esposa começam iguais). Ledger; select-first idempotente
+  // (índice único usuario/acao/referencia protege).
+  for (const bonusUid of [ids.consumidor, ids.convidado]) {
+    const referencia = `bonus:${bonusUid}`;
     const { data: existente } = await admin
       .from("pontos_transacoes")
       .select("id")
-      .eq("usuario_id", ids.consumidor)
+      .eq("usuario_id", bonusUid)
       .eq("acao", "bonus")
       .eq("referencia_id", referencia)
       .maybeSingle();
     if (!existente) {
       const { error } = await admin.from("pontos_transacoes").insert({
-        usuario_id: ids.consumidor,
+        usuario_id: bonusUid,
         acao: "bonus",
         pontos: BONUS_DEMO,
         referencia_id: referencia,
       });
       if (error && error.code !== "23505") throw error;
-      console.log(`+ bônus de boas-vindas (${BONUS_DEMO} pts)`);
+      console.log(`+ bônus de boas-vindas (${BONUS_DEMO} pts) → ${bonusUid}`);
     } else {
-      console.log("= bônus de boas-vindas já lançado");
+      console.log(`= bônus de boas-vindas já lançado → ${bonusUid}`);
     }
   }
 
