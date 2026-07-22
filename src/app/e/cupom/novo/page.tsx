@@ -2,36 +2,33 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { buscarCategoriasEstab, type CategoriaEstab } from "@/lib/data/estab";
 import { NovoCupomForm } from "./novo-cupom-form";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Criar cupom (form reduzido ao essencial). A categoria vem pré-setada do
- * estabelecimento (D2-mínimo) — campos avançados (agendamento, horários)
- * ficam só na plataforma web. Reusa criarCupomAction.
+ * Criar cupom (form reduzido ao essencial). Fase 4: o estabelecimento
+ * pode ter N categorias (junção) — o form lista todas, com a principal
+ * pré-selecionada. Campos avançados (agendamento, horários) ficam só na
+ * plataforma web. Reusa criarCupomAction.
  */
 export default async function NovoCupomPage() {
   const supabase = createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const uid = claims?.claims?.sub;
 
-  let categoriaId: string | null = null;
-  let categoriaLabel: string | null = null;
+  let categorias: CategoriaEstab[] = [];
+  let categoriaPrincipal: string | null = null;
   if (uid) {
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("categoria_id")
+      .select("id, categoria_id")
       .eq("owner_id", uid)
       .maybeSingle();
-    categoriaId = est?.categoria_id ?? null;
-    if (categoriaId) {
-      const { data: cat } = await supabase
-        .from("categorias")
-        .select("label")
-        .eq("id", categoriaId)
-        .maybeSingle();
-      categoriaLabel = cat?.label ?? null;
+    if (est) {
+      categoriaPrincipal = est.categoria_id;
+      categorias = await buscarCategoriasEstab(est.id, est.categoria_id);
     }
   }
 
@@ -48,7 +45,7 @@ export default async function NovoCupomPage() {
         <h1 className="text-xl font-extrabold">Novo cupom</h1>
       </header>
 
-      <NovoCupomForm categoriaId={categoriaId} categoriaLabel={categoriaLabel} />
+      <NovoCupomForm categorias={categorias} categoriaPrincipal={categoriaPrincipal} />
     </div>
   );
 }

@@ -70,7 +70,8 @@ export interface AdminEstabelecimento {
   nome: string;
   cidade: string;
   status: string;
-  categoriaId: string;
+  categoriaId: string; // principal (avatar/gradiente e pré-seleção)
+  categorias: string[]; // conjunto completo (junção, Fase 4)
   cuponsAtivos: number;
   cuponsTotal: number;
 }
@@ -97,12 +98,24 @@ export async function buscarEstabelecimentosAdmin(): Promise<AdminEstabeleciment
     }
   });
 
+  // conjunto de categorias por estabelecimento (junção, Fase 4)
+  const { data: juncao } = await supabase
+    .from("estabelecimento_categorias")
+    .select("estabelecimento_id, categoria_id");
+  const catsPor = new Map<string, string[]>();
+  (juncao ?? []).forEach((j) => {
+    const arr = catsPor.get(j.estabelecimento_id) ?? [];
+    arr.push(j.categoria_id);
+    catsPor.set(j.estabelecimento_id, arr);
+  });
+
   return (ests ?? []).map((e) => ({
     id: e.id,
     nome: e.nome,
     cidade: e.cidade,
     status: e.status,
     categoriaId: e.categoria_id,
+    categorias: catsPor.get(e.id) ?? [e.categoria_id],
     cuponsAtivos: ativos.get(e.id) ?? 0,
     cuponsTotal: total.get(e.id) ?? 0,
   }));

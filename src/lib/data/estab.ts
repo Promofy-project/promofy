@@ -22,6 +22,37 @@ function dataBrt(iso: string): string {
   }).format(new Date(iso));
 }
 
+export interface CategoriaEstab {
+  id: string;
+  label: string;
+}
+
+/**
+ * Categorias do estabelecimento (junção da Fase 4), com a principal
+ * primeiro (pré-seleção dos forms de cupom). Lojista lê as próprias via
+ * RLS mesmo com estabelecimento pendente/suspenso; labels vêm da tabela
+ * categorias (leitura pública).
+ */
+export async function buscarCategoriasEstab(
+  estabId: string,
+  principalId?: string | null,
+): Promise<CategoriaEstab[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("estabelecimento_categorias")
+    .select("categoria_id, categorias(label)")
+    .eq("estabelecimento_id", estabId);
+
+  const lista = (data ?? []).map((r) => ({
+    id: r.categoria_id,
+    label: r.categorias?.label ?? r.categoria_id,
+  }));
+  lista.sort((a, b) =>
+    a.id === principalId ? -1 : b.id === principalId ? 1 : a.label.localeCompare(b.label),
+  );
+  return lista;
+}
+
 export interface ResumoEstab {
   estabelecimento: { id: string; nome: string; status: string } | null;
   cuponsAtivos: number;

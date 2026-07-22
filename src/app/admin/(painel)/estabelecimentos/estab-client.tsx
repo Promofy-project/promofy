@@ -2,17 +2,21 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 
 import type { AdminEstabelecimento } from "@/lib/data/admin";
 import type { CategoriaId } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import { categorias as todasCategorias, getCategoria } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Icon } from "@/components/icon";
 import { DataTable, type Column } from "@/components/admin/data-table";
-import { moderarEstabelecimentoAction } from "@/lib/actions/admin";
+import {
+  definirCategoriasEstabelecimentoAction,
+  moderarEstabelecimentoAction,
+} from "@/lib/actions/admin";
 
 const STATUS: Record<string, { variant: BadgeProps["variant"]; label: string }> = {
   ativo: { variant: "success", label: "Ativo" },
@@ -37,6 +41,7 @@ export function EstabAdminClient({
   const [filtro, setFiltro] = React.useState<string>("todos");
   const [processando, setProcessando] = React.useState<string | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
+  const [editando, setEditando] = React.useState<AdminEstabelecimento | null>(null);
 
   const filtrados =
     filtro === "todos"
@@ -85,11 +90,23 @@ export function EstabAdminClient({
     },
     {
       key: "categoria",
-      header: "Categoria",
+      header: "Categorias",
       render: (e) => (
-        <span className="text-muted-foreground">
-          {getCategoria(e.categoriaId as CategoriaId).label}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {e.categorias.map((c) => (
+            <Badge key={c} variant="muted">
+              {getCategoria(c as CategoriaId).label}
+            </Badge>
+          ))}
+          <button
+            type="button"
+            aria-label={`Editar categorias de ${e.nome}`}
+            onClick={() => setEditando(e)}
+            className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ),
     },
     {
@@ -177,6 +194,126 @@ export function EstabAdminClient({
         getRowKey={(e) => e.id}
         empty="Nenhum estabelecimento neste filtro."
       />
+
+      {editando && (
+        <CategoriasModal
+          estabelecimento={editando}
+          onClose={() => setEditando(null)}
+          onSalvo={() => {
+            setEditando(null);
+            router.refresh();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Editor simples do conjunto de categorias (Fase 4). A principal fica
+ * travada (o servidor também garante); categoria com cupons existentes
+ * não pode ser removida — a action devolve 'categoria_em_uso'.
+ */
+function CategoriasModal({
+  estabelecimento,
+  onClose,
+  onSalvo,
+}: {
+  estabelecimento: AdminEstabelecimento;
+  onClose: () => void;
+  onSalvo: () => void;
+}) {
+  const [selecao, setSelecao] = React.useState<Set<string>>(
+    new Set(estabelecimento.categorias),
+  );
+  const [salvando, setSalvando] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
+
+  const toggle = (id: string) => {
+    if (id === estabelecimento.categoriaId) return; // principal travada
+    setSelecao((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  async function salvar() {
+    setSalvando(true);
+    setErro(null);
+    const r = await definirCategoriasEstabelecimentoAction(
+      estabelecimento.id,
+      Array.from(selecao),
+    );
+    setSalvando(false);
+    if (r.ok) {
+      onSalvo();
+    } else {
+      setErro(
+        r.motivo === "categoria_em_uso"
+          ? "Há cupons nessa categoria — remova ou recategorize os cupons antes."
+          : "Não foi possível salvar. Tente novamente.",
+      );
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div className="animate-fade-up relative w-full max-w-[420px] rounded-card bg-surface p-6 shadow-2xl">
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={onClose}
+          className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <h2 className="text-lg font-bold">Categorias</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {estabelecimento.nome} — a categoria principal não pode ser removida.
+        </p>
+
+        <div className="mt-4 flex flex-col gap-2">
+          {todasCategorias.map((c) => {
+            const principal = c.id === estabelecimento.categoriaId;
+            return (
+              <label
+                key={c.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border border-border px-3 py-2.5",
+                  principal ? "bg-muted/60" : "cursor-pointer hover:bg-muted/40",
+                )}
+              >
+                {/* a principal é travada no toggle() — clique vira no-op */}
+                <Checkbox
+                  checked={selecao.has(c.id)}
+                  onCheckedChange={() => toggle(c.id)}
+                />
+                <span className="flex-1 text-sm font-medium">{c.label}</span>
+                {principal && (
+                  <span className="text-xs text-muted-foreground">principal</span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+
+        {erro && <p className="mt-3 text-sm font-semibold text-danger">{erro}</p>}
+
+        <div className="mt-5 flex items-center justify-end gap-3">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={salvar} disabled={salvando}>
+            <Check className="h-4 w-4" /> {salvando ? "Salvando…" : "Salvar"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

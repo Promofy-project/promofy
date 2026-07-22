@@ -4,7 +4,7 @@ import * as React from "react";
 import { Check } from "lucide-react";
 
 import type { CategoriaId, Cupom } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import { DIAS_SEMANA } from "@/lib/dias";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,8 @@ import { CouponCard } from "@/components/coupon-card";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { criarCupomAction } from "@/lib/actions/cupons";
 
-const DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+// formato canônico dos dias vive em src/lib/dias.ts (Fase 4)
+const DIAS = DIAS_SEMANA;
 
 function Field({
   label,
@@ -39,20 +40,27 @@ function Field({
 
 export function NovoCupomForm({
   estabelecimentoNome,
-  categoriaId,
+  categorias,
+  categoriaPrincipal,
   onSalvar,
   onCancelar,
 }: {
   estabelecimentoNome: string;
-  categoriaId: string | null;
+  categorias: { id: string; label: string }[];
+  categoriaPrincipal: string | null;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
   const [titulo, setTitulo] = React.useState("");
   const [beneficio, setBeneficio] = React.useState("");
-  // D2: categoria pré-setada e travada — a do estabelecimento. O servidor
-  // (criarCupomAction) é autoritativo; aqui é só exibição.
-  const categoria = (categoriaId ?? "alimentacao") as CategoriaId;
+  // Fase 4: o estabelecimento pode ter N categorias — seleção entre elas,
+  // principal pré-setada. O servidor valida contra o conjunto (junção).
+  const [categoriaSel, setCategoriaSel] = React.useState<string>(
+    categoriaPrincipal ?? categorias[0]?.id ?? "alimentacao",
+  );
+  const categoria = categoriaSel as CategoriaId;
+  const categoriaLabel =
+    categorias.find((c) => c.id === categoriaSel)?.label ?? categoriaSel;
   const [economia, setEconomia] = React.useState("");
   const [validade, setValidade] = React.useState("");
   const [dataInicio, setDataInicio] = React.useState("");
@@ -151,14 +159,32 @@ export function NovoCupomForm({
           </Field>
 
           <Field label="Categoria">
-            <div className="flex h-11 items-center justify-between rounded-btn border border-border bg-muted/60 px-3.5 text-sm">
-              <span className="font-medium text-foreground">
-                {getCategoria(categoria).label}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                definida pelo estabelecimento
-              </span>
-            </div>
+            {categorias.length > 1 ? (
+              <div className="flex flex-wrap gap-2">
+                {categorias.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategoriaSel(c.id)}
+                    className={cn(
+                      "h-9 rounded-lg border px-3 text-sm font-semibold transition-colors",
+                      categoriaSel === c.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-11 items-center justify-between rounded-btn border border-border bg-muted/60 px-3.5 text-sm">
+                <span className="font-medium text-foreground">{categoriaLabel}</span>
+                <span className="text-xs text-muted-foreground">
+                  definida pelo estabelecimento
+                </span>
+              </div>
+            )}
           </Field>
 
           <Field label="Economia (R$)" htmlFor="f-economia">

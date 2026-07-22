@@ -4,20 +4,24 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { criarCupomAction } from "@/lib/actions/cupons";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/field";
 
 /**
  * Form reduzido de criação de cupom para o /e. Coleta só o essencial;
  * os campos avançados vão com defaults sensatos (prazo 5h da regra de
- * negócio; horário "todos os dias"). Categoria pré-setada e travada.
+ * negócio; horário "todos os dias"). Fase 4: o estabelecimento pode ter
+ * N categorias — com 1, o campo fica travado como antes; com 2+, vira
+ * seleção por chips (a principal pré-selecionada). O servidor valida
+ * contra o conjunto de qualquer forma.
  */
 export function NovoCupomForm({
-  categoriaId,
-  categoriaLabel,
+  categorias,
+  categoriaPrincipal,
 }: {
-  categoriaId: string | null;
-  categoriaLabel: string | null;
+  categorias: { id: string; label: string }[];
+  categoriaPrincipal: string | null;
 }) {
   const router = useRouter();
   const [titulo, setTitulo] = React.useState("");
@@ -26,6 +30,9 @@ export function NovoCupomForm({
   const [validade, setValidade] = React.useState("");
   const [limiteUsuario, setLimiteUsuario] = React.useState("1");
   const [limiteTotal, setLimiteTotal] = React.useState("100");
+  const [categoriaId, setCategoriaId] = React.useState<string | null>(
+    categoriaPrincipal ?? categorias[0]?.id ?? null,
+  );
   const [erro, setErro] = React.useState<string | null>(null);
   const [salvando, setSalvando] = React.useState(false);
 
@@ -112,14 +119,36 @@ export function NovoCupomForm({
         />
       </div>
 
-      {/* Categoria pré-setada do estabelecimento (D2-mínimo) */}
+      {/* Categoria: travada com 1; chips com 2+ (padrão do seletor de dias) */}
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-semibold text-foreground">Categoria</span>
-        <div className="flex h-12 items-center rounded-xl bg-muted/70 px-3.5 text-sm text-foreground">
-          {categoriaLabel ?? "—"}
-        </div>
+        {categorias.length > 1 ? (
+          <div className="flex flex-wrap gap-2">
+            {categorias.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategoriaId(c.id)}
+                className={cn(
+                  "h-10 rounded-xl border px-3.5 text-sm font-semibold transition-colors",
+                  categoriaId === c.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-12 items-center rounded-xl bg-muted/70 px-3.5 text-sm text-foreground">
+            {categorias[0]?.label ?? "—"}
+          </div>
+        )}
         <span className="text-xs text-muted-foreground">
-          Definida pelo seu estabelecimento.
+          {categorias.length > 1
+            ? "Escolha entre as categorias do seu estabelecimento."
+            : "Definida pelo seu estabelecimento."}
         </span>
       </div>
 

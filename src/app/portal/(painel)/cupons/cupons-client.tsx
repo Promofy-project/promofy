@@ -20,11 +20,13 @@ import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 export function CuponsClient({
   initialLista,
   estabelecimentoNome,
-  estabelecimentoCategoria,
+  categorias,
+  categoriaPrincipal,
 }: {
   initialLista: ItemCupomPortal[];
   estabelecimentoNome: string;
-  estabelecimentoCategoria: string | null;
+  categorias: { id: string; label: string }[];
+  categoriaPrincipal: string | null;
 }) {
   const [lista, setLista] = React.useState<ItemCupomPortal[]>(initialLista);
   const [view, setView] = React.useState<"lista" | "novo">("lista");
@@ -111,7 +113,8 @@ export function CuponsClient({
       ) : (
         <NovoCupomForm
           estabelecimentoNome={estabelecimentoNome}
-          categoriaId={estabelecimentoCategoria}
+          categorias={categorias}
+          categoriaPrincipal={categoriaPrincipal}
           onCancelar={() => setView("lista")}
           onSalvar={(item) => {
             setLista((prev) => [item, ...prev]);

@@ -164,16 +164,30 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
 
+    // Fase 4: a categoria escolhida DEVE pertencer ao conjunto do
+    // estabelecimento (junção). Ausente → principal. Fora do conjunto →
+    // rejeitada aqui; o trigger checar_categoria_cupom é a 2ª barreira
+    // (barra também o PostgREST direto).
+    const { data: cats } = await supabase
+      .from("estabelecimento_categorias")
+      .select("categoria_id")
+      .eq("estabelecimento_id", est.id);
+    const conjunto = new Set((cats ?? []).map((c) => c.categoria_id));
+    conjunto.add(est.categoria_id); // invariante: principal ∈ conjunto
+    const categoriaId = input.categoria || est.categoria_id;
+    if (!conjunto.has(categoriaId)) {
+      return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+    }
+
     const inteiro = (n: number, min: number) => Math.max(min, Math.trunc(Number(n) || min));
     const descricaoHorario = `${input.dias.length ? input.dias.join(", ") : "Todos os dias"}, ${input.horaInicio} às ${input.horaFim}`;
 
     const novo: Database["public"]["Tables"]["cupons"]["Insert"] = {
       estabelecimento_id: est.id,
       titulo: input.titulo.trim(),
-      // D2: a categoria do cupom é SEMPRE a do estabelecimento (autoritativo no
-      // servidor). `input.categoria` do form é ignorado — o form só a exibe,
-      // pré-setada e travada. (Multi-categoria via tabela de junção = Fase 4.)
-      categoria_id: est.categoria_id,
+      // Fase 4 (evolui a D2): o form escolhe entre as N categorias do
+      // estabelecimento; o servidor valida contra a junção (acima).
+      categoria_id: categoriaId,
       beneficio: input.beneficio.trim(),
       economia: input.economia,
       validade_inicio: input.dataInicio || null,
