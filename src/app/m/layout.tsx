@@ -8,6 +8,7 @@ import {
   FavoritesProvider,
   type FavoritosInicial,
 } from "@/components/favorites-provider";
+import { AuthSync } from "@/components/auth-sync";
 import { createClient } from "@/lib/supabase/server";
 import type { EstadoCupomDTO } from "@/lib/actions/cupons";
 
@@ -82,6 +83,10 @@ export default async function MobileLayout({
 
   return (
     <MobileFlowProvider>
+      {/* Fora dos providers com key={userId}: fica montado estável na sessão
+          toda (não re-monta a cada navegação) p/ ouvir a perda de sessão e
+          invalidar o Router Cache. `serverLogado` = havia sessão no render. */}
+      <AuthSync serverLogado={Boolean(userId)} />
       <FavoritesProvider key={userId ?? "anon"} initial={favoritos}>
         <CouponStateProvider key={userId ?? "anon"} initial={inicial}>
           <PhoneFrame>{children}</PhoneFrame>
