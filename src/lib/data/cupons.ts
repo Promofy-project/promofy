@@ -23,6 +23,18 @@ function horariosDeJson(horarios: CupomRow["horarios"]): string {
   return "";
 }
 
+/** jsonb horarios {dias[]} → labels válidos (Fase 4); fora do formato = sem restrição. */
+function diasDeJson(horarios: CupomRow["horarios"]): string[] | undefined {
+  if (horarios && typeof horarios === "object" && !Array.isArray(horarios)) {
+    const d = (horarios as Record<string, unknown>).dias;
+    if (Array.isArray(d)) {
+      const dias = d.filter((x): x is string => typeof x === "string");
+      return dias.length > 0 ? dias : undefined;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Linha do banco → tipo `Cupom` do protótipo. Os componentes de UI
  * (CouponCard etc.) continuam intocados: consomem o mesmo shape.
@@ -48,8 +60,23 @@ export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupo
     beneficio: row.beneficio,
     regras: regrasDeJson(row.regras),
     horarios: horariosDeJson(row.horarios),
+    dias: diasDeJson(row.horarios),
     destaque: row.destaque,
   };
+}
+
+/**
+ * Visibilidade do catálogo do consumidor (mesma regra da home desde a
+ * Fase 2): validade vigente e agendamento respeitado. A RLS já garantiu
+ * status ativo/indisponivel de estabelecimento ativo. "hoje" em BRT.
+ */
+function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
+  return rows
+    .filter((row) => row.validade_fim >= hoje) // exibir ≡ ativável (Fase 2)
+    .filter(
+      (row) =>
+        !(row.ocultar_ate_inicio && row.validade_inicio && row.validade_inicio > hoje),
+    );
 }
 
 /**
@@ -75,15 +102,30 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
 
   // "hoje" no fuso de negócio (BRT), coerente com hoje_brt() no banco —
   // um cupom válido "até dia X" não some às 21:00 UTC do dia anterior.
-  const hoje = hojeBrt();
-  return (data ?? [])
-    .filter((row) => row.validade_fim >= hoje) // exibir ≡ ativável (Fase 2)
-    .filter(
-      (row) =>
-        !(row.ocultar_ate_inicio && row.validade_inicio && row.validade_inicio > hoje),
-    )
+  return filtrarVisiveis(data ?? [], hojeBrt())
     .slice(0, limite)
     .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? ""));
+}
+
+/**
+ * Catálogo completo para a busca do /m (Fase 4) — mesma visibilidade da
+ * home, sem limite (max_rows do PostgREST = 1000 cobre o catálogo).
+ */
+export async function buscarCuponsBusca(): Promise<Cupom[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("cupons")
+    .select("*, estabelecimentos(nome)")
+    .in("status", ["ativo", "indisponivel"])
+    .order("ordem", { ascending: true });
+
+  if (error) {
+    throw new Error(`Falha ao buscar cupons da busca: ${error.message}`);
+  }
+
+  return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+  );
 }
 
 /** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */

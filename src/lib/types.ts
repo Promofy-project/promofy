@@ -39,6 +39,8 @@ export interface Cupom {
   beneficio: string; // linha curta de destaque
   regras: string[];
   horarios: string;
+  /** Restrição de dias (Fase 4, labels de DIAS_SEMANA); ausente/vazio = todos os dias. */
+  dias?: string[];
   destaque?: boolean; // "Oferta exclusiva"
 }
 
