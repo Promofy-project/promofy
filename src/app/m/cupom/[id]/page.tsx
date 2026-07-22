@@ -2,23 +2,25 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
-  Heart,
   Share2,
   MapPin,
   Phone,
   MessageCircle,
 } from "lucide-react";
 
-import { cupons, getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
+import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
+import { buscarCupomPorId } from "@/lib/data/cupons";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
 import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
+import { FavoriteButton } from "@/components/favorite-button";
 import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
 
-export function generateStaticParams() {
-  return cupons.map((c) => ({ id: c.id }));
-}
+// O /m inteiro já é dinâmico (o layout lê cookies); o detalhe deixa de
+// ser SSG do mock para poder cair no banco quando o id não está no mock
+// (cupom aprovado ao vivo — Fase 4).
+export const dynamic = "force-dynamic";
 
 const horariosTabela = [
   { dia: "Hoje, Quinta", manha: "09:00 - 16:00", noite: "09:00 - 16:00", hoje: true },
@@ -28,8 +30,14 @@ const horariosTabela = [
   { dia: "Segunda", manha: "09:00 - 16:00", noite: "09:00 - 16:00" },
 ];
 
-export default function CupomDetalhe({ params }: { params: { id: string } }) {
-  const cupom = getCupom(params.id);
+export default async function CupomDetalhe({
+  params,
+}: {
+  params: { id: string };
+}) {
+  // mock primeiro (conteúdo rico do protótipo); banco como fallback para
+  // cupons que nasceram depois (ex.: criados no /e e aprovados no admin)
+  const cupom = getCupom(params.id) ?? (await buscarCupomPorId(params.id));
   if (!cupom) notFound();
 
   const categoria = getCategoria(cupom.categoria);
@@ -49,12 +57,8 @@ export default function CupomDetalhe({ params }: { params: { id: string } }) {
         <h1 className="flex-1 truncate text-base font-bold">
           {cupom.estabelecimento}
         </h1>
-        <button
-          aria-label="Favoritar"
-          className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/15"
-        >
-          <Heart className="h-5 w-5" />
-        </button>
+        {/* Fase 4: coração real — favorita o estabelecimento do cupom */}
+        <FavoriteButton estabelecimentoId={cupom.estabelecimentoId} />
         <button
           aria-label="Compartilhar"
           className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/15"

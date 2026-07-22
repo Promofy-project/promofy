@@ -89,12 +89,29 @@ function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
  */
 export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  // Fase 4: para o usuário logado, cupons de estabelecimentos favoritados
+  // sobem para o topo — por isso a busca é sem janela (um favorito além
+  // das primeiras `ordem` nunca subiria). Anônimo segue o caminho antigo.
+  const { data: claims } = await supabase.auth.getClaims();
+  const logado = Boolean(claims?.claims?.sub);
+
+  let query = supabase
     .from("cupons")
     .select("*, estabelecimentos(nome)")
     .in("status", ["ativo", "indisponivel"])
-    .order("ordem", { ascending: true })
-    .limit(limite * 2); // folga p/ o filtro de agendamento abaixo
+    .order("ordem", { ascending: true });
+  if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
+
+  const [{ data, error }, favSet] = await Promise.all([
+    query,
+    logado
+      ? supabase
+          .from("favoritos")
+          .select("estabelecimento_id")
+          .then(({ data: favs }) => new Set((favs ?? []).map((f) => f.estabelecimento_id)))
+      : Promise.resolve(new Set<string>()),
+  ]);
 
   if (error) {
     throw new Error(`Falha ao buscar cupons da home: ${error.message}`);
@@ -102,9 +119,66 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
 
   // "hoje" no fuso de negócio (BRT), coerente com hoje_brt() no banco —
   // um cupom válido "até dia X" não some às 21:00 UTC do dia anterior.
-  return filtrarVisiveis(data ?? [], hojeBrt())
+  const visiveis = filtrarVisiveis(data ?? [], hojeBrt());
+  // partição estável: favoritados primeiro, `ordem` preservada nos grupos
+  const ordenados =
+    favSet.size > 0
+      ? [
+          ...visiveis.filter((r) => favSet.has(r.estabelecimento_id)),
+          ...visiveis.filter((r) => !favSet.has(r.estabelecimento_id)),
+        ]
+      : visiveis;
+  return ordenados
     .slice(0, limite)
     .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? ""));
+}
+
+/**
+ * Um cupom visível por id (fallback do detalhe /m/cupom/[id] para cupons
+ * criados depois do mock — ex.: aprovados ao vivo, Fase 4). Mesma
+ * visibilidade do catálogo; invisível/expirado → null (a página dá 404).
+ */
+export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("cupons")
+    .select("*, estabelecimentos(nome)")
+    .eq("id", id)
+    .in("status", ["ativo", "indisponivel"])
+    .maybeSingle();
+  if (!data) return null;
+  if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
+  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "");
+}
+
+/**
+ * Cupons visíveis dos estabelecimentos favoritados do usuário logado
+ * (página /m/favoritos, Fase 4). Anônimo → lista vazia (a página mostra
+ * o convite a logar).
+ */
+export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
+  const supabase = createClient();
+
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) return [];
+
+  const { data: favs } = await supabase.from("favoritos").select("estabelecimento_id");
+  const ids = (favs ?? []).map((f) => f.estabelecimento_id);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("cupons")
+    .select("*, estabelecimentos(nome)")
+    .in("estabelecimento_id", ids)
+    .in("status", ["ativo", "indisponivel"])
+    .order("ordem", { ascending: true });
+  if (error) {
+    throw new Error(`Falha ao buscar cupons dos favoritos: ${error.message}`);
+  }
+
+  return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+  );
 }
 
 /**

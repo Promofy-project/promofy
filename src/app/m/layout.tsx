@@ -4,7 +4,10 @@ import {
   CouponStateProvider,
   type EstadoInicial,
 } from "@/components/coupon-state-provider";
-import { FavoritesProvider } from "@/components/favorites-provider";
+import {
+  FavoritesProvider,
+  type FavoritosInicial,
+} from "@/components/favorites-provider";
 import { createClient } from "@/lib/supabase/server";
 import type { EstadoCupomDTO } from "@/lib/actions/cupons";
 
@@ -32,6 +35,7 @@ export default async function MobileLayout({
   children: React.ReactNode;
 }) {
   let inicial = INICIAL_ANONIMO;
+  let favoritos: FavoritosInicial = { logado: false, ids: [] };
   let userId: string | null = null;
 
   try {
@@ -40,11 +44,17 @@ export default async function MobileLayout({
     userId = claims?.claims?.sub ?? null;
 
     if (userId) {
-      // estado + economia (RPC própria, security definer) numa ida só
-      const [{ data, error }, { data: economiaData }] = await Promise.all([
-        supabase.rpc("meu_estado_consumidor"),
-        supabase.rpc("economia_total_consumidor"),
-      ]);
+      // estado + economia + favoritos (leitura sob RLS own) numa ida só
+      const [{ data, error }, { data: economiaData }, { data: favs }] =
+        await Promise.all([
+          supabase.rpc("meu_estado_consumidor"),
+          supabase.rpc("economia_total_consumidor"),
+          supabase.from("favoritos").select("estabelecimento_id"),
+        ]);
+      favoritos = {
+        logado: true,
+        ids: (favs ?? []).map((f) => f.estabelecimento_id),
+      };
       if (!error && data) {
         const p = data as unknown as {
           usuario: { nome: string; cpf_mascarado: string } | null;
@@ -67,11 +77,12 @@ export default async function MobileLayout({
   } catch {
     // banco indisponível → segue anônimo (não derruba /m)
     inicial = INICIAL_ANONIMO;
+    favoritos = { logado: false, ids: [] };
   }
 
   return (
     <MobileFlowProvider>
-      <FavoritesProvider>
+      <FavoritesProvider key={userId ?? "anon"} initial={favoritos}>
         <CouponStateProvider key={userId ?? "anon"} initial={inicial}>
           <PhoneFrame>{children}</PhoneFrame>
         </CouponStateProvider>

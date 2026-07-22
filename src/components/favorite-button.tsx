@@ -6,15 +6,19 @@ import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFavorites } from "@/components/favorites-provider";
 
+/**
+ * Coração de favoritar. Fase 4: favorita o ESTABELECIMENTO (não o cupom)
+ * — no card de cupom, passa-se cupom.estabelecimentoId.
+ */
 export function FavoriteButton({
-  cupomId,
+  estabelecimentoId,
   className,
 }: {
-  cupomId: string;
+  estabelecimentoId: string;
   className?: string;
 }) {
   const { isFavorite, toggleFavorite } = useFavorites();
-  const active = isFavorite(cupomId);
+  const active = isFavorite(estabelecimentoId);
 
   return (
     <button
@@ -24,7 +28,7 @@ export function FavoriteButton({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggleFavorite(cupomId);
+        toggleFavorite(estabelecimentoId);
       }}
       className={cn(
         "grid h-9 w-9 place-items-center rounded-full bg-white/90 text-foreground shadow-sm backdrop-blur transition hover:scale-105 active:scale-95",

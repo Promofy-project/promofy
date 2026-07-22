@@ -68,7 +68,10 @@ export function CouponCard({
             Oferta exclusiva
           </Badge>
         )}
-        <FavoriteButton cupomId={cupom.id} className="absolute right-3 top-3 z-[2]" />
+        <FavoriteButton
+          estabelecimentoId={cupom.estabelecimentoId}
+          className="absolute right-3 top-3 z-[2]"
+        />
 
         {indisponivel && (
           <div className="absolute inset-0 grid place-items-center bg-foreground/55">

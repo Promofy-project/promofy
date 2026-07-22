@@ -61,6 +61,19 @@ export async function definirCategoriasEstabelecimentoAction(
   try {
     const supabase = createClient();
 
+    // Papel checado no servidor ALÉM da RLS (defesa em profundidade —
+    // sem isto, um delete barrado pela policy afeta 0 linhas sem erro e
+    // devolveria um ok:true enganoso).
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false, motivo: "sem_permissao" };
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", uid)
+      .maybeSingle();
+    if (perfil?.role !== "admin") return { ok: false, motivo: "sem_permissao" };
+
     const { data: est } = await supabase
       .from("estabelecimentos")
       .select("categoria_id")

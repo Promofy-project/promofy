@@ -71,9 +71,11 @@ function EstabelecimentoCard({ e }: { e: Estabelecimento }) {
         </div>
       </div>
 
-      {/* Ações */}
+      {/* Ações — Fase 4: o coração favorita o estabelecimento no banco.
+          Nesta lista (ainda mock) e4/e6 não estão ativos: a RPC recusa e
+          o toggle otimista reverte em silêncio (comportamento aceito). */}
       <div className="flex shrink-0 flex-col items-center gap-2">
-        <FavoriteButton cupomId={`est:${e.id}`} />
+        <FavoriteButton estabelecimentoId={e.id} />
         <NotifyBell nome={e.nome} />
       </div>
     </article>
