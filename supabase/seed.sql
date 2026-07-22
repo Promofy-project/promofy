@@ -30,6 +30,19 @@ insert into public.estabelecimentos
   ('e5', 'Saber+ Cursos',        'educacao',    'Remoto / Online', 'ativo',    4.8,  412),
   ('e6', 'Mundo Pet',            'pet',         'Santo André, SP', 'suspenso', 4.7,  738);
 
+-- CATEGORIAS POR ESTABELECIMENTO (Fase 4) ---------------------
+-- Junção obrigatória ANTES dos cupons (trigger checa categoria ∈ conjunto).
+-- e1 prova o caso multi-categoria do cliente: restaurante fitness.
+insert into public.estabelecimento_categorias (estabelecimento_id, categoria_id) values
+  ('e1', 'alimentacao'),
+  ('e1', 'fitness'),
+  ('e2', 'fitness'),
+  ('e3', 'beleza'),
+  ('e4', 'eletronicos'),
+  ('e5', 'educacao'),
+  ('e6', 'pet')
+on conflict do nothing; -- a migration 12 já faz backfill da principal
+
 -- CUPONS (12 do catálogo + 2 campanhas portal-only do e1) -----
 -- ordem = índice do array do mock (home = order by ordem limit 6).
 -- rating/avaliacoes = POR CUPOM (protótipo; difere do estabelecimento).
@@ -41,17 +54,17 @@ insert into public.cupons
   ('c01', 'e1', 'Rodízio de pizza em dobro', 'alimentacao',
    '2 rodízios pelo preço de 1', 45, 89.9, 44.9, current_date + 45, 1000,
    '["Válido para consumo no local, jantar.","Não cumulativo com outras promoções.","Necessário apresentar o cupom no caixa."]'::jsonb,
-   '{"descricao":"Ter a Dom, 18h às 23h"}'::jsonb,
+   '{"descricao":"Ter a Dom, 18h às 23h","dias":["Ter","Qua","Qui","Sex","Sáb","Dom"],"inicio":"18:00","fim":"23:00"}'::jsonb,
    'ativo', true, 1.2, '/img/cupons/c01.jpg', 1, 4.8, 1240),
   ('c02', 'e1', '20% off no almoço executivo', 'alimentacao',
    'Prato + bebida + sobremesa', 18, null, null, current_date + 30, 1000,
    '["Válido de segunda a sexta.","Limite de 1 cupom por pessoa."]'::jsonb,
-   '{"descricao":"Seg a Sex, 11h às 15h"}'::jsonb,
+   '{"descricao":"Seg a Sex, 11h às 15h","dias":["Seg","Ter","Qua","Qui","Sex"],"inicio":"11:00","fim":"15:00"}'::jsonb,
    'ativo', false, 2.4, '/img/cupons/c02.jpg', 2, 4.5, 1240),
   ('c03', 'e2', '1 mês grátis na matrícula', 'fitness',
    'Plano anual com 1 mês cortesia', 99, 199, 99, current_date + 60, null,
    '["Válido para novos alunos.","Fidelidade mínima de 12 meses.","Avaliação física inclusa."]'::jsonb,
-   '{"descricao":"Seg a Sáb, 6h às 22h"}'::jsonb,
+   '{"descricao":"Seg a Sáb, 6h às 22h","dias":["Seg","Ter","Qua","Qui","Sex","Sáb"],"inicio":"06:00","fim":"22:00"}'::jsonb,
    'ativo', true, 0.8, '/img/cupons/c03.jpg', 3, 4.7, 890),
   ('c04', 'e2', 'Aula de spinning 2x1', 'fitness',
    'Traga um amigo sem custo', 30, null, null, current_date + 30, null,
@@ -61,7 +74,7 @@ insert into public.cupons
   ('c05', 'e3', 'Corte + escova com 40% off', 'beleza',
    'Inclui hidratação expressa', 50, 125, 75, current_date + 40, null,
    '["Mediante agendamento.","Válido de terça a quinta."]'::jsonb,
-   '{"descricao":"Ter a Sáb, 9h às 19h"}'::jsonb,
+   '{"descricao":"Ter a Sáb, 9h às 19h","dias":["Ter","Qua","Qui","Sex","Sáb"],"inicio":"09:00","fim":"19:00"}'::jsonb,
    'ativo', true, 1.6, '/img/cupons/c05.jpg', 5, 4.9, 654),
   ('c06', 'e3', 'Dia de noiva com brinde', 'beleza',
    'Pacote completo + acompanhante', 120, null, null, current_date + 75, null,
@@ -159,3 +172,10 @@ from (values
   ('p-campanha-expirada', 'ativacao', 240),      ('p-campanha-expirada', 'validacao', 180)
 ) as v(cupom_id, tipo, qtd)
 cross join lateral generate_series(1, v.qtd);
+
+-- PUBLICADO_EM (Fase 4) — cupons do seed nascem direto no status final
+-- (sem passar por aprovar_cupom); mesmo predicado do backfill da
+-- migration 14, para local e hosted não divergirem.
+update public.cupons
+   set publicado_em = criado_em
+ where status not in ('pendente', 'rejeitado');
