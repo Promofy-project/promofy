@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { buscarCuponsHome } from "@/lib/data/cupons";
+import { buscarCuponsHome, contarNovidades } from "@/lib/data/cupons";
 import { HomeHeader } from "@/components/home-header";
 import { BannerCarousel } from "@/components/banner-carousel";
 import { HomeSearchBar } from "@/components/home-search-bar";
@@ -14,11 +14,14 @@ import { PointsSummary } from "@/components/points-summary";
 export const dynamic = "force-dynamic";
 
 export default async function MobileHome() {
-  const grid = await buscarCuponsHome();
+  const [grid, novidades] = await Promise.all([
+    buscarCuponsHome(),
+    contarNovidades(),
+  ]);
 
   return (
     <div className="flex flex-col gap-5 pb-6">
-      <HomeHeader />
+      <HomeHeader novidades={novidades} />
       <BannerCarousel />
       <HomeSearchBar />
 

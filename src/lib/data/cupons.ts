@@ -133,6 +133,48 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
     .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? ""));
 }
 
+// Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
+// visível de estab favoritado, publicado depois do favorito e do visto).
+interface NovidadesRpc {
+  count?: number;
+  cupom_ids?: string[];
+}
+
+/** Contagem do badge do sino (home). Anônimo/erro → 0 (sem badge). */
+export async function contarNovidades(): Promise<number> {
+  const supabase = createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) return 0;
+  const { data, error } = await supabase.rpc("novidades_favoritos");
+  if (error) return 0;
+  return Number((data as unknown as NovidadesRpc | null)?.count ?? 0);
+}
+
+/**
+ * Cupons das novidades (/m/novidades), na ordem da RPC (publicado_em
+ * desc). A visibilidade já foi aplicada pelo predicado da RPC.
+ */
+export async function buscarCuponsNovidades(): Promise<Cupom[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("novidades_favoritos");
+  if (error) return [];
+  const ids = (data as unknown as NovidadesRpc | null)?.cupom_ids ?? [];
+  if (ids.length === 0) return [];
+
+  const { data: rows } = await supabase
+    .from("cupons")
+    .select("*, estabelecimentos(nome)")
+    .in("id", ids);
+
+  const porId = new Map(
+    (rows ?? []).map((row) => [
+      row.id,
+      linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+    ]),
+  );
+  return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
+}
+
 /**
  * Um cupom visível por id (fallback do detalhe /m/cupom/[id] para cupons
  * criados depois do mock — ex.: aprovados ao vivo, Fase 4). Mesma
