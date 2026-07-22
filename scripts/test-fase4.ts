@@ -22,6 +22,7 @@ config({ path: envFile });
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { DIAS_SEMANA, cupomDisponivelNoDia, diaSemanaBrt } from "../src/lib/dias";
+import { cupons as mockCupons } from "../src/lib/mock-data";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -70,9 +71,10 @@ const idsOf = (r: Jsonb) => ((r as { cupom_ids?: string[] })?.cupom_ids ?? []);
 const CAT_OK = "f4-cat-ok"; // cupom do lojista com a 2ª categoria (fitness ∈ e1)
 const NOVO = "f4-novidade"; // cupom aprovado DEPOIS do favorito de A
 const ANTIGO = "f4-antigo"; // cupom aprovado ANTES do favorito de B
+const BUG1 = "f4-bug1"; // detalhe /m/cupom/[id]: cupom novo aprovado deve abrir por id
 
 async function limparFase4(uids: string[]) {
-  await svc.from("cupons").delete().in("id", [CAT_OK, NOVO, ANTIGO]);
+  await svc.from("cupons").delete().in("id", [CAT_OK, NOVO, ANTIGO, BUG1, `${BUG1}-exp`]);
   await svc.from("favoritos").delete().in("usuario_id", uids);
   await svc.from("novidades_visto").delete().in("usuario_id", uids);
 }
@@ -203,6 +205,66 @@ async function main() {
     {
       const anonRpc = await anonC.rpc("favoritar_estabelecimento", { p_est_id: "e1" });
       check("anon NÃO chama a RPC de favoritar (execute revogado)", anonRpc.error !== null);
+    }
+    {
+      // regressão Fase 4: o detalhe /m/cupom/[id] renderiza <FavoriteButton
+      // estabelecimentoId={cupom.estabelecimentoId}>. Um cupom-seed (via mock)
+      // precisa apontar p/ um estabelecimento REAL — senão favoritar pelo
+      // detalhe fica mudo (id órfão). Guarda a paridade mock↔banco.
+      const { data } = await svc.from("estabelecimentos").select("id");
+      const dbIds = new Set((data ?? []).map((e) => e.id));
+      const orfaos = mockCupons
+        .filter((c) => !dbIds.has(c.estabelecimentoId))
+        .map((c) => `${c.id}→${c.estabelecimentoId}`);
+      check(
+        "todo cupom do mock aponta p/ estabelecimento existente (FavoriteButton nunca recebe id órfão)",
+        orfaos.length === 0,
+        orfaos.join(", "),
+      );
+    }
+
+    console.log("\n[bug1 — /m/cupom/[id] lê o banco: novo aprovado abre; invisível dá 404]");
+    {
+      // pendente: buscarCupomPorId filtra por status in (ativo,indisponivel) →
+      // anon não lê → notFound() correto (cupom ainda não aprovado no admin).
+      await svc.from("cupons").insert({
+        id: BUG1, estabelecimento_id: "e1", titulo: "F4 Bug1 detalhe",
+        categoria_id: "alimentacao", economia: 20, validade_fim: "2030-12-31",
+        status: "pendente",
+      });
+      const pend = await anonC
+        .from("cupons").select("id")
+        .eq("id", BUG1).in("status", ["ativo", "indisponivel"]).maybeSingle();
+      check("cupom pendente NÃO é lido por id (→ null → 404 correto)",
+        pend.data == null, JSON.stringify(pend.data));
+
+      // aprovado: agora anon lê por id (no main, o detalhe só olhava o mock e
+      // dava 404 p/ id novo — este é exatamente o caminho do buscarCupomPorId).
+      await admin.rpc("aprovar_cupom", { p_cupom_id: BUG1 });
+      const apr = await anonC
+        .from("cupons").select("id, estabelecimentos(nome)")
+        .eq("id", BUG1).in("status", ["ativo", "indisponivel"]).maybeSingle();
+      const nome = (apr.data as { estabelecimentos?: { nome?: string } } | null)
+        ?.estabelecimentos?.nome;
+      check("cupom recém-aprovado É lido por id via anon (fix do 404 no /m/cupom/[id])",
+        apr.data?.id === BUG1 && nome === "Sabor & Cia", JSON.stringify(apr.data));
+
+      // aprovado porém expirado: passa no filtro de status, mas a visibilidade
+      // (validade_fim >= hoje, BRT) reprova → buscarCupomPorId → null → 404 legítimo.
+      await svc.from("cupons").insert({
+        id: `${BUG1}-exp`, estabelecimento_id: "e1", titulo: "F4 Bug1 expirado",
+        categoria_id: "alimentacao", economia: 20, validade_fim: "2000-01-01",
+        status: "ativo",
+      });
+      const exp = await anonC
+        .from("cupons").select("id, validade_fim")
+        .eq("id", `${BUG1}-exp`).in("status", ["ativo", "indisponivel"]).maybeSingle();
+      const hojeBrt = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date());
+      const visivel = exp.data != null && (exp.data.validade_fim as string) >= hojeBrt;
+      check("cupom aprovado porém expirado NÃO passa na visibilidade (→ null → 404)",
+        !visivel, JSON.stringify({ validade_fim: exp.data?.validade_fim, hojeBrt }));
     }
 
     console.log("\n[dia da semana — funções puras (fuso BRT)]");
