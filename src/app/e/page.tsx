@@ -63,13 +63,13 @@ export default async function EstabHomePage() {
       <div className="flex flex-col gap-3">
         <TotemActionCard
           href="/e/cupons"
-          icon={Ticket}
+          icon={<Ticket className="h-6 w-6" />}
           label="Meus cupons"
           description="Ativos, resgatados e em análise"
         />
         <TotemActionCard
           href="/e/cupom/novo"
-          icon={Plus}
+          icon={<Plus className="h-6 w-6" />}
           label="Novo cupom"
           description="Criar uma oferta rápida"
         />

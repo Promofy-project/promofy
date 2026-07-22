@@ -1,7 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,9 +11,13 @@ import { cn } from "@/lib/utils";
  * "Gerenciar cupom" das referências. Alvo grande (≥64px) para uso de balcão.
  * `variant="primary"` = ação dominante (azul sólido); "surface" = card branco.
  * Reusa os tokens do design system (rounded-card, shadow-card, bg-primary).
+ *
+ * `icon` é um ELEMENTO renderizado (ex.: <Ticket className="h-6 w-6" />), não o
+ * componente — assim um Server Component pode passá-lo pela fronteira RSC
+ * (componentes/funções não serializam; elementos sim).
  */
 interface TotemActionCardProps {
-  icon: LucideIcon;
+  icon: ReactNode;
   label: string;
   description?: string;
   href?: string;
@@ -22,7 +27,7 @@ interface TotemActionCardProps {
 }
 
 export function TotemActionCard({
-  icon: Icon,
+  icon,
   label,
   description,
   href,
@@ -48,7 +53,7 @@ export function TotemActionCard({
           primary ? "bg-white/15 text-white" : "bg-primary/10 text-primary",
         )}
       >
-        <Icon className="h-6 w-6" />
+        {icon}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-base font-bold leading-tight">{label}</span>
