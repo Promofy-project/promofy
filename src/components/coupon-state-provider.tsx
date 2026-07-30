@@ -7,6 +7,7 @@ import {
   consultarCupomAction,
   responderNpsAction,
   type EstadoCupomDTO,
+  type UsoCupomDTO,
 } from "@/lib/actions/cupons";
 
 /** Ciclo de vida de um cupom para o consumidor. */
@@ -38,12 +39,25 @@ export interface EstadoInicial {
   economia: number;
   config: ConfigPontos;
   estados: EstadoCupomDTO[];
+  /** Uso por cupom (Fase 5) — insumo do selo "utilizado". */
+  usos: UsoCupomDTO[];
 }
 
 /** Resultado de uma ativação para a UI reagir. */
 export type ResultadoAtivacao =
   | { ok: true }
   | { ok: false; motivo: string };
+
+/** NPS devolve os pontos REAIS creditados pelo banco (0 se já respondido). */
+export type ResultadoNps =
+  | { ok: true; pontos: number }
+  | { ok: false; motivo: string };
+
+/** Comemoração de pontos: `seq` remonta o componente e reinicia a animação. */
+export interface PontosPopState {
+  valor: number;
+  seq: number;
+}
 
 interface CouponStateValue {
   logado: boolean;
@@ -52,6 +66,12 @@ interface CouponStateValue {
 
   getStatus: (id: string) => StatusCupom;
   getEstado: (id: string) => EstadoCupom | null;
+  /**
+   * Uso do cupom pelo usuário (Fase 5). `null` = o servidor não reportou
+   * uso nenhum. Quem decide se ainda há uso disponível é o servidor:
+   * aqui é só leitura de `restantes`.
+   */
+  getUsos: (id: string) => UsoCupomDTO | null;
   /** Saldo real do consumidor (SUM do ledger, hidratado do servidor). */
   getPontos: () => number;
   /** Total economizado real (soma da economia dos cupons validados). */
@@ -67,11 +87,16 @@ interface CouponStateValue {
   /** Abre o NPS para um cupom já validado. */
   abrirNps: (id: string) => void;
   /** Registra a nota de NPS (idempotente no servidor). */
-  responderNps: (id: string, nota: number) => Promise<ResultadoAtivacao>;
+  responderNps: (id: string, nota: number) => Promise<ResultadoNps>;
   fecharNps: () => void;
 
   sheetId: string | null;
   npsId: string | null;
+
+  /** Animação "+N pontos" (Fase 5) — sempre com valor vindo do servidor. */
+  pontosPop: PontosPopState | null;
+  celebrarPontos: (pontos: number) => void;
+  encerrarPontosPop: () => void;
 }
 
 const CouponStateContext = React.createContext<CouponStateValue | null>(null);
@@ -122,8 +147,25 @@ export function CouponStateProvider({
   );
   const [saldo, setSaldo] = React.useState(initial.saldo);
   const [economia, setEconomia] = React.useState(initial.economia);
+  const [usos, setUsos] = React.useState<Record<string, UsoCupomDTO>>(() =>
+    Object.fromEntries((initial.usos ?? []).map((u) => [u.cupom_id, u])),
+  );
   const [sheetId, setSheetId] = React.useState<string | null>(null);
   const [npsId, setNpsId] = React.useState<string | null>(null);
+  const [pontosPop, setPontosPop] = React.useState<PontosPopState | null>(null);
+  const seqPop = React.useRef(0);
+
+  /**
+   * Dispara a comemoração. `pontos` é SEMPRE o valor que a RPC devolveu —
+   * nunca um número fixo no cliente. Zero/ausente não anima (nada de "+0"
+   * quando o servidor não creditou nada, ex.: NPS já respondido).
+   */
+  const celebrarPontos = React.useCallback((pontos: number) => {
+    if (!(pontos > 0)) return;
+    seqPop.current += 1;
+    setPontosPop({ valor: pontos, seq: seqPop.current });
+  }, []);
+  const encerrarPontosPop = React.useCallback(() => setPontosPop(null), []);
 
   const aplicarDto = React.useCallback((id: string, dto: EstadoCupomDTO | null) => {
     setEstados((prev) => {
@@ -146,6 +188,7 @@ export function CouponStateProvider({
 
       getStatus: (id) => estados[id]?.status ?? "disponivel",
       getEstado: (id) => estados[id] ?? null,
+      getUsos: (id) => usos[id] ?? null,
       getPontos: () => saldo,
       getEconomia: () => economia,
 
@@ -165,11 +208,16 @@ export function CouponStateProvider({
         if (!r?.ok) return;
         setSaldo(r.saldo);
         setEconomia(r.economia);
+        // `usos` recalculado no mesmo poll: é o que faz o selo "utilizado"
+        // aparecer na home sem F5 depois que o lojista valida.
+        setUsos(Object.fromEntries((r.usos ?? []).map((u) => [u.cupom_id, u])));
         const anterior = estados[id]?.status;
         aplicarDto(id, r.estado);
-        // flip ativo → validado detectado no polling → abre o NPS
-        if (anterior === "ativo" && r.estado?.status === "validado" && r.estado.nps === null) {
-          setNpsId(id);
+        // flip ativo → validado detectado no polling
+        if (anterior === "ativo" && r.estado?.status === "validado") {
+          // pontos do RESGATE, lidos do ledger pela RPC (não é número fixo)
+          celebrarPontos(r.estado.pontos_resgate ?? 0);
+          if (r.estado.nps === null) setNpsId(id);
         }
       },
 
@@ -184,7 +232,7 @@ export function CouponStateProvider({
         setEstados((prev) =>
           prev[id] ? { ...prev, [id]: { ...prev[id], nps: nota } } : prev,
         );
-        return { ok: true };
+        return { ok: true, pontos: r.pontos ?? 0 };
       },
 
       fecharNps: () => {
@@ -194,8 +242,24 @@ export function CouponStateProvider({
 
       sheetId,
       npsId,
+
+      pontosPop,
+      celebrarPontos,
+      encerrarPontosPop,
     }),
-    [estados, saldo, economia, sheetId, npsId, initial, aplicarDto],
+    [
+      estados,
+      saldo,
+      economia,
+      usos,
+      sheetId,
+      npsId,
+      pontosPop,
+      celebrarPontos,
+      encerrarPontosPop,
+      initial,
+      aplicarDto,
+    ],
   );
 
   return (
@@ -217,6 +281,7 @@ export function useCouponState(): CouponStateValue {
       config: CONFIG_FALLBACK,
       getStatus: () => "disponivel",
       getEstado: () => null,
+      getUsos: () => null,
       getPontos: () => 0,
       getEconomia: () => 0,
       ativarCupom: async () => ({ ok: false, motivo: "sem_sessao" }),
@@ -228,6 +293,9 @@ export function useCouponState(): CouponStateValue {
       fecharNps: () => {},
       sheetId: null,
       npsId: null,
+      pontosPop: null,
+      celebrarPontos: () => {},
+      encerrarPontosPop: () => {},
     };
   }
   return ctx;

@@ -25,17 +25,20 @@ const CONFETTI = [
  * confete. Enviar ou pular fecham o fluxo e voltam ao detalhe (cupom 'validado').
  */
 export function NpsDialog() {
-  const { npsId, responderNps, fecharNps } = useCouponState();
+  const { npsId, responderNps, fecharNps, celebrarPontos } = useCouponState();
   const [nota, setNota] = React.useState<number | null>(null);
   const [enviado, setEnviado] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
+  /** Pontos creditados pelo servidor por esta resposta (0 = já respondida). */
+  const [pontosGanhos, setPontosGanhos] = React.useState(0);
 
   React.useEffect(() => {
     setNota(null);
     setEnviado(false);
     setEnviando(false);
     setErro(null);
+    setPontosGanhos(0);
   }, [npsId]);
 
   if (!npsId) return null;
@@ -47,6 +50,9 @@ export function NpsDialog() {
     const r = await responderNps(npsId, nota);
     setEnviando(false);
     if (r.ok) {
+      setPontosGanhos(r.pontos);
+      // valor REAL do servidor; 0 (resposta repetida) não anima
+      celebrarPontos(r.pontos);
       setEnviado(true);
     } else {
       setErro("Não foi possível enviar sua avaliação agora. Tente novamente.");
@@ -145,7 +151,11 @@ export function NpsDialog() {
           </div>
           <h2 className="text-xl font-extrabold">Obrigado pela avaliação!</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Você ganhou pontos por compartilhar sua experiência.
+            {/* valor real creditado; sem crédito (resposta repetida) não
+                promete pontos que não existem */}
+            {pontosGanhos > 0
+              ? `Você ganhou ${pontosGanhos} pontos por compartilhar sua experiência.`
+              : "Sua avaliação já tinha sido registrada."}
           </p>
           <Button className="mt-6 w-full" onClick={fecharNps}>
             Concluir

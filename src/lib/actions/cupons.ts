@@ -15,15 +15,37 @@ export interface EstadoCupomDTO {
   ativado_em: string;
   expira_em: string | null;
   nps: number | null;
+  /** Pontos que o banco creditou POR ESTE resgate (Fase 5) — 0 se não validado. */
+  pontos_resgate?: number;
 }
+
+/**
+ * Quantas vezes o usuário já consumiu um cupom e quantas ainda restam
+ * (Fase 5). `consumidos` usa a MESMA regra de `ativar_cupom`: validadas
+ * + ativas vigentes. É o insumo do selo "utilizado" — sem `restantes`
+ * não dá para distinguir "acabou" de "ainda tem uso sobrando".
+ */
+export interface UsoCupomDTO {
+  cupom_id: string;
+  consumidos: number;
+  limite: number;
+  restantes: number;
+}
+
 type AtivarResult =
   | { ok: true; ja_ativo: boolean; estado: EstadoCupomDTO }
   | { ok: false; motivo: string };
 type ConsultarResult =
-  | { ok: true; estado: EstadoCupomDTO | null; saldo: number; economia: number }
+  | {
+      ok: true;
+      estado: EstadoCupomDTO | null;
+      saldo: number;
+      economia: number;
+      usos: UsoCupomDTO[];
+    }
   | { ok: false };
 type NpsResult =
-  | { ok: true; ja_respondido: boolean; saldo: number }
+  | { ok: true; ja_respondido: boolean; saldo: number; pontos: number }
   | { ok: false; motivo: string };
 export interface ValidarDadosDTO {
   codigo: string;
@@ -63,6 +85,7 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
     const parsed = estadoJson as unknown as {
       saldo?: number;
       estados?: EstadoCupomDTO[];
+      usos?: UsoCupomDTO[];
     } | null;
     const estados = parsed?.estados ?? [];
     // linha mais recente não-expirada do cupom (ativo vigente vence validado)
@@ -78,6 +101,11 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
       estado: doCupom[0] ?? null,
       saldo: parsed?.saldo ?? 0,
       economia: Number(economiaData ?? 0),
+      // `usos` vai junto de propósito: navegação client-side não
+      // re-renderiza o layout (Partial Rendering) e nada dá
+      // router.refresh() no fluxo do consumidor — sem isto o selo
+      // "utilizado" só apareceria depois de um F5.
+      usos: parsed?.usos ?? [],
     };
   } catch {
     return { ok: false };

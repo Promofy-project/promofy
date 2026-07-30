@@ -10,7 +10,7 @@ import {
 } from "@/components/favorites-provider";
 import { AuthSync } from "@/components/auth-sync";
 import { createClient } from "@/lib/supabase/server";
-import type { EstadoCupomDTO } from "@/lib/actions/cupons";
+import type { EstadoCupomDTO, UsoCupomDTO } from "@/lib/actions/cupons";
 
 const INICIAL_ANONIMO: EstadoInicial = {
   logado: false,
@@ -19,6 +19,7 @@ const INICIAL_ANONIMO: EstadoInicial = {
   economia: 0,
   config: {},
   estados: [],
+  usos: [],
 };
 
 /**
@@ -57,11 +58,16 @@ export default async function MobileLayout({
         ids: (favs ?? []).map((f) => f.estabelecimento_id),
       };
       if (!error && data) {
+        // ATENÇÃO: este objeto é montado CAMPO A CAMPO e é o único
+        // construtor de EstadoInicial. Chave nova da RPC que não for
+        // listada aqui é descartada em silêncio — foi o que quase
+        // aconteceu com `usos`.
         const p = data as unknown as {
           usuario: { nome: string; cpf_mascarado: string } | null;
           saldo: number;
           config: Record<string, number>;
           estados: EstadoCupomDTO[];
+          usos: UsoCupomDTO[];
         };
         inicial = {
           logado: true,
@@ -72,6 +78,7 @@ export default async function MobileLayout({
           economia: Number(economiaData ?? 0),
           config: p.config ?? {},
           estados: p.estados ?? [],
+          usos: p.usos ?? [],
         };
       }
     }

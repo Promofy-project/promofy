@@ -6,6 +6,7 @@ import { BannerCarousel } from "@/components/banner-carousel";
 import { HomeSearchBar } from "@/components/home-search-bar";
 import { HomeCategoryChips } from "@/components/home-category-chips";
 import { CouponCard } from "@/components/coupon-card";
+import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
 
@@ -44,6 +45,7 @@ export default async function MobileHome() {
               economiaTone="blue"
               compact
               ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}
+              overlay={<CupomSeloUtilizado cupomId={c.id} />}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import { buscarCuponsNovidades } from "@/lib/data/cupons";
 import { createClient } from "@/lib/supabase/server";
 import { MobilePageHeader } from "@/components/mobile-page-header";
 import { CouponListItem } from "@/components/coupon-list-item";
+import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { Button } from "@/components/ui/button";
 import { MarcarNovidadesVistas } from "./marcar-vistas";
 
@@ -30,7 +31,12 @@ export default async function NovidadesPage() {
       <div className="flex flex-col gap-3 px-4 pb-6 pt-4">
         {cupons.length > 0 ? (
           cupons.map((c) => (
-            <CouponListItem key={c.id} cupom={c} href={`/m/cupom/${c.id}`} />
+            <CouponListItem
+              key={c.id}
+              cupom={c}
+              href={`/m/cupom/${c.id}`}
+              overlay={<CupomSeloUtilizado cupomId={c.id} variante="lista" />}
+            />
           ))
         ) : (
           <div className="grid place-items-center rounded-card border border-dashed border-border bg-card/60 px-6 py-16 text-center">
