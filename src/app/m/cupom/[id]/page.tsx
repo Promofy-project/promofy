@@ -10,6 +10,7 @@ import {
 
 import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
+import { dentroDaJanela } from "@/lib/janela";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
@@ -37,8 +38,17 @@ export default async function CupomDetalhe({
 }) {
   // mock primeiro (conteúdo rico do protótipo); banco como fallback para
   // cupons que nasceram depois (ex.: criados no /e e aprovados no admin)
-  const cupom = getCupom(params.id) ?? (await buscarCupomPorId(params.id));
+  const doMock = getCupom(params.id);
+  const doBanco = await buscarCupomPorId(params.id);
+  const cupom = doMock ?? doBanco;
   if (!cupom) notFound();
+
+  // A JANELA VEM SEMPRE DO BANCO, mesmo quando o conteúdo vem do mock:
+  // o mock só tem `horarios` como texto ("Ter a Dom, 18h às 23h"), sem
+  // dias/início/fim estruturados. Confiar nele mostraria o botão
+  // habilitado num cupom que a RPC vai recusar — o "botão inerte" que
+  // esta fase existe para matar. Calculado no servidor (fuso BRT).
+  const foraDaJanela = doBanco ? !dentroDaJanela(doBanco.janela) : false;
 
   const categoria = getCategoria(cupom.categoria);
 
@@ -77,7 +87,12 @@ export default async function CupomDetalhe({
             <h2 className="text-xl font-extrabold leading-snug">
               {cupom.titulo}
             </h2>
-            <CupomAcaoUsar cupom={cupom} size="sm" className="shrink-0" />
+            <CupomAcaoUsar
+              cupom={cupom}
+              size="sm"
+              className="shrink-0"
+              foraDaJanela={foraDaJanela}
+            />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             Estou economizando {formatBRL(cupom.economia)}
@@ -165,7 +180,7 @@ export default async function CupomDetalhe({
 
       {/* Rodapé fixo */}
       <div className="sticky bottom-0 z-20 border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <CupomAcaoUsar cupom={cupom} size="lg" full />
+        <CupomAcaoUsar cupom={cupom} size="lg" full foraDaJanela={foraDaJanela} />
       </div>
     </div>
   );

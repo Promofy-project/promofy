@@ -2,6 +2,10 @@
 // Promofy — domain types (protótipo, dados 100% mockados)
 // ============================================================
 
+import type { JanelaConsumo } from "@/lib/janela";
+
+export type { JanelaConsumo };
+
 export type CategoriaId =
   | "alimentacao"
   | "fitness"
@@ -41,6 +45,12 @@ export interface Cupom {
   horarios: string;
   /** Restrição de dias (Fase 4, labels de DIAS_SEMANA); ausente/vazio = todos os dias. */
   dias?: string[];
+  /**
+   * Janela de consumo estruturada (Fase 5) — dias + faixa de horário.
+   * Espelha o que `ativar_cupom` checa no servidor. Só vem do BANCO: o
+   * mock tem `horarios` como texto solto e não sabe dias/início/fim.
+   */
+  janela?: JanelaConsumo;
   destaque?: boolean; // "Oferta exclusiva"
 }
 

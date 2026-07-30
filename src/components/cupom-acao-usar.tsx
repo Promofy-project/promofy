@@ -11,11 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { useCouponState } from "@/components/coupon-state-provider";
 import { registrarEventoAction } from "@/lib/actions/cupons";
 
+/** Mesma frase no espelho (botão esmaecido) e na recusa do servidor. */
+const FORA_DA_JANELA = "Cupom fora do intervalo de consumo.";
+
 // Motivos do servidor → mensagem amigável.
 const MENSAGEM_ERRO: Record<string, string> = {
   limite_usuario: "Você já usou este cupom.",
   esgotado: "Este cupom está esgotado.",
   fora_da_validade: "Este cupom está fora da validade.",
+  fora_da_janela: FORA_DA_JANELA,
   indisponivel: "Cupom indisponível no momento.",
   nao_encontrado: "Cupom indisponível no momento.",
   sem_sessao: "Entre para usar o cupom.",
@@ -35,11 +39,20 @@ export function CupomAcaoUsar({
   size = "default",
   full = false,
   className,
+  foraDaJanela = false,
 }: {
   cupom: Cupom;
   size?: "sm" | "lg" | "default";
   full?: boolean;
   className?: string;
+  /**
+   * Espelho da janela de consumo, calculado NO SERVIDOR e passado por
+   * prop (nunca `new Date()` aqui: o "agora" do cliente na Vercel é UTC
+   * e divergiria do BRT, quebrando a hidratação). A barreira real é a
+   * RPC — se esta prop chegar velha, o servidor recusa com
+   * 'fora_da_janela' e a mensagem é a mesma.
+   */
+  foraDaJanela?: boolean;
 }) {
   const router = useRouter();
   const { logado, getStatus, ativarCupom, verCupomAtivo } = useCouponState();
@@ -102,6 +115,27 @@ export function CupomAcaoUsar({
       >
         Ver cupom ativo
       </Button>
+    );
+  }
+
+  // Fora do dia/horário de consumo: esmaecido, mas AINDA CLICÁVEL —
+  // `aria-disabled` em vez de `disabled`, senão o toque não dispara nada
+  // e o usuário fica sem saber por que o botão não funciona.
+  if (foraDaJanela) {
+    return (
+      <div className={cn(full ? "w-full" : "", "flex flex-col items-stretch gap-1")}>
+        <Button
+          size={size}
+          aria-disabled
+          onClick={() => setErro(FORA_DA_JANELA)}
+          className={cn(width, "cursor-not-allowed opacity-50", className)}
+        >
+          {size === "sm" ? "Utilizar" : "Usar cupom"}
+        </Button>
+        {erro && (
+          <p className="text-center text-xs font-medium text-danger">{erro}</p>
+        )}
+      </div>
     );
   }
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
+import type { JanelaConsumo } from "@/lib/janela";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -36,6 +37,26 @@ function diasDeJson(horarios: CupomRow["horarios"]): string[] | undefined {
 }
 
 /**
+ * jsonb horarios → janela de consumo estruturada (Fase 5).
+ *
+ * Espelha o que `dentro_da_janela` lê no servidor. Defensivo pelo mesmo
+ * motivo que a função SQL: o form do portal já gravou `inicio`/`fim`
+ * vazios, e valor fora do formato tem de virar "sem restrição" — nunca
+ * "fora da janela". Sem restrição nenhuma → undefined.
+ */
+function janelaDeJson(horarios: CupomRow["horarios"]): JanelaConsumo | undefined {
+  if (!horarios || typeof horarios !== "object" || Array.isArray(horarios)) {
+    return undefined;
+  }
+  const h = horarios as Record<string, unknown>;
+  const dias = diasDeJson(horarios);
+  const inicio = typeof h.inicio === "string" ? h.inicio : undefined;
+  const fim = typeof h.fim === "string" ? h.fim : undefined;
+  if (!dias && !inicio && !fim) return undefined;
+  return { dias, inicio, fim };
+}
+
+/**
  * Linha do banco → tipo `Cupom` do protótipo. Os componentes de UI
  * (CouponCard etc.) continuam intocados: consomem o mesmo shape.
  * rating/avaliacoes/distancia_km são colunas-protótipo POR CUPOM
@@ -61,6 +82,7 @@ export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupo
     regras: regrasDeJson(row.regras),
     horarios: horariosDeJson(row.horarios),
     dias: diasDeJson(row.horarios),
+    janela: janelaDeJson(row.horarios),
     destaque: row.destaque,
   };
 }
