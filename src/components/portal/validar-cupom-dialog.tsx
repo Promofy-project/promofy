@@ -6,6 +6,7 @@ import { X, QrCode, BadgeCheck, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validarCupomAction, type ValidarDadosDTO } from "@/lib/actions/cupons";
+import { normalizarCodigoCupom } from "@/lib/codigo-cupom";
 
 // Mensagem amigável por motivo retornado pelo servidor.
 const MENSAGEM: Record<string, string> = {
@@ -45,7 +46,9 @@ export function ValidarCupomDialog({
     e.preventDefault();
     setErro(null);
     setValidando(true);
-    const r = await validarCupomAction(codigo.trim().toUpperCase());
+    // mesma normalização do /e/validar (função pura em src/lib): com ou
+    // sem hífens, a RPC recebe sempre o formato canônico
+    const r = await validarCupomAction(normalizarCodigoCupom(codigo));
     setValidando(false);
     if (r.ok) {
       setSucesso(r.dados);

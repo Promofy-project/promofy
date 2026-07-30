@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validarCupomAction } from "@/lib/actions/cupons";
+import { normalizarCodigoCupom } from "@/lib/codigo-cupom";
 import {
   ResultadoValidacao,
   type ResultadoValidar,
@@ -21,7 +22,11 @@ export function ValidarClient() {
 
   async function validar(e: React.FormEvent) {
     e.preventDefault();
-    const codigoLimpo = codigo.trim().toUpperCase();
+    // No balcão ninguém quer caçar hífen no teclado: aceita "KK8P8U6Q",
+    // "prmf kk8p 8u6q" ou o código colado inteiro. A reconstituição do
+    // formato canônico é função pura (src/lib), e a RPC + o formato
+    // gravado no banco continuam exatamente como eram.
+    const codigoLimpo = normalizarCodigoCupom(codigo);
     if (!codigoLimpo) return;
     setValidando(true);
     const r = await validarCupomAction(codigoLimpo);
@@ -65,12 +70,17 @@ export function ValidarClient() {
           placeholder="PRMF-XXXX-XXXX"
           // Código é ALFANUMÉRICO — nada de inputMode="numeric" (bloquearia as
           // letras no teclado do celular). uppercase automático + autofocus.
+          // Sem maxLength: com ou sem hífens muda o comprimento, e cortar
+          // atrapalharia a colagem.
           autoFocus
           autoCapitalize="characters"
           autoComplete="off"
           spellCheck={false}
           className="mt-2 h-16 text-center font-mono text-2xl uppercase tracking-widest"
         />
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Pode digitar só os 8 caracteres, sem os hífens.
+        </p>
 
         <QrScanner className="mt-4" />
 
