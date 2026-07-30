@@ -180,7 +180,24 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     }
 
     const inteiro = (n: number, min: number) => Math.max(min, Math.trunc(Number(n) || min));
-    const descricaoHorario = `${input.dias.length ? input.dias.join(", ") : "Todos os dias"}, ${input.horaInicio} às ${input.horaFim}`;
+
+    // Fase 5 — hora malformada vira CHAVE OMITIDA, nunca string vazia.
+    // Os <input type="time"> do form não são `required`: limpar os campos
+    // gravava {"inicio":"","fim":""}, e a janela de consumo (dentro_da_janela)
+    // teria de decidir o que fazer com isso. Ela já trata (malformado = sem
+    // restrição), mas gravar sujeira no jsonb é a origem do problema.
+    const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test((h ?? "").trim());
+    const hi = horaValida(input.horaInicio) ? input.horaInicio.trim() : null;
+    const hf = horaValida(input.horaFim) ? input.horaFim.trim() : null;
+    const diasLimpos = (input.dias ?? []).filter((d) => typeof d === "string" && d.length > 0);
+
+    const faixa = hi && hf ? `${hi} às ${hf}` : "qualquer horário";
+    const descricaoHorario = `${diasLimpos.length ? diasLimpos.join(", ") : "Todos os dias"}, ${faixa}`;
+    // literal inline (e não montado por partes) para o TS conferir contra Json
+    const horarios =
+      hi && hf
+        ? { descricao: descricaoHorario, dias: diasLimpos, inicio: hi, fim: hf }
+        : { descricao: descricaoHorario, dias: diasLimpos };
 
     const novo: Database["public"]["Tables"]["cupons"]["Insert"] = {
       estabelecimento_id: est.id,
@@ -197,7 +214,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       limite_por_usuario: inteiro(input.limiteUsuario, 1),
       limite_total: inteiro(input.limiteTotal, 1),
       regras: input.beneficio.trim() ? [input.beneficio.trim()] : [],
-      horarios: { descricao: descricaoHorario, dias: input.dias, inicio: input.horaInicio, fim: input.horaFim },
+      horarios,
       status: "pendente",
       imagem: "", // upload de imagem fica p/ fase futura (storage desligado)
     };
