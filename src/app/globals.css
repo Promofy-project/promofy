@@ -14,6 +14,12 @@
   --promofy-orange: #f5a623; /* CTA das telas amarelas */
   --promofy-navy: #0a1633; /* azul-marinho escuro — footer do consumidor */
 
+  /* Grafismo do fundo amarelo — as duas tonalidades das ondas da marca.
+     Únicos pontos de cor do <WaveBackground>; quando o manual de
+     identidade chegar, ajustar AQUI (e o desenho no componente). */
+  --promofy-wave-deep: #edb70c; /* onda mais fechada (sombra) */
+  --promofy-wave-light: #ffe89e; /* onda mais aberta (luz) */
+
   --surface: #ffffff;
   --bg-app: #f5f6fb;
   --muted-bg: #eef0f7;
