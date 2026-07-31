@@ -185,6 +185,39 @@ A partir de 31/07/2026 os dados de vitrine **divergem de propósito** entre os d
 
 **Por quê:** no hospedado a vitrine precisa ser demonstrável a qualquer hora, e `c01` sozinho basta para exibir a barreira. No local, as janelas estreitas do seed são o material de teste. **Não "conserte" essa diferença achando que é bug.** Se um dia quisermos convergir, é um commit à parte alterando o `seed.sql` — e aí o local perde as janelas estreitas que as suítes usam como fixture.
 
-- **Próximos passos (com seu OK):** ~~`test:rls:hosted`~~ **bloqueado** (seção 10, item 3 — a suíte destruiria a conta `consumidor@`; exige conta `qa-*` parametrizada antes) → merge `fase-5` → `main` + acompanhar o build → **anotar o deployment da Fase 4 para rollback à mão** → smoke no ar com `convidado@`.
+- **CONCLUÍDO em 31/07/2026:** ~~`test:rls:hosted`~~ pulado por decisão registrada (seção 10, item 3 — a migration 15 não altera policy nenhuma, a RLS já está verde no local, e o que a Fase 5 muda é comportamento de RPC, melhor coberto pelo smoke). Merge `--no-ff` `fase-5` → `main` (`23846ac`), push `05c3071..23846ac`, build no ar e confirmado, smoke completo com `convidado@`. Rollback (deployment da Fase 4, `05c3071`) ficou de prontidão e **não foi necessário**.
+
+## 12. BACKLOG CONFIRMADO EM PRODUÇÃO
+
+Os quatro achados abaixo foram observados **no ar**, em `promofy-pro.vercel.app`, durante o smoke de 31/07/2026. **Nenhum é regressão da Fase 5** — para cada um, `git diff 05c3071..HEAD` prova que o arquivo (ou a constante) não foi tocado pela fase. Ficam aqui para a Fase 6 puxar.
+
+### 12.1 — ALTA · `horariosTabela` hardcoded contradiz a barreira real
+
+[`src/app/m/cupom/[id]/page.tsx:26`](../src/app/m/cupom/%5Bid%5D/page.tsx) — a tabela "Regras de Uso" é uma constante literal: `{ dia: "Hoje, Quinta", manha: "09:00 - 16:00", noite: "09:00 - 16:00" }`. Não lê `cupons.horarios`.
+
+**Por que é ALTA e não cosmético:** desde a Fase 5 a MESMA tela barra o cupom fora da janela. Observado no ar numa **sexta-feira** às 14h: a tabela anunciava "Hoje, Quinta" e "09:00 – 16:00" todos os dias, enquanto o servidor aplicava Ter–Dom 18h–23h no `c01`. O consumidor lê um horário, o botão obedece a outro. É a única contradição visível que a barreira introduziu, e ela mora ao lado do botão. Corrigir = alimentar a tabela a partir de `horarios` (`dias` + `inicio`/`fim`), reusando `DIAS_SEMANA` e `diaSemanaBrt` (`src/lib/dias.ts`), que já acertam o dia — o chip "HOJE" do `/m/buscar` marcou **Sex** corretamente no mesmo instante.
+
+### 12.2 — `/cadastro` é 404 e está linkado em 5 pontos públicos
+
+A rota não existe (confirmado: `curl` → 404) e é alvo de `<Link href="/cadastro">` em:
+
+| Arquivo | Linha |
+|---|---|
+| [`src/app/page.tsx`](../src/app/page.tsx) | 54 |
+| [`src/app/para-empresas/page.tsx`](../src/app/para-empresas/page.tsx) | 306, 320, 742 |
+| [`src/app/para-voce/page.tsx`](../src/app/para-voce/page.tsx) | 275 |
+
+Sintoma colateral: o prefetch RSC do Next dispara um erro de console na landing (`/cadastro?_rsc=… 404`). Decidir se a rota passa a existir ou se os links apontam para `/m/cadastro` / `/portal/cadastro`.
+
+### 12.3 — Filtros de categoria decorativos (não filtram nada)
+
+- [`src/components/home-category-chips.tsx:11,21`](../src/components/home-category-chips.tsx) — `active` é `React.useState` local e o `onClick` só alterna a cor do próprio chip. Não há callback, query param, nem refetch: a lista da home **não muda**. Observado no ar: com "Beleza" em `aria-pressed="true"`, os 6 cupons continuaram na tela, incluindo os de alimentação.
+- [`src/app/m/filtros/page.tsx:11`](../src/app/m/filtros/page.tsx) — as opções são literais (`["Todos","Alimentação","Lazer","Compras","Serviços"]`), divergentes das categorias reais do banco (faltam `fitness`, `beleza`, `eletronicos`, `educacao`, `pet`); e o "Aplicar" da linha 104 é um `<Link href="/m">` sem parâmetro — navega de volta e descarta a seleção.
+
+O filtro que **funciona** é o de `/m/buscar` (busca textual + dias). A junção multi-categoria da Fase 4 está correta no banco e é aplicada no portal (o form do `lojista@`/e1 oferece só "Alimentação" e "Fitness"); o que falta é ligá-la a estas duas telas.
+
+### 12.4 — Validade divergente banco × mock
+
+[`src/lib/mock-data.ts:180`](../src/lib/mock-data.ts) — o mock do `c02` traz `validade: "2026-08-12"`, enquanto o banco tem `2026-08-20`. A home renderiza do banco ("Válido até 20/08") e a folha do cupom ativado ([`src/components/cupom-ativo-sheet.tsx`](../src/components/cupom-ativo-sheet.tsx)) renderiza do mock ("Válido até 12/08"). O mesmo cupom exibe duas validades em duas telas do mesmo fluxo — e a folha é justamente a tela que o consumidor mostra no caixa.
 
 *(Nota de ferramenta: `playwright` foi instalado com `npm install --no-save` só para o smoke em runtime. `package.json` e `package-lock.json` **não** foram alterados.)*
