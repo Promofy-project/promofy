@@ -636,6 +636,7 @@ export type Database = {
         Args: { p_est_id: string; p_status: string }
         Returns: Json
       }
+      dentro_da_janela: { Args: { p_horarios: Json }; Returns: boolean }
       desfavoritar_estabelecimento: {
         Args: { p_est_id: string }
         Returns: Json

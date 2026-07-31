@@ -20,6 +20,7 @@ const envFile = hosted ? ".env.hosted.local" : ".env.local";
 config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { abrirJanela, restaurarJanela, type SnapshotJanela } from "./_janela-fixture";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -58,10 +59,16 @@ async function logar(email: string): Promise<SupabaseClient> {
   return c;
 }
 
+// Fase 5: esta suíte ativa c01, que tem janela de consumo no seed
+// (Ter–Dom, 18h–23h). Como `ativar_cupom` passou a barrar fora da janela,
+// sem abrir/restaurar aqui a asserção da RPC dependeria da hora do relógio.
+const svc = createClient(url!, serviceRole!, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+let snapJanela: SnapshotJanela = [];
+
 async function main() {
-  const svc = createClient(url!, serviceRole!, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  snapJanela = await abrirJanela(svc);
 
   const anon = novoClient();
 
@@ -251,12 +258,14 @@ async function main() {
   await svc.from("cupom_eventos").delete().eq("usuario_id", meuId);
   await svc.from("pontos_transacoes").delete().eq("usuario_id", meuId).neq("acao", "bonus");
   await svc.from("profiles").update({ cidade: null }).eq("id", meuId);
+  await restaurarJanela(svc, snapJanela);
 
   console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("test-rls falhou:", err);
+  await restaurarJanela(svc, snapJanela); // não deixa o seed alterado numa falha
   process.exit(1);
 });

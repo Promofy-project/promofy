@@ -8,6 +8,7 @@ import { DIAS_SEMANA, cupomDisponivelNoDia } from "@/lib/dias";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { CouponListItem } from "@/components/coupon-list-item";
+import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 
 const chips = ["Ordenar", "Mais próximos", "Maior economia", "Melhor avaliados"];
 
@@ -113,7 +114,12 @@ export function BuscarClient({
       {resultados.length > 0 ? (
         <div className="flex flex-col gap-3">
           {resultados.map((c) => (
-            <CouponListItem key={c.id} cupom={c} href={`/m/cupom/${c.id}`} />
+            <CouponListItem
+              key={c.id}
+              cupom={c}
+              href={`/m/cupom/${c.id}`}
+              overlay={<CupomSeloUtilizado cupomId={c.id} variante="lista" />}
+            />
           ))}
         </div>
       ) : (

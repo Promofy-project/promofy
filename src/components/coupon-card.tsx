@@ -17,6 +17,7 @@ export function CouponCard({
   economiaTone = "yellow",
   compact = false,
   showcase = false,
+  overlay,
   className,
 }: {
   cupom: Cupom;
@@ -29,6 +30,13 @@ export function CouponCard({
   compact?: boolean;
   /** vitrine da landing: mantém o visual, mas troca o resgate por um CTA "Baixe o app" (→ /m) */
   showcase?: boolean;
+  /**
+   * Camada opcional sobre o card (Fase 5: selo "utilizado"). Recebe um
+   * ELEMENTO já renderizado — elemento serializa entre RSC, função de
+   * componente não (lição do bug do /e na Fase 3). O card segue server
+   * component; quem passa nada (landing, portal) não muda em nada.
+   */
+  overlay?: React.ReactNode;
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
@@ -159,6 +167,8 @@ export function CouponCard({
           </Button>
         )}
       </div>
+
+      {overlay}
     </article>
   );
 }

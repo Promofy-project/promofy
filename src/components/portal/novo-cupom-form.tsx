@@ -98,9 +98,20 @@ export function NovoCupomForm({
     destaque: false,
   };
 
+  // Fase 5 — se o cupom restringe dias, precisa restringir horário também:
+  // desde que a janela de consumo virou barreira no servidor, um cupom com
+  // dias e horário em branco é ambíguo para quem cadastra. Os <input
+  // type="time"> não são `required`, então a checagem vive aqui.
+  const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h.trim());
+  const horarioIncompleto =
+    dias.length > 0 && !(horaValida(horaInicio) && horaValida(horaFim));
+
   // validade agora é obrigatória (a coluna é NOT NULL no banco)
   const podeSalvar =
-    titulo.trim().length > 0 && Number(economia) > 0 && validade.length > 0;
+    titulo.trim().length > 0 &&
+    Number(economia) > 0 &&
+    validade.length > 0 &&
+    !horarioIncompleto;
 
   const salvar = async () => {
     if (!podeSalvar || salvando) return;
@@ -198,21 +209,24 @@ export function NovoCupomForm({
             />
           </Field>
 
+          {/* Início à ESQUERDA, validade à direita — ordem de leitura do
+              período (pedido do cliente). Só o layout muda: o que é salvo
+              continua validade_inicio / validade_fim, sem inversão. */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Validade da oferta" htmlFor="f-validade">
-              <Input
-                id="f-validade"
-                type="date"
-                value={validade}
-                onChange={(e) => setValidade(e.target.value)}
-              />
-            </Field>
             <Field label="Data de início" htmlFor="f-inicio">
               <Input
                 id="f-inicio"
                 type="date"
                 value={dataInicio}
                 onChange={(e) => setDataInicio(e.target.value)}
+              />
+            </Field>
+            <Field label="Validade da oferta" htmlFor="f-validade">
+              <Input
+                id="f-validade"
+                type="date"
+                value={validade}
+                onChange={(e) => setValidade(e.target.value)}
               />
             </Field>
           </div>
@@ -285,6 +299,12 @@ export function NovoCupomForm({
               />
             </Field>
           </div>
+          {horarioIncompleto && (
+            <p className="-mt-1 text-xs font-medium text-danger">
+              Preencha início e fim do horário — o cupom só pode ser usado nos
+              dias e no horário definidos aqui.
+            </p>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Limite por usuário" htmlFor="f-lu">

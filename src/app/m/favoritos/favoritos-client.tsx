@@ -6,6 +6,7 @@ import { Heart } from "lucide-react";
 import type { Cupom } from "@/lib/types";
 import { useFavorites } from "@/components/favorites-provider";
 import { CouponListItem } from "@/components/coupon-list-item";
+import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -51,7 +52,12 @@ export function FavoritosClient({
   return (
     <>
       {favoritos.map((c) => (
-        <CouponListItem key={c.id} cupom={c} href={`/m/cupom/${c.id}`} />
+        <CouponListItem
+              key={c.id}
+              cupom={c}
+              href={`/m/cupom/${c.id}`}
+              overlay={<CupomSeloUtilizado cupomId={c.id} variante="lista" />}
+            />
       ))}
     </>
   );

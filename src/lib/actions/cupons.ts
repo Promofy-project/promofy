@@ -15,15 +15,37 @@ export interface EstadoCupomDTO {
   ativado_em: string;
   expira_em: string | null;
   nps: number | null;
+  /** Pontos que o banco creditou POR ESTE resgate (Fase 5) — 0 se não validado. */
+  pontos_resgate?: number;
 }
+
+/**
+ * Quantas vezes o usuário já consumiu um cupom e quantas ainda restam
+ * (Fase 5). `consumidos` usa a MESMA regra de `ativar_cupom`: validadas
+ * + ativas vigentes. É o insumo do selo "utilizado" — sem `restantes`
+ * não dá para distinguir "acabou" de "ainda tem uso sobrando".
+ */
+export interface UsoCupomDTO {
+  cupom_id: string;
+  consumidos: number;
+  limite: number;
+  restantes: number;
+}
+
 type AtivarResult =
   | { ok: true; ja_ativo: boolean; estado: EstadoCupomDTO }
   | { ok: false; motivo: string };
 type ConsultarResult =
-  | { ok: true; estado: EstadoCupomDTO | null; saldo: number; economia: number }
+  | {
+      ok: true;
+      estado: EstadoCupomDTO | null;
+      saldo: number;
+      economia: number;
+      usos: UsoCupomDTO[];
+    }
   | { ok: false };
 type NpsResult =
-  | { ok: true; ja_respondido: boolean; saldo: number }
+  | { ok: true; ja_respondido: boolean; saldo: number; pontos: number }
   | { ok: false; motivo: string };
 export interface ValidarDadosDTO {
   codigo: string;
@@ -63,6 +85,7 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
     const parsed = estadoJson as unknown as {
       saldo?: number;
       estados?: EstadoCupomDTO[];
+      usos?: UsoCupomDTO[];
     } | null;
     const estados = parsed?.estados ?? [];
     // linha mais recente não-expirada do cupom (ativo vigente vence validado)
@@ -78,6 +101,11 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
       estado: doCupom[0] ?? null,
       saldo: parsed?.saldo ?? 0,
       economia: Number(economiaData ?? 0),
+      // `usos` vai junto de propósito: navegação client-side não
+      // re-renderiza o layout (Partial Rendering) e nada dá
+      // router.refresh() no fluxo do consumidor — sem isto o selo
+      // "utilizado" só apareceria depois de um F5.
+      usos: parsed?.usos ?? [],
     };
   } catch {
     return { ok: false };
@@ -180,7 +208,24 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     }
 
     const inteiro = (n: number, min: number) => Math.max(min, Math.trunc(Number(n) || min));
-    const descricaoHorario = `${input.dias.length ? input.dias.join(", ") : "Todos os dias"}, ${input.horaInicio} às ${input.horaFim}`;
+
+    // Fase 5 — hora malformada vira CHAVE OMITIDA, nunca string vazia.
+    // Os <input type="time"> do form não são `required`: limpar os campos
+    // gravava {"inicio":"","fim":""}, e a janela de consumo (dentro_da_janela)
+    // teria de decidir o que fazer com isso. Ela já trata (malformado = sem
+    // restrição), mas gravar sujeira no jsonb é a origem do problema.
+    const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test((h ?? "").trim());
+    const hi = horaValida(input.horaInicio) ? input.horaInicio.trim() : null;
+    const hf = horaValida(input.horaFim) ? input.horaFim.trim() : null;
+    const diasLimpos = (input.dias ?? []).filter((d) => typeof d === "string" && d.length > 0);
+
+    const faixa = hi && hf ? `${hi} às ${hf}` : "qualquer horário";
+    const descricaoHorario = `${diasLimpos.length ? diasLimpos.join(", ") : "Todos os dias"}, ${faixa}`;
+    // literal inline (e não montado por partes) para o TS conferir contra Json
+    const horarios =
+      hi && hf
+        ? { descricao: descricaoHorario, dias: diasLimpos, inicio: hi, fim: hf }
+        : { descricao: descricaoHorario, dias: diasLimpos };
 
     const novo: Database["public"]["Tables"]["cupons"]["Insert"] = {
       estabelecimento_id: est.id,
@@ -197,7 +242,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       limite_por_usuario: inteiro(input.limiteUsuario, 1),
       limite_total: inteiro(input.limiteTotal, 1),
       regras: input.beneficio.trim() ? [input.beneficio.trim()] : [],
-      horarios: { descricao: descricaoHorario, dias: input.dias, inicio: input.horaInicio, fim: input.horaFim },
+      horarios,
       status: "pendente",
       imagem: "", // upload de imagem fica p/ fase futura (storage desligado)
     };

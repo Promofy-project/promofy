@@ -119,11 +119,20 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // Fase 5: comemoração "+N pontos" — sobe, segura e some.
+        "pontos-pop": {
+          "0%": { opacity: "0", transform: "translateY(12px) scale(0.85)" },
+          "18%": { opacity: "1", transform: "translateY(0) scale(1.08)" },
+          "32%": { opacity: "1", transform: "translateY(0) scale(1)" },
+          "76%": { opacity: "1", transform: "translateY(-16px) scale(1)" },
+          "100%": { opacity: "0", transform: "translateY(-42px) scale(0.97)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-up": "fade-up 0.5s ease-out both",
+        "pontos-pop": "pontos-pop 1.7s ease-out both",
       },
     },
   },

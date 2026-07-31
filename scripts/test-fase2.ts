@@ -18,6 +18,7 @@ const envFile = hosted ? ".env.hosted.local" : ".env.local";
 config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { abrirJanela, restaurarJanela, type SnapshotJanela } from "./_janela-fixture";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -70,7 +71,14 @@ async function limparCiclo(uid: string) {
   await svc.from("pontos_transacoes").delete().eq("usuario_id", uid).neq("acao", "bonus");
 }
 
+// Fase 5: esta suíte ativa c01/c02/c03, que têm janela de consumo no seed
+// (e janelas DISJUNTAS entre si). Como `ativar_cupom` passou a barrar fora
+// da janela, sem abrir/restaurar aqui a suíte não passaria em hora nenhuma.
+let snapJanela: SnapshotJanela = [];
+
 async function main() {
+  snapJanela = await abrirJanela(svc);
+
   const consumidor = await logar("consumidor@promofy.test");
   const uid = (await consumidor.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test");   // e1
@@ -199,11 +207,13 @@ async function main() {
   }
 
   await limparCiclo(uid);
+  await restaurarJanela(svc, snapJanela);
   console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("test-fase2 falhou:", err);
+  await restaurarJanela(svc, snapJanela); // não deixa o seed alterado numa falha
   process.exit(1);
 });

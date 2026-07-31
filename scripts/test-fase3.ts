@@ -17,6 +17,7 @@ const envFile = hosted ? ".env.hosted.local" : ".env.local";
 config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { abrirJanela, restaurarJanela } from "./_janela-fixture";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -71,6 +72,10 @@ const PEND = "f3-pendente";
 const PEND_REJ = "f3-pendente-rej";
 
 async function main() {
+  // Fase 5: esta suíte ativa c01/c02, que têm janela de consumo no seed.
+  // `ativar_cupom` passou a barrar fora dela — abre agora, restaura no finally.
+  const snapJanela = await abrirJanela(svc);
+
   const consumidor = await logar("consumidor@promofy.test");
   const consumidorId = (await consumidor.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test"); // e1
@@ -186,6 +191,7 @@ async function main() {
     await svc.from("estabelecimentos").update({ status: "ativo" }).eq("id", "e1");
     await limparCiclo(consumidorId);
     await limparCiclo(lojista2Id);
+    await restaurarJanela(svc, snapJanela);
   }
 
   console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);

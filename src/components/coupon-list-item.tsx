@@ -9,10 +9,13 @@ import { FavoriteButton } from "@/components/favorite-button";
 export function CouponListItem({
   cupom,
   href,
+  overlay,
   className,
 }: {
   cupom: Cupom;
   href?: string;
+  /** Camada opcional sobre a linha (Fase 5: selo "utilizado"). Ver CouponCard. */
+  overlay?: React.ReactNode;
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
@@ -77,6 +80,8 @@ export function CouponListItem({
         estabelecimentoId={cupom.estabelecimentoId}
         className="relative z-[2] shadow-none"
       />
+
+      {overlay}
     </div>
   );
 }

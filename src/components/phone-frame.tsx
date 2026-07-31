@@ -10,6 +10,7 @@ import { TutorialDialog } from "@/components/tutorial-dialog";
 import { SideMenu } from "@/components/side-menu";
 import { CupomAtivoSheet } from "@/components/cupom-ativo-sheet";
 import { NpsDialog } from "@/components/nps-dialog";
+import { PontosPop } from "@/components/pontos-pop";
 
 const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 // Abas com bottom nav (todas as outras telas de /m são telas cheias)
@@ -67,6 +68,8 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         {!isEntry && <SideMenu />}
         {!isEntry && <CupomAtivoSheet />}
         {!isEntry && <NpsDialog />}
+        {/* acima do NPS (z-50): o "+N" do resgate aparece com o NPS abrindo */}
+        {!isEntry && <PontosPop />}
         <TutorialDialog />
       </div>
     </div>
