@@ -147,15 +147,44 @@ Princípio permanente: regra no servidor, lógica pura em `src/lib` sem API de n
 ## 10. Riscos conhecidos e o que decidir antes do deploy
 
 1. **A barreira muda comportamento no ar.** `c01` ("Ter a Dom, 18h–23h") e `c02` ("Seg a Sex, 11h–15h") passam a **recusar ativação fora da janela** — inclusive numa demo às 10h. É exatamente o que o item 5 pediu. Os cupons legados (só `{descricao}`) seguem sem restrição, então **sempre há cupom ativável** no catálogo. No hospedado, `c03` e `c05` também ganharam `dias` no embelezamento da Fase 4. **Ajustar a janela dos cupons de demo é um passo separado, só com o seu OK** — nenhum dado do cliente foi tocado.
+
+   **DECIDIDO em 31/07/2026 (aplicado no hospedado).** `c02`, `c03` e `c05` foram alargados para **todos os dias, 00:00–23:59**. A mecânica segue **engajada**, não desligada: `dias` continua sendo um array com os 7 rótulos canônicos e `inicio`/`fim` continuam presentes, então `dentro_da_janela` avalia os dois ramos (dia e hora) como sempre — só os valores alargaram. `descricao` foi atualizada junto ("Todos os dias, 00:00 às 23:59") para o rótulo da vitrine não mentir sobre o botão.
+
+   **`c01` ("Rodízio de pizza em dobro", Ter a Dom 18h–23h) foi MANTIDO restrito de propósito: é o cupom de exemplo com janela — a demonstração viva da barreira.** Fora de Ter–Dom 18h–23h ele é o item do catálogo que mostra o botão esmaecido com "Cupom fora do intervalo de consumo." e cuja RPC recusa com `fora_da_janela`. Quem for rodar o roteiro de smoke: **use `c01` para demonstrar a barreira e qualquer um dos alargados (`c02`/`c03`/`c05`) para o ciclo principal** — e note que um `c01` **já ativo** reabre normalmente mesmo fora da janela (o ramo idempotente vem antes da checagem).
+
+   Não tocados: `c04`, `c06`–`c12`, os cupons do cliente (`c2ff55a5`, `093cb015`, `40b297aa`, `ae1fa920`) e os rejeitados. Diff sobre os 20 cupons do hospedado confirmou **3 linhas alteradas, exatamente as autorizadas**. Atenção: o `seed.sql` **não** foi alterado, então um `db:reset` local devolve `c02`/`c03`/`c05` às janelas estreitas — a partir daqui, os dados de vitrine local e hospedado divergem de propósito.
 2. **O espelho pode envelhecer.** `foraDaJanela` é calculado na renderização do servidor; quem deixa a tela aberta atravessando o fim da janela vê o botão habilitado e leva o `fora_da_janela` da RPC — com a mensagem certa. Aceito: a barreira é o servidor.
-3. **`test:rls:hosted` passa a mutar `cupons.horarios`** transitoriamente (abre e restaura em `finally`). É a única suíte que o projeto roda no hospedado. A regra permanente continua: **nenhuma suíte contra as contas/dados que o cliente usa** sem decisão explícita.
+3. **`test:rls:hosted` NÃO PODE rodar no hospedado como está — BLOQUEADOR (achado em 31/07/2026).** Além de mutar `cupons.horarios` transitoriamente (abre e restaura em `finally`), a suíte **loga como `consumidor@promofy.test`** — conta do cliente — em `scripts/test-rls.ts:125`, e a limpeza do fim (linhas 257–260) apaga **por `usuario_id`, não pelas linhas que ela criou**:
+
+   ```
+   svc.from("cupons_usuario").delete().eq("usuario_id", meuId);
+   svc.from("cupom_eventos").delete().eq("usuario_id", meuId);
+   svc.from("pontos_transacoes").delete().eq("usuario_id", meuId).neq("acao", "bonus");
+   svc.from("profiles").update({ cidade: null }).eq("id", meuId);
+   ```
+
+   Medido no hospedado (leitura): rodá-la apagaria **3 linhas de `cupons_usuario`, 12 de `cupom_eventos` e 4 de `pontos_transacoes`** do `consumidor@`, derrubando o saldo de **1.410 → 1.250**. É destruição de dado de demonstração do cliente, irreversível sem restauração manual. O `finally` protege `horarios`, **não** protege a conta. Para provar RLS no hospedado é preciso **parametrizar a conta de consumo da suíte e usar uma conta `qa-*` descartável** — hoje o e-mail é literal. Regra permanente reafirmada: **nenhuma suíte contra as contas/dados que o cliente usa.**
 4. **`/m/cupom/[id]` faz uma consulta a mais** — passou a buscar `buscarCupomPorId` sempre (antes só quando o mock não tinha o id), porque a janela precisa vir do banco. Um `maybeSingle()` por PK numa página que já é `force-dynamic`.
 
 ## 11. Estado dos ambientes
 
 - **Local:** `npm run verify` verde do zero; banco no estado do seed (o `db:reset` do verify foi a última operação).
-- **Hospedado (`bpeqpxvxgdyjjdcoycgp`):** **intocado.** Nenhuma migration aplicada, nenhum dado alterado, nenhuma suíte rodada.
+- **Hospedado (`bpeqpxvxgdyjjdcoycgp`) — 31/07/2026:** DDL da migration 15 **aplicada** e **registrada** no histórico (`supabase_migrations.schema_migrations`, versão `20260730120000`, via `migration repair --status applied`). **A fidelidade da linha foi provada por experimento, não por suposição:** o `repair` lê o próprio `.sql` e usa o mesmo `parser.SplitAndTrim` do `db push`; rodá-lo em cima da linha LOCAL — que o `db push` tinha escrito — deixou `md5(statements::text)` inalterado (`164c6a6d839fcf637001e419d0cc3e42`, `name=fase5_janela_pontos_usos`, 9 statements). Logo a linha do hospedado é idêntica à que um `db push` teria gravado. `migration list` mostra a 15 com `local` e `remote` preenchidos **nos dois bancos** (`--linked` e `--local`); `db push --dry-run` responde `{"upToDate":true,"migrations":[]}`. Dados: só a janela de `c02`/`c03`/`c05` (ver seção 10, item 1). Nenhuma suíte rodada ainda.
 - **Vercel:** **sem deploy.** A `main` segue com a Fase 4 no ar.
-- **Próximo passo (com seu OK):** `supabase db push` da migration 15 no hospedado (com dry-run antes) → deploy → smoke no ar.
+
+### Divergência local × hospedado na vitrine — INTENCIONAL, não é bug
+
+A partir de 31/07/2026 os dados de vitrine **divergem de propósito** entre os dois ambientes:
+
+| | `seed.sql` (local, após `db:reset`) | Hospedado |
+|---|---|---|
+| `c02` | Seg–Sex, 11:00–15:00 | **Todos os dias, 00:00–23:59** |
+| `c03` | Seg–Sáb, 06:00–22:00 | **Todos os dias, 00:00–23:59** |
+| `c05` | Ter–Sáb, 09:00–19:00 | **Todos os dias, 00:00–23:59** |
+| `c01` | Ter–Dom, 18:00–23:00 | Ter–Dom, 18:00–23:00 *(igual — é a demo da barreira)* |
+
+**Por quê:** no hospedado a vitrine precisa ser demonstrável a qualquer hora, e `c01` sozinho basta para exibir a barreira. No local, as janelas estreitas do seed são o material de teste. **Não "conserte" essa diferença achando que é bug.** Se um dia quisermos convergir, é um commit à parte alterando o `seed.sql` — e aí o local perde as janelas estreitas que as suítes usam como fixture.
+
+- **Próximos passos (com seu OK):** ~~`test:rls:hosted`~~ **bloqueado** (seção 10, item 3 — a suíte destruiria a conta `consumidor@`; exige conta `qa-*` parametrizada antes) → merge `fase-5` → `main` + acompanhar o build → **anotar o deployment da Fase 4 para rollback à mão** → smoke no ar com `convidado@`.
 
 *(Nota de ferramenta: `playwright` foi instalado com `npm install --no-save` só para o smoke em runtime. `package.json` e `package-lock.json` **não** foram alterados.)*
