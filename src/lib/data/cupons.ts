@@ -109,7 +109,10 @@ function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
  *   (comparação por data-string YYYY-MM-DD — determinística, sem Date local;
  *   fuso de referência do agendamento é decisão da Fase 2).
  */
-export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
+export async function buscarCuponsHome(
+  limite = 6,
+  categoriaId?: string,
+): Promise<Cupom[]> {
   const supabase = createClient();
 
   // Fase 4: para o usuário logado, cupons de estabelecimentos favoritados
@@ -123,7 +126,13 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
     .select("*, estabelecimentos(nome)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
-  if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
+  // Fase 6/H5: filtro dos chips da home. Roda NO SERVIDOR (é predicado de
+  // consulta, não `.filter()` no cliente) e o id já vem saneado contra a
+  // tabela `categorias` — ver categoriaValida em src/lib/data/categorias.ts.
+  if (categoriaId) query = query.eq("categoria_id", categoriaId);
+  // com filtro, a folga do limite não vale: o corte por categoria pode
+  // deixar de fora justamente os que sobrariam
+  if (!logado && !categoriaId) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
 
   const [{ data, error }, favSet] = await Promise.all([
     query,
