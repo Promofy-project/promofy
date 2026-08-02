@@ -303,7 +303,7 @@ export default function ParaEmpresasPage() {
             />
           </Link>
           <Button size="lg" variant="outline" className={LP_BTN_SECONDARY} asChild>
-            <Link href="/cadastro">Cadastrar-se</Link>
+            <Link href="/cadastro#empresa">Cadastrar-se</Link>
           </Button>
         </div>
       </header>
@@ -317,7 +317,7 @@ export default function ParaEmpresasPage() {
               aumente suas vendas com a Promofy. Seja parceiro hoje mesmo!
             </h1>
             <Button size="lg" className={cn("mt-8", LP_BTN_PRIMARY)} asChild>
-              <Link href="/cadastro">Cadastrar-se agora!</Link>
+              <Link href="/cadastro#empresa">Cadastrar-se agora!</Link>
             </Button>
           </div>
 
@@ -739,7 +739,7 @@ export default function ParaEmpresasPage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button size="lg" className={LP_BTN_PRIMARY} asChild>
-                <Link href="/cadastro">
+                <Link href="/cadastro#empresa">
                   Cadastre seu negócio agora <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
