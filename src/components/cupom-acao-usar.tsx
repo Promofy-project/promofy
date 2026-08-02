@@ -71,7 +71,9 @@ export function CupomAcaoUsar({
     setAtivando(true);
     // clique é métrica de app — fire-and-forget, não bloqueia o fluxo
     void registrarEventoAction(cupom.id, "clique");
-    const r = await ativarCupom(cupom.id);
+    // o CUPOM inteiro (e não o id) vai para o provider: é o que a folha
+    // renderiza. Aqui ele já veio do banco, via server component (Fase 6/H3).
+    const r = await ativarCupom(cupom);
     setAtivando(false);
     if (!r.ok) {
       setErro(MENSAGEM_ERRO[r.motivo] ?? "Não foi possível usar o cupom agora.");
@@ -110,7 +112,7 @@ export function CupomAcaoUsar({
       <Button
         size={size}
         variant="secondary"
-        onClick={() => verCupomAtivo(cupom.id)}
+        onClick={() => verCupomAtivo(cupom)}
         className={cn(width, className)}
       >
         Ver cupom ativo

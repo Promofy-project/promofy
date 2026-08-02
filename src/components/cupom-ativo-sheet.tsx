@@ -12,7 +12,6 @@ import {
   BadgeCheck,
 } from "lucide-react";
 
-import { getCupom } from "@/lib/mock-data";
 import {
   formatBRLValue,
   formatDistance,
@@ -29,10 +28,23 @@ import { useCouponState } from "@/components/coupon-state-provider";
  * balcão. A validação acontece de verdade no portal do estabelecimento —
  * aqui fazemos polling (5s) e, quando o servidor marca 'validado', o NPS
  * abre sozinho.
+ *
+ * Fase 6 (H3): o cupom exibido vem do PROVIDER (`sheetCupom`), que o recebeu
+ * de quem abriu a folha — ou seja, do banco, via server component. Antes vinha
+ * de `getCupom()` do mock, o que fazia esta tela — justamente a que o
+ * consumidor mostra no caixa — anunciar uma validade diferente da home, e
+ * abrir EM BRANCO para cupom que só existe no banco (criado no /e e aprovado).
  */
 export function CupomAtivoSheet() {
-  const { sheetId, getEstado, usuario, fecharCupomAtivo, consultarCupom, abrirNps } =
-    useCouponState();
+  const {
+    sheetId,
+    sheetCupom,
+    getEstado,
+    usuario,
+    fecharCupomAtivo,
+    consultarCupom,
+    abrirNps,
+  } = useCouponState();
   const [copiado, setCopiado] = React.useState(false);
 
   React.useEffect(() => setCopiado(false), [sheetId]);
@@ -57,7 +69,7 @@ export function CupomAtivoSheet() {
   }, [sheetId, statusAtual, consultarCupom]);
 
   if (!sheetId) return null;
-  const cupom = getCupom(sheetId);
+  const cupom = sheetCupom;
   const estado = estadoAtual;
   if (!cupom || !estado) return null;
 

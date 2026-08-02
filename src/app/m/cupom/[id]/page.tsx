@@ -36,11 +36,13 @@ export default async function CupomDetalhe({
 }: {
   params: { id: string };
 }) {
-  // mock primeiro (conteúdo rico do protótipo); banco como fallback para
-  // cupons que nasceram depois (ex.: criados no /e e aprovados no admin)
-  const doMock = getCupom(params.id);
+  // BANCO PRIMEIRO (Fase 6/H3). Era o contrário, e por isso o mesmo cupom
+  // exibia duas validades no mesmo fluxo: a home lia do banco ("até 20/08") e
+  // esta tela lia do mock ("até 12/08", mock-data.ts:180). O mock fica só como
+  // fallback dos ids que existem apenas no protótipo — nenhuma rota some.
   const doBanco = await buscarCupomPorId(params.id);
-  const cupom = doMock ?? doBanco;
+  const doMock = getCupom(params.id);
+  const cupom = doBanco ?? doMock;
   if (!cupom) notFound();
 
   // A JANELA VEM SEMPRE DO BANCO, mesmo quando o conteúdo vem do mock:
@@ -103,7 +105,12 @@ export default async function CupomDetalhe({
         <section>
           <h3 className="mb-2 text-base font-bold">Benefícios Exclusivos</h3>
           <div className="rounded-card bg-yellow-soft p-4 text-sm leading-relaxed text-[#7a5e0a]">
-            {cupom.beneficio}. {cupom.regras[0]}
+            {/* Fase 6/H3: com o BANCO como fonte primária, benefício e regras
+                podem vir vazios (cupom criado no /e sem benefício). Antes o
+                mock sempre tinha os dois e a concatenação crua bastava; agora
+                ela renderizaria um ". " solto. */}
+            {[cupom.beneficio, cupom.regras[0]].filter(Boolean).join(". ") ||
+              "Sem condições adicionais."}
           </div>
         </section>
 
