@@ -157,8 +157,19 @@ export default async function CupomDetalhe({
               </div>
             </div>
           ) : (
+            /* Sem janela estruturada, o servidor NÃO restringe nada. Mostrar
+               só a descrição livre do lojista ("Seg a Sáb, 10h às 22h")
+               recriaria a contradição que esta fase mata — num domingo o
+               texto diria "Seg a Sáb" com o botão ativo. Então a descrição
+               fica como informação do estabelecimento e a regra que o app
+               aplica é dita explicitamente. */
             <div className="rounded-card border-2 border-primary px-4 py-3 text-sm text-foreground">
-              {resumoJanela(cupom.horarios)}
+              <p className="font-semibold">Sem restrição de horário no app</p>
+              {cupom.horarios.trim() && (
+                <p className="mt-1 text-muted-foreground">
+                  Horário informado pelo estabelecimento: {cupom.horarios.trim()}.
+                </p>
+              )}
             </div>
           )}
         </section>
