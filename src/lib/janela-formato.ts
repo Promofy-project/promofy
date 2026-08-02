@@ -92,14 +92,3 @@ export function linhasDaJanela(
     return { dia, permitido, faixa: permitido ? faixa : "—", hoje: dia === diaHoje };
   });
 }
-
-/**
- * Frase única para o cupom sem janela estruturada. `descricao` é o texto
- * livre que o lojista gravou em `horarios.descricao` ("Sob agendamento",
- * "Acesso 24h (online)") — se existir, é mais informativo do que a frase
- * genérica; se não, o honesto é dizer que não há restrição.
- */
-export function resumoJanela(descricao?: string | null): string {
-  const texto = (descricao ?? "").trim();
-  return texto || "Sem restrição de horário";
-}

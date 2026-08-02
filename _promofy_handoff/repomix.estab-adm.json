@@ -1,0 +1,37 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "_promofy_handoff/07-REPOMIX-ESTABELECIMENTOS-ADM.xml",
+    "style": "xml",
+    "headerText": "PROMOFY — PACOTE ESTABELECIMENTOS + ADM. Portal do estabelecimento (/portal) e painel administrativo global (/admin), com seus componentes (sidebar/dashboard shell, tabelas, cards de metrica, graficos, formulario de cupom, dialog de validacao). Todos os dados vem de src/lib/mock-data.ts (ver PACOTE CORE). Sem backend/banco/auth reais. O backbone compartilhado (tipos, mock-data, ui, providers) esta no 06-REPOMIX-CORE.xml.",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": true,
+    "compress": false,
+    "copyToClipboard": false
+  },
+  "include": [
+    "src/app/portal/**",
+    "src/app/admin/**",
+    "src/components/portal/**",
+    "src/components/admin/**",
+    "src/components/sidebar.tsx",
+    "src/components/side-menu.tsx",
+    "src/components/metric-card.tsx",
+    "src/components/bar-chart.tsx",
+    "src/components/funnel-chart.tsx",
+    "src/components/business-card.tsx",
+    "src/components/review-card.tsx"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.webp", "**/*.svg",
+      "**/*.ico", "**/*.gif", "**/*.avif",
+      "_promofy_handoff/**", "repomix-promofy.xml", ".next/**"
+    ]
+  }
+}

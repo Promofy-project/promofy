@@ -1,0 +1,81 @@
+
+> promofy@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3001
+  - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 12s
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 4.3s (129 modules)
+ ○ Compiling /m ...
+ ✓ Compiled /m in 28.3s (960 modules)
+ GET /m 200 in 31037ms
+ ✓ Compiled in 2.8s (359 modules)
+ ○ Compiling /m/buscar ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (106kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (253kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled /m/buscar in 37.5s (983 modules)
+ GET /m/buscar 200 in 39203ms
+ ○ Compiling /m/novidades ...
+ ✓ Compiled /m/novidades in 1184ms (996 modules)
+ GET /m/novidades 200 in 1816ms
+ ○ Compiling /e/login ...
+ ✓ Compiled /e/login in 5.2s (1134 modules)
+ GET /e/login 200 in 6434ms
+ ○ Compiling /admin/login ...
+ ✓ Compiled /admin/login in 3.1s (1141 modules)
+ GET /admin/login 200 in 3392ms
+ [AuthApiError: Invalid Refresh Token: Refresh Token Not Found] {
+  __isAuthError: true,
+  name: 'AuthApiError',
+  status: 400,
+  code: 'refresh_token_not_found'
+}
+ [AuthApiError: Invalid Refresh Token: Refresh Token Not Found] {
+  __isAuthError: true,
+  name: 'AuthApiError',
+  status: 400,
+  code: 'refresh_token_not_found'
+}
+ ○ Compiling /m/login ...
+ ✓ Compiled /m/login in 5.3s (1104 modules)
+ GET /m/login 200 in 6037ms
+ ○ Compiling /icon.png ...
+ ✓ Compiled /icon.png in 2.1s (696 modules)
+ GET /icon.png?70c22718f7348231 200 in 2437ms
+ ○ Compiling /m ...
+ ✓ Compiled /m in 1075ms (693 modules)
+ GET /m 200 in 974ms
+ POST /m 200 in 306ms
+ GET /m 200 in 1034ms
+ ○ Compiling /m/favoritos ...
+ ✓ Compiled /m/favoritos in 4.3s (1121 modules)
+ GET /m/favoritos 200 in 5926ms
+ ○ Compiling /icon.png ...
+ ✓ Compiled /icon.png in 2.6s (711 modules)
+ GET /icon.png?70c22718f7348231 200 in 3439ms
+ ○ Compiling /m/buscar ...
+ ✓ Compiled /m/buscar in 1435ms (720 modules)
+ GET /m/buscar 200 in 2367ms
+ GET /icon.png?70c22718f7348231 200 in 422ms
+ POST /m/buscar 200 in 544ms
+ ○ Compiling /e/login ...
+ ✓ Compiled /e/login in 2.1s (700 modules)
+ GET /e/login 200 in 3488ms
+ ○ Compiling /e ...
+ ✓ Compiled /e in 2.1s (1156 modules)
+ ○ Compiling /e/cupom/novo ...
+ ✓ Compiled /e/cupom/novo in 1875ms (1164 modules)
+ GET /e/cupom/novo 200 in 2526ms
+ POST /e/cupom/novo 200 in 802ms
+ ○ Compiling /e/cupons ...
+ ✓ Compiled /e/cupons in 1209ms (1103 modules)
+ ✓ Compiled in 7.8s (462 modules)
+ ✓ Compiled in 2.7s (1111 modules)
+ ✓ Compiled in 3.1s (1114 modules)
+ ✓ Compiled in 3.4s (1100 modules)
+ ✓ Compiled in 9.8s (1241 modules)

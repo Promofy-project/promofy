@@ -24,7 +24,6 @@ import { DIAS_SEMANA, diaSemanaBrt, type DiaSemana } from "../src/lib/dias";
 import {
   faixaHorario,
   linhasDaJanela,
-  resumoJanela,
   temRestricao,
 } from "../src/lib/janela-formato";
 
@@ -228,15 +227,6 @@ console.log("\n[linhas e resumo]");
   check(
     "temRestricao é falso para cupom legado (só descrição)",
     temRestricao(undefined) === false && temRestricao({}) === false,
-  );
-  check(
-    "resumo usa a descrição do lojista quando existe",
-    resumoJanela("Sob agendamento") === "Sob agendamento",
-  );
-  check(
-    "resumo sem descrição é honesto",
-    resumoJanela("") === "Sem restrição de horário" &&
-      resumoJanela(null) === "Sem restrição de horário",
   );
 }
 

@@ -11,7 +11,7 @@ import {
 import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
 import { dentroDaJanela } from "@/lib/janela";
-import { linhasDaJanela, resumoJanela, temRestricao } from "@/lib/janela-formato";
+import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
 import { diaSemanaBrt } from "@/lib/dias";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";

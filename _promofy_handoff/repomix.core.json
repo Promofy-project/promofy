@@ -1,0 +1,49 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "_promofy_handoff/06-REPOMIX-CORE.xml",
+    "style": "xml",
+    "headerText": "PROMOFY — PACOTE CORE. Backbone compartilhado: tipos de dominio, dados mockados, utilitarios, gamificacao, providers de estado (React Context), primitivos de UI (shadcn), layout raiz, design tokens e configuracoes do projeto. NAO HA backend, banco, ORM, migrations, edge functions ou auth reais neste repositorio (prototipo 100% mockado). Ver 03-ARQUITETURA-BANCO-E-AUTH.md.",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": true,
+    "compress": false,
+    "copyToClipboard": false
+  },
+  "include": [
+    "README.md",
+    "package.json",
+    "tsconfig.json",
+    "next.config.mjs",
+    "next-env.d.ts",
+    "tailwind.config.ts",
+    "postcss.config.mjs",
+    "components.json",
+    ".eslintrc.json",
+    ".gitignore",
+    "src/app/layout.tsx",
+    "src/app/globals.css",
+    "src/lib/**",
+    "src/components/ui/**",
+    "src/components/coupon-state-provider.tsx",
+    "src/components/favorites-provider.tsx",
+    "src/components/mobile-flow-provider.tsx",
+    "src/components/field.tsx",
+    "src/components/icon.tsx",
+    "src/components/logo.tsx",
+    "src/components/page-header.tsx",
+    "src/components/page-placeholder.tsx"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.webp", "**/*.svg",
+      "**/*.ico", "**/*.gif", "**/*.avif",
+      "package-lock.json", "tsconfig.tsbuildinfo",
+      "_promofy_handoff/**", "repomix-promofy.xml", ".next/**"
+    ]
+  }
+}
