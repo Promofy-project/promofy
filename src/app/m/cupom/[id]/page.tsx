@@ -11,6 +11,8 @@ import {
 import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
 import { dentroDaJanela } from "@/lib/janela";
+import { linhasDaJanela, resumoJanela, temRestricao } from "@/lib/janela-formato";
+import { diaSemanaBrt } from "@/lib/dias";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
@@ -22,14 +24,6 @@ import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
 // ser SSG do mock para poder cair no banco quando o id não está no mock
 // (cupom aprovado ao vivo — Fase 4).
 export const dynamic = "force-dynamic";
-
-const horariosTabela = [
-  { dia: "Hoje, Quinta", manha: "09:00 - 16:00", noite: "09:00 - 16:00", hoje: true },
-  { dia: "Sexta", manha: "09:00 - 16:00", noite: "09:00 - 16:00" },
-  { dia: "Sábado", manha: "09:00 - 16:00", noite: "09:00 - 16:00" },
-  { dia: "Domingo", manha: "09:00 - 16:00", noite: "09:00 - 16:00" },
-  { dia: "Segunda", manha: "09:00 - 16:00", noite: "09:00 - 16:00" },
-];
 
 export default async function CupomDetalhe({
   params,
@@ -51,6 +45,13 @@ export default async function CupomDetalhe({
   // habilitado num cupom que a RPC vai recusar — o "botão inerte" que
   // esta fase existe para matar. Calculado no servidor (fuso BRT).
   const foraDaJanela = doBanco ? !dentroDaJanela(doBanco.janela) : false;
+
+  // Fase 6/H1: a tabela "Regras de Uso" descreve ESTE MESMO objeto `janela`.
+  // Antes era uma constante literal ("Hoje, Quinta", "09:00 - 16:00") que
+  // contradizia o botão logo acima. "hoje" resolvido no servidor (BRT).
+  const janela = doBanco?.janela;
+  const janelaRestringe = temRestricao(janela);
+  const linhas = linhasDaJanela(janela, diaSemanaBrt());
 
   const categoria = getCategoria(cupom.categoria);
 
@@ -114,40 +115,52 @@ export default async function CupomDetalhe({
           </div>
         </section>
 
-        {/* Regras de Uso */}
+        {/* Regras de Uso — a janela REAL do cupom, a mesma que o servidor
+            aplica em ativar_cupom. Duas colunas e não três: o modelo tem UMA
+            faixa de horário por cupom; "Manhã/Tarde" e "Noite" eram ficção. */}
         <section>
           <h3 className="mb-2 text-base font-bold">Regras de Uso</h3>
-          <div className="overflow-hidden rounded-card border-2 border-primary">
-            <div className="overflow-x-auto">
-            <table className="w-full min-w-[340px] text-sm">
-              <thead>
-                <tr className="bg-primary text-left text-xs font-semibold text-white">
-                  <th className="whitespace-nowrap px-3 py-2">Dia</th>
-                  <th className="whitespace-nowrap px-3 py-2">Manhã/Tarde</th>
-                  <th className="whitespace-nowrap px-3 py-2">Noite</th>
-                </tr>
-              </thead>
-              <tbody>
-                {horariosTabela.map((row, i) => (
-                  <tr
-                    key={row.dia}
-                    className={cn(
-                      "border-t border-border",
-                      row.hoje
-                        ? "bg-primary/5 font-bold text-foreground"
-                        : "text-muted-foreground",
-                      i % 2 === 1 && !row.hoje && "bg-muted/40",
-                    )}
-                  >
-                    <td className="whitespace-nowrap px-3 py-2.5">{row.dia}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{row.manha}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{row.noite}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {janelaRestringe ? (
+            <div className="overflow-hidden rounded-card border-2 border-primary">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[280px] text-sm">
+                  <thead>
+                    <tr className="bg-primary text-left text-xs font-semibold text-white">
+                      <th className="whitespace-nowrap px-3 py-2">Dia</th>
+                      <th className="whitespace-nowrap px-3 py-2">Horário</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhas.map((row, i) => (
+                      <tr
+                        key={row.dia}
+                        className={cn(
+                          "border-t border-border",
+                          row.hoje
+                            ? "bg-primary/5 font-bold text-foreground"
+                            : row.permitido
+                              ? "text-muted-foreground"
+                              : "text-muted-foreground/60",
+                          i % 2 === 1 && !row.hoje && "bg-muted/40",
+                        )}
+                      >
+                        <td className="whitespace-nowrap px-3 py-2.5">
+                          {row.hoje ? `Hoje, ${row.dia}` : row.dia}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
+                          {row.faixa}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-card border-2 border-primary px-4 py-3 text-sm text-foreground">
+              {resumoJanela(cupom.horarios)}
+            </div>
+          )}
         </section>
 
         {/* Feedbacks */}
