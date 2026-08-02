@@ -19,6 +19,7 @@ config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { abrirJanela, restaurarJanela, type SnapshotJanela } from "./_janela-fixture";
+import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -41,11 +42,11 @@ const svc = createClient(url!, serviceRole!, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-async function logar(email: string): Promise<SupabaseClient> {
+async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
   const c = createClient(url!, anonKey!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { error } = await c.auth.signInWithPassword({ email, password: SENHA });
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(`login ${email}: ${error.message}`);
   return c;
 }
@@ -75,11 +76,19 @@ async function limparCiclo(uid: string) {
 // (e janelas DISJUNTAS entre si). Como `ativar_cupom` passou a barrar fora
 // da janela, sem abrir/restaurar aqui a suíte não passaria em hora nenhuma.
 let snapJanela: SnapshotJanela = [];
+let qaA: ContaQa | null = null;
+let qaB: ContaQa | null = null;
 
-async function main() {
+async function main(): Promise<number> {
   snapJanela = await abrirJanela(svc);
 
-  const consumidor = await logar("consumidor@promofy.test");
+  // Fase 6/H4: contas de consumo CRIADAS E DESTRUÍDAS por esta suíte —
+  // nunca `consumidor@`, que é conta de demonstração do cliente.
+  qaA = await criarContaQa(svc, "f2a", { nome: "QA Fase2 A" });
+  qaB = await criarContaQa(svc, "f2b", { nome: "QA Fase2 B" });
+  console.log(`[contas efêmeras] ${qaA.email} · ${qaB.email}`);
+
+  const consumidor = await logar(qaA.email, qaA.senha);
   const uid = (await consumidor.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test");   // e1
   const lojista2 = await logar("lojista2@promofy.test"); // e2
@@ -175,14 +184,14 @@ async function main() {
   {
     // c03 (e2): força limite_total=1; dois consumidores ativam; 2ª validação = esgotado
     await svc.from("cupons").update({ limite_total: 1 }).eq("id", "c03");
-    const c2 = await logar("consumidor@promofy.test"); // reusa; e um segundo user:
-    void c2;
-    // usa admin como 2º "consumidor" de teste (tem sessão; RPC funciona p/ qualquer autenticado)
-    const admin = await logar("admin@promofy.test");
-    const adminId = (await admin.auth.getUser()).data.user!.id;
-    await limparCiclo(uid); await limparCiclo(adminId);
+    // Fase 6/H4: o 2º "consumidor" era o `admin@` — dava certo (a RPC serve
+    // qualquer autenticado), mas sujava o ledger de uma conta de operação.
+    // Agora é uma segunda conta qa-*, que é o que ele sempre representou.
+    const segundo = await logar(qaB!.email, qaB!.senha);
+    const segundoId = (await segundo.auth.getUser()).data.user!.id;
+    await limparCiclo(uid); await limparCiclo(segundoId);
     const rA = (await consumidor.rpc("ativar_cupom", { p_cupom_id: "c03" })).data as Jsonb;
-    const rB = (await admin.rpc("ativar_cupom", { p_cupom_id: "c03" })).data as Jsonb;
+    const rB = (await segundo.rpc("ativar_cupom", { p_cupom_id: "c03" })).data as Jsonb;
     const codA = (rA as { estado?: { codigo?: string } }).estado?.codigo ?? "";
     const codB = (rB as { estado?: { codigo?: string } }).estado?.codigo ?? "";
     check("dois usuários ativam c03 (limite_total=1 ainda não valida)", ok(rA) && ok(rB));
@@ -190,7 +199,7 @@ async function main() {
     const v2 = motivo((await lojista2.rpc("validar_cupom", { p_codigo: codB })).data as Jsonb);
     check("1ª validação passa, 2ª → esgotado", v1 === undefined && v2 === "esgotado", `v1=${v1} v2=${v2}`);
     await svc.from("cupons").update({ limite_total: null }).eq("id", "c03");
-    await limparCiclo(adminId);
+    await limparCiclo(segundoId);
   }
 
   console.log("\n[eventos do app — dedup]");
@@ -207,13 +216,23 @@ async function main() {
   }
 
   await limparCiclo(uid);
-  await restaurarJanela(svc, snapJanela);
-  console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-  process.exit(failed > 0 ? 1 : 0);
+  return encerrar(passed, failed);
 }
 
-main().catch(async (err) => {
-  console.error("test-fase2 falhou:", err);
-  await restaurarJanela(svc, snapJanela); // não deixa o seed alterado numa falha
-  process.exit(1);
-});
+/** `process.exit` não executa `finally` — ver scripts/_qa-conta.ts. */
+async function limpar() {
+  await restaurarJanela(svc, snapJanela); // não deixa o seed alterado
+  await destruirContaQa(svc, qaA?.id);
+  await destruirContaQa(svc, qaB?.id);
+}
+
+main()
+  .then(async (code) => {
+    await limpar();
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-fase2 falhou:", err);
+    await limpar();
+    process.exit(1);
+  });

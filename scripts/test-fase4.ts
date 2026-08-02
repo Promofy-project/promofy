@@ -21,6 +21,7 @@ config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 import { DIAS_SEMANA, cupomDisponivelNoDia, diaSemanaBrt } from "../src/lib/dias";
 import { cupons as mockCupons } from "../src/lib/mock-data";
 
@@ -55,9 +56,9 @@ const anon = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-async function logar(email: string): Promise<SupabaseClient> {
+async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
   const c = anon();
-  const { error } = await c.auth.signInWithPassword({ email, password: SENHA });
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(`login ${email}: ${error.message}`);
   return c;
 }
@@ -73,16 +74,26 @@ const NOVO = "f4-novidade"; // cupom aprovado DEPOIS do favorito de A
 const ANTIGO = "f4-antigo"; // cupom aprovado ANTES do favorito de B
 const BUG1 = "f4-bug1"; // detalhe /m/cupom/[id]: cupom novo aprovado deve abrir por id
 
+let qaA: ContaQa | null = null;
+let qaB: ContaQa | null = null;
+
 async function limparFase4(uids: string[]) {
   await svc.from("cupons").delete().in("id", [CAT_OK, NOVO, ANTIGO, BUG1, `${BUG1}-exp`]);
   await svc.from("favoritos").delete().in("usuario_id", uids);
   await svc.from("novidades_visto").delete().in("usuario_id", uids);
 }
 
-async function main() {
-  const consumidor = await logar("consumidor@promofy.test"); // A
+async function main(): Promise<number> {
+  // Fase 6/H4: os dois consumidores (A e B) são contas criadas e destruídas
+  // por esta suíte — antes eram `consumidor@` e `convidado@`, as duas contas
+  // de demonstração que o cliente usa lado a lado.
+  qaA = await criarContaQa(svc, "f4a", { nome: "QA Fase4 A" });
+  qaB = await criarContaQa(svc, "f4b", { nome: "QA Fase4 B" });
+  console.log(`[contas efêmeras] ${qaA.email} · ${qaB.email}`);
+
+  const consumidor = await logar(qaA.email, qaA.senha); // A
   const consumidorId = (await consumidor.auth.getUser()).data.user!.id;
-  const convidado = await logar("convidado@promofy.test"); // B
+  const convidado = await logar(qaB.email, qaB.senha); // B
   const convidadoId = (await convidado.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test"); // e1
   const lojista2 = await logar("lojista2@promofy.test"); // e2
@@ -198,7 +209,7 @@ async function main() {
     }
     {
       // persistência: sessão NOVA do mesmo usuário continua vendo o favorito
-      const outraSessao = await logar("consumidor@promofy.test");
+      const outraSessao = await logar(qaA!.email, qaA!.senha);
       const { data } = await outraSessao.from("favoritos").select("estabelecimento_id");
       check("favorito persiste em novo login (1 linha)", data?.length === 1, String(data?.length));
     }
@@ -342,11 +353,22 @@ async function main() {
       .eq("estabelecimento_id", "e2").eq("categoria_id", "alimentacao");
   }
 
-  console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-  process.exit(failed > 0 ? 1 : 0);
+  return encerrar(passed, failed);
 }
 
-main().catch((err) => {
-  console.error("test-fase4 falhou:", err);
-  process.exit(1);
-});
+/** `process.exit` NÃO executa `finally` — ver scripts/_qa-conta.ts. */
+async function limpar() {
+  await destruirContaQa(svc, qaA?.id);
+  await destruirContaQa(svc, qaB?.id);
+}
+
+main()
+  .then(async (code) => {
+    await limpar();
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-fase4 falhou:", err);
+    await limpar();
+    process.exit(1);
+  });

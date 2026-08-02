@@ -18,6 +18,7 @@ config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { abrirJanela, restaurarJanela } from "./_janela-fixture";
+import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -50,9 +51,9 @@ const anon = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-async function logar(email: string): Promise<SupabaseClient> {
+async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
   const c = anon();
-  const { error } = await c.auth.signInWithPassword({ email, password: SENHA });
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(`login ${email}: ${error.message}`);
   return c;
 }
@@ -68,15 +69,20 @@ async function limparCiclo(uid: string) {
   await svc.from("pontos_transacoes").delete().eq("usuario_id", uid).neq("acao", "bonus");
 }
 
+let qa: ContaQa | null = null;
+
 const PEND = "f3-pendente";
 const PEND_REJ = "f3-pendente-rej";
 
-async function main() {
+async function main(): Promise<number> {
   // Fase 5: esta suíte ativa c01/c02, que têm janela de consumo no seed.
   // `ativar_cupom` passou a barrar fora dela — abre agora, restaura no finally.
   const snapJanela = await abrirJanela(svc);
 
-  const consumidor = await logar("consumidor@promofy.test");
+  // Fase 6/H4: conta de consumo criada e destruida por esta suite.
+  qa = await criarContaQa(svc, "f3", { nome: "QA Fase3" });
+  console.log(`[conta efemera] ${qa.email}`);
+  const consumidor = await logar(qa.email, qa.senha);
   const consumidorId = (await consumidor.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test"); // e1
   const lojista2 = await logar("lojista2@promofy.test"); // e2
@@ -194,11 +200,17 @@ async function main() {
     await restaurarJanela(svc, snapJanela);
   }
 
-  console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-  process.exit(failed > 0 ? 1 : 0);
+  return encerrar(passed, failed);
 }
 
-main().catch((err) => {
-  console.error("test-fase3 falhou:", err);
-  process.exit(1);
-});
+/** `process.exit` NÃO executa `finally` — ver scripts/_qa-conta.ts. */
+main()
+  .then(async (code) => {
+    await destruirContaQa(svc, qa?.id);
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-fase3 falhou:", err);
+    await destruirContaQa(svc, qa?.id);
+    process.exit(1);
+  });

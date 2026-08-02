@@ -31,6 +31,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { dentroDaJanela, type JanelaConsumo } from "../src/lib/janela";
 import { normalizarCodigoCupom } from "../src/lib/codigo-cupom";
 import { DIAS_SEMANA, diaSemanaBrt } from "../src/lib/dias";
+import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -63,9 +64,9 @@ const anon = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-async function logar(email: string): Promise<SupabaseClient> {
+async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
   const c = anon();
-  const { error } = await c.auth.signInWithPassword({ email, password: SENHA });
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(`login ${email}: ${error.message}`);
   return c;
 }
@@ -110,8 +111,13 @@ function deslocarHoras(hhmm: string, horas: number): string {
   return `${String(total).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-async function main() {
-  const consumidor = await logar("consumidor@promofy.test");
+let qa: ContaQa | null = null;
+
+async function main(): Promise<number> {
+  // Fase 6/H4: conta de consumo criada e destruida por esta suite.
+  qa = await criarContaQa(svc, "f5", { nome: "QA Fase5" });
+  console.log(`[conta efemera] ${qa.email}`);
+  const consumidor = await logar(qa.email, qa.senha);
   const uid = (await consumidor.auth.getUser()).data.user!.id;
   const lojista = await logar("lojista@promofy.test"); // dono de e1
 
@@ -533,11 +539,17 @@ async function main() {
     await svc.from("cupons").delete().in("id", TODOS);
   }
 
-  console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-  process.exit(failed > 0 ? 1 : 0);
+  return encerrar(passed, failed);
 }
 
-main().catch((err) => {
-  console.error("test-fase5 falhou:", err);
-  process.exit(1);
-});
+/** `process.exit` NÃO executa `finally` — ver scripts/_qa-conta.ts. */
+main()
+  .then(async (code) => {
+    await destruirContaQa(svc, qa?.id);
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-fase5 falhou:", err);
+    await destruirContaQa(svc, qa?.id);
+    process.exit(1);
+  });
