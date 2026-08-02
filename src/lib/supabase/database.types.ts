@@ -212,11 +212,13 @@ export type Database = {
           destaque: boolean
           distancia_km: number | null
           economia: number
+          economia_variavel: boolean
           estabelecimento_id: string
+          formas_consumo: Json
           horarios: Json
           id: string
           imagem: string
-          limite_por_usuario: number
+          limite_por_usuario: number | null
           limite_total: number | null
           ocultar_ate_inicio: boolean
           ordem: number
@@ -227,6 +229,7 @@ export type Database = {
           rating: number | null
           regras: Json
           status: Database["public"]["Enums"]["status_cupom"]
+          taxas: Json
           titulo: string
           validade_fim: string
           validade_inicio: string | null
@@ -240,11 +243,13 @@ export type Database = {
           destaque?: boolean
           distancia_km?: number | null
           economia: number
+          economia_variavel?: boolean
           estabelecimento_id: string
+          formas_consumo?: Json
           horarios?: Json
           id?: string
           imagem?: string
-          limite_por_usuario?: number
+          limite_por_usuario?: number | null
           limite_total?: number | null
           ocultar_ate_inicio?: boolean
           ordem?: number
@@ -255,6 +260,7 @@ export type Database = {
           rating?: number | null
           regras?: Json
           status?: Database["public"]["Enums"]["status_cupom"]
+          taxas?: Json
           titulo: string
           validade_fim: string
           validade_inicio?: string | null
@@ -268,11 +274,13 @@ export type Database = {
           destaque?: boolean
           distancia_km?: number | null
           economia?: number
+          economia_variavel?: boolean
           estabelecimento_id?: string
+          formas_consumo?: Json
           horarios?: Json
           id?: string
           imagem?: string
-          limite_por_usuario?: number
+          limite_por_usuario?: number | null
           limite_total?: number | null
           ocultar_ate_inicio?: boolean
           ordem?: number
@@ -283,6 +291,7 @@ export type Database = {
           rating?: number | null
           regras?: Json
           status?: Database["public"]["Enums"]["status_cupom"]
+          taxas?: Json
           titulo?: string
           validade_fim?: string
           validade_inicio?: string | null
@@ -641,6 +650,7 @@ export type Database = {
         Args: { p_est_id: string }
         Returns: Json
       }
+      economia_consumidor: { Args: never; Returns: Json }
       economia_total_consumidor: { Args: never; Returns: number }
       estado_cupom_json: {
         Args: { p_row: Database["public"]["Tables"]["cupons_usuario"]["Row"] }
