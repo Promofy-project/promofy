@@ -234,16 +234,24 @@ begin
      or new.regras            is distinct from old.regras
      or new.imagem            is distinct from old.imagem;
 
-  if old.status = 'ativo' then
-    new.moderacao_historico := coalesce(old.moderacao_historico, '[]'::jsonb)
-      || jsonb_build_array(jsonb_build_object(
-           'em', now(),
-           'acao', case when v_material then 'editado_material' else 'editado' end,
-           'por', v_uid
-         ));
-    if v_material then
-      new.status := 'pendente';
-    end if;
+  -- O REGISTRO vale para QUALQUER status. É o que fecha o ciclo do C5: um
+  -- cupom rejeitado que volta para a fila precisa mostrar ao admin SE o
+  -- lojista corrigiu alguma coisa antes de reenviar — sem isso o histórico
+  -- fica "rejeitado → reenviado" e o moderador reabre no escuro.
+  new.moderacao_historico := coalesce(old.moderacao_historico, '[]'::jsonb)
+    || jsonb_build_array(jsonb_build_object(
+         'em', now(),
+         'acao', case when v_material then 'editado_material' else 'editado' end,
+         'por', v_uid
+       ));
+
+  -- O REBAIXAMENTO, não: só cupom ATIVO volta para moderação. Um cupom
+  -- 'rejeitado' editado NÃO vira 'pendente' sozinho — quem decide quando
+  -- reenviar é o lojista, pelo botão explícito (reenviar_cupom_moderacao).
+  -- Rebaixar aqui roubaria dele a chance de fazer vários ajustes antes de
+  -- submeter de novo.
+  if old.status = 'ativo' and v_material then
+    new.status := 'pendente';
   end if;
 
   return new;
