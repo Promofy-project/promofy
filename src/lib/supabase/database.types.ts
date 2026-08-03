@@ -220,6 +220,7 @@ export type Database = {
           imagem: string
           limite_por_usuario: number | null
           limite_total: number | null
+          moderacao_historico: Json
           ocultar_ate_inicio: boolean
           ordem: number
           prazo_ativacao_horas: number
@@ -251,6 +252,7 @@ export type Database = {
           imagem?: string
           limite_por_usuario?: number | null
           limite_total?: number | null
+          moderacao_historico?: Json
           ocultar_ate_inicio?: boolean
           ordem?: number
           prazo_ativacao_horas?: number
@@ -282,6 +284,7 @@ export type Database = {
           imagem?: string
           limite_por_usuario?: number | null
           limite_total?: number | null
+          moderacao_historico?: Json
           ocultar_ate_inicio?: boolean
           ordem?: number
           prazo_ativacao_horas?: number
@@ -659,6 +662,7 @@ export type Database = {
       favoritar_estabelecimento: { Args: { p_est_id: string }; Returns: Json }
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
+      hora_ou_null: { Args: { p_hora: string }; Returns: string }
       marcar_novidades_vistas: { Args: never; Returns: Json }
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
       meu_estado_consumidor: { Args: never; Returns: Json }
