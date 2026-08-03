@@ -7,6 +7,7 @@ import {
   ativarCupomAction,
   consultarCupomAction,
   responderNpsAction,
+  type EconomiaDTO,
   type EstadoCupomDTO,
   type UsoCupomDTO,
 } from "@/lib/actions/cupons";
@@ -36,8 +37,12 @@ export interface EstadoInicial {
   logado: boolean;
   usuario: UsuarioConsumidor | null;
   saldo: number;
-  /** Total economizado (soma da economia dos cupons validados). */
-  economia: number;
+  /**
+   * Total economizado + se o acumulado inclui algum cupom "a partir de"
+   * (Fase 6/C3). O `total` soma a economia MÍNIMA garantida; a flag é o
+   * que autoriza o "mais de R$ X".
+   */
+  economia: EconomiaDTO;
   config: ConfigPontos;
   estados: EstadoCupomDTO[];
   /** Uso por cupom (Fase 5) — insumo do selo "utilizado". */
@@ -75,8 +80,8 @@ interface CouponStateValue {
   getUsos: (id: string) => UsoCupomDTO | null;
   /** Saldo real do consumidor (SUM do ledger, hidratado do servidor). */
   getPontos: () => number;
-  /** Total economizado real (soma da economia dos cupons validados). */
-  getEconomia: () => number;
+  /** Total economizado + flag "inclui cupom variável" (Fase 6/C3). */
+  getEconomia: () => EconomiaDTO;
 
   /**
    * Ativa o cupom no servidor e abre a folha. Recebe o CUPOM inteiro, não só
@@ -156,7 +161,7 @@ export function CouponStateProvider({
     () => estadosDeInicial(initial.estados),
   );
   const [saldo, setSaldo] = React.useState(initial.saldo);
-  const [economia, setEconomia] = React.useState(initial.economia);
+  const [economia, setEconomia] = React.useState<EconomiaDTO>(initial.economia);
   const [usos, setUsos] = React.useState<Record<string, UsoCupomDTO>>(() =>
     Object.fromEntries((initial.usos ?? []).map((u) => [u.cupom_id, u])),
   );
@@ -297,7 +302,7 @@ export function useCouponState(): CouponStateValue {
       getEstado: () => null,
       getUsos: () => null,
       getPontos: () => 0,
-      getEconomia: () => 0,
+      getEconomia: () => ({ total: 0, incluiVariavel: false }),
       ativarCupom: async () => ({ ok: false, motivo: "sem_sessao" }),
       verCupomAtivo: () => {},
       fecharCupomAtivo: () => {},

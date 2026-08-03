@@ -13,6 +13,12 @@ import { buscarCupomPorId } from "@/lib/data/cupons";
 import { dentroDaJanela } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
 import { diaSemanaBrt } from "@/lib/dias";
+import {
+  listarPtBr,
+  rotuloEconomia,
+  rotulosFormasConsumo,
+  rotulosTaxas,
+} from "@/lib/cupom-campos";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { FeedbackCarousel } from "@/components/feedback-carousel";
@@ -98,7 +104,8 @@ export default async function CupomDetalhe({
             />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Estou economizando {formatBRL(cupom.economia)}
+            Estou economizando{" "}
+            {rotuloEconomia(formatBRL(cupom.economia), cupom.economiaVariavel)}
           </p>
         </div>
 
@@ -173,6 +180,40 @@ export default async function CupomDetalhe({
             </div>
           )}
         </section>
+
+        {/* Fase 6/C1: formas de consumo e taxas não cobertas. Ficam logo
+            abaixo das Regras de Uso porque são a outra metade da mesma
+            pergunta ("como e com que custo eu uso isto?"). Campo vazio
+            não vira linha — não informado é diferente de "todas". */}
+        {((cupom.formasConsumo?.length ?? 0) > 0 ||
+          (cupom.taxas?.length ?? 0) > 0) && (
+          <section className="flex flex-col gap-3">
+            {(cupom.formasConsumo?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-base font-bold">Formas de consumo</h3>
+                <div className="flex flex-wrap gap-2">
+                  {rotulosFormasConsumo(cupom.formasConsumo ?? []).map((l) => (
+                    <span
+                      key={l}
+                      className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary"
+                    >
+                      {l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(cupom.taxas?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-base font-bold">O que não está incluso</h3>
+                <p className="text-sm text-muted-foreground">
+                  O benefício não cobre{" "}
+                  {listarPtBr(rotulosTaxas(cupom.taxas ?? [])).toLowerCase()}.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Feedbacks */}
         <section>

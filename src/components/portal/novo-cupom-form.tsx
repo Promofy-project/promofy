@@ -5,6 +5,11 @@ import { Check } from "lucide-react";
 
 import type { CategoriaId, Cupom } from "@/lib/types";
 import { DIAS_SEMANA } from "@/lib/dias";
+import {
+  FORMAS_CONSUMO,
+  PRAZO_ATIVACAO_MIN_HORAS,
+  TAXAS,
+} from "@/lib/cupom-campos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -62,6 +67,13 @@ export function NovoCupomForm({
   const categoriaLabel =
     categorias.find((c) => c.id === categoriaSel)?.label ?? categoriaSel;
   const [economia, setEconomia] = React.useState("");
+  // Fase 6/C3: com a flag, `economia` passa a ser o MÍNIMO garantido.
+  const [economiaVariavel, setEconomiaVariavel] = React.useState(false);
+  // Fase 6/C1: multivalorados, saneados de novo no servidor.
+  const [taxas, setTaxas] = React.useState<string[]>([]);
+  const [formasConsumo, setFormasConsumo] = React.useState<string[]>([]);
+  const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(false);
+  const [limiteTotalIlimitado, setLimiteTotalIlimitado] = React.useState(false);
   const [validade, setValidade] = React.useState("");
   const [dataInicio, setDataInicio] = React.useState("");
   const [ocultarAteInicio, setOcultarAteInicio] = React.useState(false);
@@ -79,6 +91,13 @@ export function NovoCupomForm({
       prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
     );
 
+  /** Alterna um id numa lista multivalorada (taxas / formas de consumo). */
+  const toggleEm = (
+    set: React.Dispatch<React.SetStateAction<string[]>>,
+    id: string,
+  ) =>
+    set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
   const previewCupom: Cupom = {
     id: "preview",
     titulo: titulo || "Título do seu cupom",
@@ -86,6 +105,9 @@ export function NovoCupomForm({
     estabelecimentoId: "preview",
     categoria,
     economia: Number(economia) || 0,
+    economiaVariavel,
+    taxas,
+    formasConsumo,
     distanciaKm: 1.2,
     rating: 0,
     avaliacoes: 0,
@@ -106,12 +128,20 @@ export function NovoCupomForm({
   const horarioIncompleto =
     dias.length > 0 && !(horaValida(horaInicio) && horaValida(horaFim));
 
+  // Fase 6: o mínimo de 5h é regra de negócio (o consumidor precisa de
+  // tempo para chegar ao balcão). Aqui é só aviso — quem recusa é a
+  // Server Action, e o CHECK da coluna cobre o PostgREST direto.
+  const prazoInvalido =
+    prazoAtivacao.trim().length > 0 &&
+    Number(prazoAtivacao) < PRAZO_ATIVACAO_MIN_HORAS;
+
   // validade agora é obrigatória (a coluna é NOT NULL no banco)
   const podeSalvar =
     titulo.trim().length > 0 &&
     Number(economia) > 0 &&
     validade.length > 0 &&
-    !horarioIncompleto;
+    !horarioIncompleto &&
+    !prazoInvalido;
 
   const salvar = async () => {
     if (!podeSalvar || salvando) return;
@@ -123,15 +153,20 @@ export function NovoCupomForm({
       beneficio,
       categoria,
       economia: Number(economia),
+      economiaVariavel,
       validade,
       dataInicio: dataInicio || undefined,
       ocultarAteInicio,
-      prazoAtivacao: Number(prazoAtivacao) || 5,
+      prazoAtivacao: Number(prazoAtivacao) || PRAZO_ATIVACAO_MIN_HORAS,
       dias,
       horaInicio,
       horaFim,
       limiteUsuario: Number(limiteUsuario) || 1,
       limiteTotal: Number(limiteTotal) || 1,
+      limiteUsuarioIlimitado,
+      limiteTotalIlimitado,
+      taxas,
+      formasConsumo,
     });
     setSalvando(false);
     if (r.ok) {
@@ -198,7 +233,13 @@ export function NovoCupomForm({
             )}
           </Field>
 
-          <Field label="Economia (R$)" htmlFor="f-economia">
+          {/* Fase 6/C3: com "variável", o valor deixa de ser exato e vira
+              o PISO — o app passa a exibir "a partir de R$ X" no cupom e
+              "mais de R$ X" no total do consumidor. */}
+          <Field
+            label={economiaVariavel ? "Economia mínima garantida (R$)" : "Economia (R$)"}
+            htmlFor="f-economia"
+          >
             <Input
               id="f-economia"
               type="number"
@@ -207,6 +248,73 @@ export function NovoCupomForm({
               onChange={(e) => setEconomia(e.target.value)}
               placeholder="45"
             />
+          </Field>
+
+          <label
+            htmlFor="f-economia-variavel"
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-foreground">
+                Economia variável
+              </span>
+              <span className="text-xs text-muted-foreground">
+                O cliente economiza <b>pelo menos</b> esse valor — pode ser mais.
+              </span>
+            </span>
+            <Switch
+              id="f-economia-variavel"
+              checked={economiaVariavel}
+              onCheckedChange={setEconomiaVariavel}
+            />
+          </label>
+
+          <Field label="Formas de consumo">
+            <div className="flex flex-wrap gap-2">
+              {FORMAS_CONSUMO.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => toggleEm(setFormasConsumo, f.id)}
+                  aria-pressed={formasConsumo.includes(f.id)}
+                  className={cn(
+                    "h-9 rounded-lg border px-3 text-sm font-semibold transition-colors",
+                    formasConsumo.includes(f.id)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Onde o cupom vale. Sem seleção, o app não exibe esta informação.
+            </span>
+          </Field>
+
+          <Field label="Taxas NÃO cobertas pelo benefício">
+            <div className="flex flex-wrap gap-2">
+              {TAXAS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => toggleEm(setTaxas, t.id)}
+                  aria-pressed={taxas.includes(t.id)}
+                  className={cn(
+                    "h-9 rounded-lg border px-3 text-sm font-semibold transition-colors",
+                    taxas.includes(t.id)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              O cliente vê &ldquo;não inclui…&rdquo; — evita discussão no balcão.
+            </span>
           </Field>
 
           {/* Início à ESQUERDA, validade à direita — ordem de leitura do
@@ -254,11 +362,17 @@ export function NovoCupomForm({
             <Input
               id="f-prazo"
               type="number"
-              min={1}
+              min={PRAZO_ATIVACAO_MIN_HORAS}
               value={prazoAtivacao}
               onChange={(e) => setPrazoAtivacao(e.target.value)}
-              placeholder="24"
+              placeholder={String(PRAZO_ATIVACAO_MIN_HORAS)}
             />
+            {prazoInvalido && (
+              <span className="text-xs font-medium text-danger">
+                Mínimo de {PRAZO_ATIVACAO_MIN_HORAS} horas — é o tempo que o
+                cliente tem para chegar ao estabelecimento.
+              </span>
+            )}
           </Field>
 
           <Field label="Dias de consumo">
@@ -306,6 +420,9 @@ export function NovoCupomForm({
             </p>
           )}
 
+          {/* Fase 6/C1: "ilimitado" explícito e SEPARADO nos dois limites.
+              Marcado, o servidor grava NULL — o mesmo vocabulário que
+              `limite_total` já usava desde o começo. */}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Limite por usuário" htmlFor="f-lu">
               <Input
@@ -315,7 +432,19 @@ export function NovoCupomForm({
                 value={limiteUsuario}
                 onChange={(e) => setLimiteUsuario(e.target.value)}
                 placeholder="1"
+                disabled={limiteUsuarioIlimitado}
               />
+              <label
+                htmlFor="f-lu-ilimitado"
+                className="flex items-center gap-2 text-xs font-medium text-muted-foreground"
+              >
+                <Switch
+                  id="f-lu-ilimitado"
+                  checked={limiteUsuarioIlimitado}
+                  onCheckedChange={setLimiteUsuarioIlimitado}
+                />
+                Ilimitado por usuário
+              </label>
             </Field>
             <Field label="Limite total" htmlFor="f-lt">
               <Input
@@ -325,7 +454,19 @@ export function NovoCupomForm({
                 value={limiteTotal}
                 onChange={(e) => setLimiteTotal(e.target.value)}
                 placeholder="500"
+                disabled={limiteTotalIlimitado}
               />
+              <label
+                htmlFor="f-lt-ilimitado"
+                className="flex items-center gap-2 text-xs font-medium text-muted-foreground"
+              >
+                <Switch
+                  id="f-lt-ilimitado"
+                  checked={limiteTotalIlimitado}
+                  onCheckedChange={setLimiteTotalIlimitado}
+                />
+                Sem limite total
+              </label>
             </Field>
           </div>
         </div>
@@ -381,11 +522,11 @@ export function NovoCupomForm({
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Limite / usuário</dt>
-              <dd className="font-medium">{limiteUsuario || "—"}</dd>
+              <dd className="font-medium">{limiteUsuarioIlimitado ? "Ilimitado" : limiteUsuario || "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Limite total</dt>
-              <dd className="font-medium">{limiteTotal || "—"}</dd>
+              <dd className="font-medium">{limiteTotalIlimitado ? "Ilimitado" : limiteTotal || "—"}</dd>
             </div>
           </dl>
         </Card>

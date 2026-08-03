@@ -3,7 +3,13 @@ import { ArrowLeft, Plus } from "lucide-react";
 
 import { buscarCuponsPortal } from "@/lib/data/cupons";
 import { Button } from "@/components/ui/button";
-import { cn, formatShortDate } from "@/lib/utils";
+import { cn, formatBRLValue, formatShortDate } from "@/lib/utils";
+import {
+  listarPtBr,
+  rotuloEconomia,
+  rotulosFormasConsumo,
+  rotulosTaxas,
+} from "@/lib/cupom-campos";
 
 export const dynamic = "force-dynamic";
 
@@ -68,12 +74,34 @@ export default async function CuponsPage() {
                     {it.cupom.beneficio}
                   </p>
                 )}
-                <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                {/* Fase 6: o lojista vê o que cadastrou — economia (com o
+                    "a partir de" quando variável), formas de consumo e as
+                    taxas que ficaram de fora. Campo vazio não vira linha. */}
+                <p className="mt-2 text-sm font-bold text-foreground">
+                  Economia{" "}
+                  {rotuloEconomia(
+                    `R$ ${formatBRLValue(it.cupom.economia)}`,
+                    it.cupom.economiaVariavel,
+                  )}
+                </p>
+                {(it.cupom.formasConsumo?.length ?? 0) > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {listarPtBr(rotulosFormasConsumo(it.cupom.formasConsumo ?? []))}
+                  </p>
+                )}
+                {(it.cupom.taxas?.length ?? 0) > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Não inclui{" "}
+                    {listarPtBr(rotulosTaxas(it.cupom.taxas ?? [])).toLowerCase()}.
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                   <span>
                     <b className="text-foreground">{it.metricas.resgates}</b>{" "}
                     resgates
                   </span>
                   <span>Validade {formatShortDate(it.cupom.validade)}</span>
+                  {it.limiteUsuario == null && <span>Ilimitado por cliente</span>}
                 </div>
               </li>
             );

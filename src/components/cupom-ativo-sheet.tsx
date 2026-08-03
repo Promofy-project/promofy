@@ -10,6 +10,8 @@ import {
   Store,
   ShieldCheck,
   BadgeCheck,
+  Utensils,
+  Info,
 } from "lucide-react";
 
 import {
@@ -17,6 +19,12 @@ import {
   formatDistance,
   formatShortDate,
 } from "@/lib/utils";
+import {
+  listarPtBr,
+  rotuloEconomia,
+  rotulosFormasConsumo,
+  rotulosTaxas,
+} from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QrFake } from "@/components/qr-fake";
@@ -191,9 +199,31 @@ export function CupomAtivoSheet() {
               <CalendarClock className="h-4 w-4 shrink-0" />
               Válido até {formatShortDate(cupom.validade)}
             </span>
+            {/* Fase 6/C1: onde o cupom vale. Lista vazia = não informado —
+                a linha some, em vez de prometer "todas as formas". */}
+            {(cupom.formasConsumo?.length ?? 0) > 0 && (
+              <span className="flex items-center gap-2">
+                <Utensils className="h-4 w-4 shrink-0" />
+                {listarPtBr(rotulosFormasConsumo(cupom.formasConsumo ?? []))}
+              </span>
+            )}
           </div>
+
+          {/* Fase 6/C1: taxas que NÃO entram no benefício. É a informação
+              que evita discussão no balcão — por isso fica na folha, e
+              não só no detalhe. */}
+          {(cupom.taxas?.length ?? 0) > 0 && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Não inclui {listarPtBr(rotulosTaxas(cupom.taxas ?? []))
+                  .toLowerCase()}
+                .
+              </span>
+            </p>
+          )}
           <p className="mt-3 inline-flex w-fit items-center rounded-md bg-yellow-soft px-2 py-1 text-sm font-extrabold text-[#8a6d0b]">
-            Economize R$ {formatBRLValue(cupom.economia)}
+            Economize {rotuloEconomia(`R$ ${formatBRLValue(cupom.economia)}`, cupom.economiaVariavel)}
           </p>
         </div>
       </div>

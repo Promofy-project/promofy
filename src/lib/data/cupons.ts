@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
+import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -70,6 +71,14 @@ export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupo
     estabelecimentoId: row.estabelecimento_id,
     categoria: row.categoria_id as CategoriaId,
     economia: Number(row.economia),
+    economiaVariavel: row.economia_variavel,
+    // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
+    // As duas colunas estão no grant de UPDATE do lojista, então o
+    // PostgREST direto pode gravar qualquer array — valor desconhecido
+    // é ignorado na exibição, nunca quebra a tela (mesma doutrina de
+    // `horarios` na Fase 5).
+    taxas: sanearTaxas(row.taxas),
+    formasConsumo: sanearFormasConsumo(row.formas_consumo),
     precoDe: row.preco_de != null ? Number(row.preco_de) : undefined,
     precoPor: row.preco_por != null ? Number(row.preco_por) : undefined,
     distanciaKm: Number(row.distancia_km ?? 0),
@@ -373,6 +382,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
         resgates: 0,
       },
     limiteTotal: row.limite_total ?? 1000, // fallback: paridade com o mock
+    limiteUsuario: row.limite_por_usuario, // Fase 6: null = ilimitado
     dataInicio: row.validade_inicio ?? undefined,
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));

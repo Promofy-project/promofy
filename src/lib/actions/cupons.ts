@@ -3,6 +3,13 @@
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import { linhaParaCupom } from "@/lib/data/cupons";
+import {
+  PRAZO_ATIVACAO_MIN_HORAS,
+  sanearFormasConsumo,
+  sanearLimite,
+  sanearPrazoAtivacao,
+  sanearTaxas,
+} from "@/lib/cupom-campos";
 import type { Database } from "@/lib/supabase/database.types";
 
 // DTOs serializáveis devolvidos ao cliente. Nenhuma action lança:
@@ -28,8 +35,44 @@ export interface EstadoCupomDTO {
 export interface UsoCupomDTO {
   cupom_id: string;
   consumidos: number;
-  limite: number;
-  restantes: number;
+  /** Fase 6: null = ilimitado. */
+  limite: number | null;
+  /** Fase 6: null quando ilimitado — DADO DE EXIBIÇÃO, nunca condição. */
+  restantes: number | null;
+  /**
+   * Fase 6: "ainda posso usar este cupom?" decidido NO SERVIDOR, com a
+   * negação literal da checagem de `ativar_cupom`.
+   *
+   * Existe porque a UI derivava isso sozinha e errava: `restantes > 0`
+   * dá false tanto para `null` quanto para `0`, então cupom ilimitado
+   * exibia o selo "Utilizado" e não oferecia a 2ª ativação, embora o
+   * servidor fosse aceitá-la. Quem lê este campo NUNCA deve voltar a
+   * comparar `restantes` num `if`.
+   */
+  pode_reusar: boolean;
+}
+
+/**
+ * Total economizado + se o acumulado inclui algum cupom "a partir de"
+ * (Fase 6/C3). `total` soma a economia MÍNIMA garantida; a flag é o que
+ * autoriza a UI a escrever "mais de R$ X".
+ */
+export interface EconomiaDTO {
+  total: number;
+  incluiVariavel: boolean;
+}
+
+const ECONOMIA_ZERO: EconomiaDTO = { total: 0, incluiVariavel: false };
+
+/** jsonb da RPC `economia_consumidor` → DTO, defensivo contra formato. */
+export function economiaDeJson(valor: unknown): EconomiaDTO {
+  if (!valor || typeof valor !== "object") return ECONOMIA_ZERO;
+  const j = valor as { total?: unknown; inclui_variavel?: unknown };
+  const total = Number(j.total);
+  return {
+    total: Number.isFinite(total) ? total : 0,
+    incluiVariavel: j.inclui_variavel === true,
+  };
 }
 
 type AtivarResult =
@@ -40,7 +83,7 @@ type ConsultarResult =
       ok: true;
       estado: EstadoCupomDTO | null;
       saldo: number;
-      economia: number;
+      economia: EconomiaDTO;
       usos: UsoCupomDTO[];
     }
   | { ok: false };
@@ -78,9 +121,13 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
     // meu_estado_consumidor (saldo + estados) e economia (RPC própria,
     // security definer) no mesmo ciclo do poll — pontos e economia sobem
     // juntos ao detectar a validação.
+    // Fase 6: `economia_consumidor` devolve {total, inclui_variavel}. A
+    // antiga `economia_total_consumidor` (numeric) segue existindo no
+    // banco para a janela de deploy banco-antes-código; o app novo não
+    // a usa mais.
     const [{ data: estadoJson }, { data: economiaData }] = await Promise.all([
       supabase.rpc("meu_estado_consumidor"),
-      supabase.rpc("economia_total_consumidor"),
+      supabase.rpc("economia_consumidor"),
     ]);
     const parsed = estadoJson as unknown as {
       saldo?: number;
@@ -100,7 +147,7 @@ export async function consultarCupomAction(cupomId: string): Promise<ConsultarRe
       ok: true,
       estado: doCupom[0] ?? null,
       saldo: parsed?.saldo ?? 0,
-      economia: Number(economiaData ?? 0),
+      economia: economiaDeJson(economiaData),
       // `usos` vai junto de propósito: navegação client-side não
       // re-renderiza o layout (Partial Rendering) e nada dá
       // router.refresh() no fluxo do consumidor — sem isto o selo
@@ -156,7 +203,9 @@ export interface NovoCupomInput {
   titulo: string;
   beneficio: string;
   categoria: string;
+  /** Fase 6: com `economiaVariavel`, é a economia MÍNIMA garantida. */
   economia: number;
+  economiaVariavel?: boolean;
   validade: string; // yyyy-mm-dd (obrigatório)
   dataInicio?: string;
   ocultarAteInicio: boolean;
@@ -166,6 +215,12 @@ export interface NovoCupomInput {
   horaFim: string;
   limiteUsuario: number;
   limiteTotal: number;
+  /** Fase 6: `true` grava NULL na coluna — o vocabulário de "sem teto". */
+  limiteUsuarioIlimitado?: boolean;
+  limiteTotalIlimitado?: boolean;
+  /** Fase 6: ids de src/lib/cupom-campos (saneados aqui no servidor). */
+  taxas?: string[];
+  formasConsumo?: string[];
 }
 type CriarResult = { ok: true; item: ItemCupomPortal } | { ok: false; erro: string };
 
@@ -178,8 +233,25 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     const supabase = createClient();
 
     if (!input.titulo.trim()) return { ok: false, erro: "Informe o título do cupom." };
-    if (!(input.economia > 0)) return { ok: false, erro: "Informe a economia (R$)." };
+    if (!(input.economia > 0)) {
+      return {
+        ok: false,
+        erro: input.economiaVariavel
+          ? "Informe a economia mínima garantida (R$)."
+          : "Informe a economia (R$).",
+      };
+    }
     if (!input.validade) return { ok: false, erro: "Informe a validade da oferta." };
+    // Fase 6: prazo mínimo de ativação é REGRA, não sugestão do form —
+    // recusa explícita em vez de clamp silencioso, para o lojista saber
+    // que o valor dele não foi aceito. (A 3ª barreira é o CHECK da
+    // coluna, que cobre o PATCH direto via PostgREST.)
+    if (Math.trunc(Number(input.prazoAtivacao)) < PRAZO_ATIVACAO_MIN_HORAS) {
+      return {
+        ok: false,
+        erro: `O prazo de ativação deve ser de no mínimo ${PRAZO_ATIVACAO_MIN_HORAS} horas.`,
+      };
+    }
 
     const { data: claims } = await supabase.auth.getClaims();
     const uid = claims?.claims?.sub;
@@ -207,8 +279,6 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
     }
 
-    const inteiro = (n: number, min: number) => Math.max(min, Math.trunc(Number(n) || min));
-
     // Fase 5 — hora malformada vira CHAVE OMITIDA, nunca string vazia.
     // Os <input type="time"> do form não são `required`: limpar os campos
     // gravava {"inicio":"","fim":""}, e a janela de consumo (dentro_da_janela)
@@ -235,14 +305,31 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       categoria_id: categoriaId,
       beneficio: input.beneficio.trim(),
       economia: input.economia,
+      economia_variavel: Boolean(input.economiaVariavel),
       validade_inicio: input.dataInicio || null,
       validade_fim: input.validade,
       ocultar_ate_inicio: input.ocultarAteInicio,
-      prazo_ativacao_horas: inteiro(input.prazoAtivacao, 1),
-      limite_por_usuario: inteiro(input.limiteUsuario, 1),
-      limite_total: inteiro(input.limiteTotal, 1),
+      prazo_ativacao_horas: sanearPrazoAtivacao(input.prazoAtivacao),
+      // Fase 6: `null` = ilimitado, o mesmo vocabulário nas duas colunas.
+      limite_por_usuario: sanearLimite(
+        input.limiteUsuario,
+        Boolean(input.limiteUsuarioIlimitado),
+      ),
+      limite_total: sanearLimite(
+        input.limiteTotal,
+        Boolean(input.limiteTotalIlimitado),
+      ),
+      // Fase 6: o jsonb não tem CHECK de domínio (de propósito — ver a
+      // migration 16); o vocabulário é garantido AQUI, no servidor, e
+      // nunca no form. Valor desconhecido é descartado, não rejeitado:
+      // o cupom sendo salvo importa mais do que uma taxa que o cliente
+      // não reconhece.
+      taxas: sanearTaxas(input.taxas),
+      formas_consumo: sanearFormasConsumo(input.formasConsumo),
       regras: input.beneficio.trim() ? [input.beneficio.trim()] : [],
       horarios,
+      // O trigger `forcar_status_pendente` (migration 19) garante isto
+      // mesmo se alguém chamar o PostgREST direto; aqui é explícito.
       status: "pendente",
       imagem: "", // upload de imagem fica p/ fase futura (storage desligado)
     };
@@ -259,6 +346,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       statusPortal: "pendente",
       metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
       limiteTotal: row.limite_total ?? 1000,
+      limiteUsuario: row.limite_por_usuario,
       dataInicio: row.validade_inicio ?? undefined,
       ocultarAteInicio: row.ocultar_ate_inicio,
     };

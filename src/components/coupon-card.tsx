@@ -4,6 +4,7 @@ import { MapPin, CalendarClock } from "lucide-react";
 import type { Cupom } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatBRLValue, formatDistance, formatShortDate } from "@/lib/utils";
+import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
@@ -132,11 +133,11 @@ export function CouponCard({
               compact ? "text-xs sm:text-sm lg:text-xs" : "text-sm",
             )}
           >
-            Economize R$ {formatBRLValue(cupom.economia)} hoje!
+            Economize {rotuloEconomia(`R$ ${formatBRLValue(cupom.economia)}`, cupom.economiaVariavel)} hoje!
           </p>
         ) : (
           <p className="mt-1 inline-flex w-fit items-center rounded-md bg-yellow-soft px-2 py-1 text-sm font-extrabold text-[#8a6d0b]">
-            Economize R$ {formatBRLValue(cupom.economia)} hoje!
+            Economize {rotuloEconomia(`R$ ${formatBRLValue(cupom.economia)}`, cupom.economiaVariavel)} hoje!
           </p>
         )}
 

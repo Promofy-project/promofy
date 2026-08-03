@@ -55,9 +55,24 @@ export function CupomAcaoUsar({
   foraDaJanela?: boolean;
 }) {
   const router = useRouter();
-  const { logado, getStatus, ativarCupom, verCupomAtivo } = useCouponState();
+  const { logado, getStatus, getUsos, ativarCupom, verCupomAtivo } = useCouponState();
   const indisponivel = cupom.status === "indisponivel";
   const status = getStatus(cupom.id);
+  /**
+   * Fase 6: cota por usuário ainda disponível? Decidido NO SERVIDOR
+   * (`meu_estado_consumidor.usos.pode_reusar`, a negação literal da
+   * checagem de `ativar_cupom`).
+   *
+   * `=== true` e nunca `!== false`: campo ausente — rollback de
+   * migration, ou cupom sem linha em `usos` — cai no comportamento da
+   * Fase 5, que é o lado conservador (mostra "utilizado" em vez de
+   * oferecer uma ativação que o servidor recusaria).
+   *
+   * Este é o ponto exato em que o "ilimitado" morreria inerte: sem ler
+   * `usos`, a tela travava no badge após a 1ª validação e não havia
+   * caminho nenhum para a 2ª ativação, embora a RPC fosse aceitá-la.
+   */
+  const podeReusar = getUsos(cupom.id)?.pode_reusar === true;
   const width = full ? "w-full" : "";
   const [ativando, setAtivando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -88,7 +103,13 @@ export function CupomAcaoUsar({
     );
   }
 
-  if (status === "validado") {
+  // Já validou E não tem mais cota → badge. Com cota sobrando (ou cupom
+  // ilimitado) o fluxo segue adiante e o botão volta a ser oferecido.
+  // O ramo `status === "ativo"` abaixo NÃO é afetado: com ativação
+  // vigente, `ativar_cupom` é idempotente e o índice
+  // `uniq_cupons_usuario_ativo` só permite uma — "Ver cupom ativo" é o
+  // certo mesmo num cupom ilimitado.
+  if (status === "validado" && !podeReusar) {
     return full ? (
       <div
         className={cn(
