@@ -81,6 +81,28 @@ admissão completa.
 **sem F5**, o botão volta a oferecer "Usar cupom" (sem badge) → 2ª ativação abre a folha com
 **código novo**; e na lista o ilimitado fica **sem** selo enquanto o de cota 1 fica **com** selo.
 
+## 4.1 ⚠️ CONFIRMAÇÃO DE PRODUTO PENDENTE — o que "ilimitado" significa hoje
+
+**Levar ao cliente antes de anunciar a funcionalidade.** O switch "Ilimitado por usuário"
+entregue nesta fase é **literal e sem controle de periodicidade**:
+
+- o consumidor pode ativar → validar → **ativar de novo em seguida**, sem intervalo mínimo;
+- **cada validação credita os pontos de `resgate` e soma `economia` outra vez** — a dedupe do
+  ledger é por linha de `cupons_usuario` (`referencia_id = v.id::text`), não por cupom, e
+  `economia_consumidor()` soma por linha validada;
+- consequência: num cupom ilimitado, pontos e "total economizado" do consumidor **não têm teto**,
+  e é o lojista que paga a métrica.
+
+**Não é farm de pontos:** `validar_cupom` exige o **lojista** validando no balcão e recusa
+`cupom_proprio` — cada repetição é uma transação real que alguém do estabelecimento autorizou.
+
+**O que o modelo NÃO cobre e é o caso que o cliente provavelmente quer:** periodicidade — "1
+café por dia", "1 por semana". Isso **não existe** no schema: exige coluna nova
+(`periodo_limite`) e uma janela de contagem em `ativar_cupom`. **É feature separada, está no
+backlog da §14, e o switch desta fase não a promete.** Se a resposta do cliente for "na verdade
+eu queria 1 por dia", o switch entregue aqui não atende e a Fase 6.5/7 precisa da periodicidade
+antes de o cupom ilimitado ir para uso comercial.
+
 ## 5. As duas decisões de modelagem que precisam ficar registradas
 
 **Taxas e formas de consumo em `jsonb`, não em colunas.** O vocabulário é do cliente e vai
