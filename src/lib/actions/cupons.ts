@@ -14,6 +14,7 @@ import {
   sanearPrazoAtivacao,
   sanearTaxas,
 } from "@/lib/cupom-campos";
+import { montarPatchCupom, type CamposEdicaoCupom } from "@/lib/cupom-patch";
 import { economiaDeJson, type EconomiaDTO } from "@/lib/economia";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -312,7 +313,11 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       // não reconhece.
       taxas: sanearTaxas(input.taxas),
       formas_consumo: sanearFormasConsumo(input.formasConsumo),
-      regras: input.beneficio.trim() ? [input.beneficio.trim()] : [],
+      // Fase 6.5/EXTRA: `regras` NÃO é mais cópia do benefício. Copiar
+      // fazia a folha do cupom exibir o mesmo texto duas vezes (o detalhe
+      // concatena benefício + regras). `regras` é campo próprio e opcional;
+      // vazio é o default honesto.
+      regras: [],
       horarios,
       // O trigger `forcar_status_pendente` (migration 19) garante isto
       // mesmo se alguém chamar o PostgREST direto; aqui é explícito.
@@ -348,7 +353,8 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
  * NÃO é `NovoCupomInput`. O formulário do `/e` é um subconjunto declarado:
  * ele não tem estado para dias/horário/agendamento/prazo e manda LITERAIS
  * no submit (`dias: []`, `horaInicio: "00:00"`, `prazoAtivacao: 5`…), e a
- * `criarCupomAction` ainda acrescenta `regras: [beneficio]` e `imagem: ""`.
+ * `criarCupomAction` ainda acrescenta `imagem: ""` (e, até o EXTRA desta
+ * fase, também `regras: [beneficio]`).
  * Se a edição aceitasse o input completo, corrigir um typo no título pelo
  * totem APAGARIA a janela, o agendamento, o prazo, as regras curadas e a
  * imagem — e, como horarios/regras/imagem são materiais, ainda rebaixaria o
@@ -406,29 +412,10 @@ export async function reenviarCupomAction(cupomId: string): Promise<ReenviarResu
   }
 }
 
-export interface EditarCupomInput {
+export interface EditarCupomInput extends CamposEdicaoCupom {
   id: string;
-  titulo?: string;
-  beneficio?: string;
+  /** Fora de `CamposEdicaoCupom`: validar categoria exige ler o banco. */
   categoria?: string;
-  economia?: number;
-  economiaVariavel?: boolean;
-  validade?: string;
-  dataInicio?: string | null;
-  ocultarAteInicio?: boolean;
-  prazoAtivacao?: number;
-  /** jsonb COMPOSTO: só é remontado se os três vierem juntos. */
-  dias?: string[];
-  horaInicio?: string;
-  horaFim?: string;
-  limiteUsuario?: number;
-  limiteTotal?: number;
-  limiteUsuarioIlimitado?: boolean;
-  limiteTotalIlimitado?: boolean;
-  taxas?: string[];
-  formasConsumo?: string[];
-  regras?: string[];
-  imagem?: string;
 }
 
 type EditarResult = { ok: true; item: ItemCupomPortal } | { ok: false; erro: string };
@@ -459,58 +446,15 @@ export async function editarCupomAction(
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
 
-    // Monta o patch CHAVE A CHAVE. Cada saneador só roda se a chave veio.
-    const patch: Database["public"]["Tables"]["cupons"]["Update"] = {};
+    // Monta o patch CHAVE A CHAVE, em `src/lib/cupom-patch.ts` — módulo puro
+    // e testável sem servidor. É a barreira que impede o form reduzido do
+    // `/e` de apagar janela/agendamento/prazo/regras/imagem em silêncio.
+    const montado = montarPatchCupom(input);
+    if (!montado.ok) return { ok: false, erro: montado.erro };
+    const patch = montado.patch;
 
-    if (input.titulo !== undefined) {
-      if (!input.titulo.trim()) return { ok: false, erro: "Informe o título do cupom." };
-      patch.titulo = input.titulo.trim();
-    }
-    if (input.beneficio !== undefined) patch.beneficio = input.beneficio.trim();
-    if (input.economia !== undefined) {
-      if (!(input.economia > 0)) return { ok: false, erro: "Informe a economia (R$)." };
-      patch.economia = input.economia;
-    }
-    if (input.economiaVariavel !== undefined) {
-      patch.economia_variavel = Boolean(input.economiaVariavel);
-    }
-    if (input.validade !== undefined) {
-      if (!input.validade) return { ok: false, erro: "Informe a validade da oferta." };
-      patch.validade_fim = input.validade;
-    }
-    if (input.dataInicio !== undefined) patch.validade_inicio = input.dataInicio || null;
-    if (input.ocultarAteInicio !== undefined) {
-      patch.ocultar_ate_inicio = input.ocultarAteInicio;
-    }
-    if (input.prazoAtivacao !== undefined) {
-      if (Math.trunc(Number(input.prazoAtivacao)) < PRAZO_ATIVACAO_MIN_HORAS) {
-        return {
-          ok: false,
-          erro: `O prazo de ativação deve ser de no mínimo ${PRAZO_ATIVACAO_MIN_HORAS} horas.`,
-        };
-      }
-      patch.prazo_ativacao_horas = sanearPrazoAtivacao(input.prazoAtivacao);
-    }
-    if (input.taxas !== undefined) patch.taxas = sanearTaxas(input.taxas);
-    if (input.formasConsumo !== undefined) {
-      patch.formas_consumo = sanearFormasConsumo(input.formasConsumo);
-    }
-    if (input.regras !== undefined) {
-      patch.regras = input.regras.map((r) => r.trim()).filter(Boolean);
-    }
-    if (input.imagem !== undefined) patch.imagem = input.imagem;
-    if (input.limiteUsuario !== undefined || input.limiteUsuarioIlimitado !== undefined) {
-      patch.limite_por_usuario = sanearLimite(
-        input.limiteUsuario,
-        Boolean(input.limiteUsuarioIlimitado),
-      );
-    }
-    if (input.limiteTotal !== undefined || input.limiteTotalIlimitado !== undefined) {
-      patch.limite_total = sanearLimite(
-        input.limiteTotal,
-        Boolean(input.limiteTotalIlimitado),
-      );
-    }
+    // A categoria fica aqui (e não no módulo puro) porque depende do banco:
+    // precisa das categorias cadastradas DESTE estabelecimento.
     if (input.categoria !== undefined) {
       const { data: cats } = await supabase
         .from("estabelecimento_categorias")
@@ -522,37 +466,6 @@ export async function editarCupomAction(
         return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
       }
       patch.categoria_id = input.categoria;
-    }
-
-    // `horarios` é jsonb COMPOSTO: recebê-lo pela metade é o mesmo bug em
-    // miniatura (gravaria uma janela que o lojista não pediu). Ou vêm os
-    // três, ou não se toca no campo.
-    const temJanela =
-      input.dias !== undefined &&
-      input.horaInicio !== undefined &&
-      input.horaFim !== undefined;
-    if (temJanela) {
-      const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test((h ?? "").trim());
-      const hi = horaValida(input.horaInicio!) ? input.horaInicio!.trim() : null;
-      const hf = horaValida(input.horaFim!) ? input.horaFim!.trim() : null;
-      const diasLimpos = (input.dias ?? []).filter(
-        (d) => typeof d === "string" && d.length > 0,
-      );
-      const faixa = hi && hf ? `${hi} às ${hf}` : "qualquer horário";
-      const descricao = `${diasLimpos.length ? diasLimpos.join(", ") : "Todos os dias"}, ${faixa}`;
-      patch.horarios =
-        hi && hf
-          ? { descricao, dias: diasLimpos, inicio: hi, fim: hf }
-          : { descricao, dias: diasLimpos };
-    } else if (
-      input.dias !== undefined ||
-      input.horaInicio !== undefined ||
-      input.horaFim !== undefined
-    ) {
-      return {
-        ok: false,
-        erro: "Para alterar o horário, informe dias, início e fim juntos.",
-      };
     }
 
     if (Object.keys(patch).length === 0) {

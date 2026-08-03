@@ -7,6 +7,7 @@ import { Check, X, Eye } from "lucide-react";
 import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaId } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
+import { regrasParaExibir } from "@/lib/cupom-campos";
 import { cn, formatBRL, formatShortDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -395,8 +396,12 @@ function DetalheModal({
             valor={`${cupom.estabelecimentoNome} (${cupom.estabelecimentoStatus})`}
             full
           />
-          {cupom.regras.length > 0 && (
-            <Linha label="Regras" valor={cupom.regras.join(" · ")} full />
+          {regrasParaExibir(cupom.regras, cupom.beneficio).length > 0 && (
+            <Linha
+              label="Regras"
+              valor={regrasParaExibir(cupom.regras, cupom.beneficio).join(" · ")}
+              full
+            />
           )}
         </dl>
 
