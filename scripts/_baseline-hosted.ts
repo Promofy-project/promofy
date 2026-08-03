@@ -58,5 +58,43 @@ async function main() {
   console.log("\n== FUNÇÕES DA FASE 5 JÁ EXISTEM? (esperado: NÃO) ==");
   const { error: eJanela } = await svc.rpc("dentro_da_janela", { p_horarios: {} });
   console.log("  dentro_da_janela:", eJanela ? `ausente (${eJanela.code ?? eJanela.message.slice(0, 40)})` : "JÁ EXISTE");
+
+  // ------------------------------------------------------------------
+  // GATES DA FASE 6 — rodar ANTES do `db push`.
+  //
+  // 1) A migration 16 adiciona `check (prazo_ativacao_horas >= 5)` e faz
+  //    `validate constraint` no mesmo passo, de propósito: se houver linha
+  //    legada violando, o push FALHA ALTO em vez de a regra passar a valer
+  //    só para linha nova. `prazo_ativacao_horas` está no grant de UPDATE do
+  //    lojista desde a Fase 3, então dá para ter linha < 5 no hospedado.
+  //    Se o número abaixo não for 0, decidir o backfill ANTES de aplicar.
+  //
+  // 2) A migration 17 NÃO faz backfill de `limite_por_usuario` para NULL, e
+  //    isso é regra, não acaso: durante a janela banco-antes-código o app
+  //    ANTIGO lê `restantes > 0`, e `null > 0` é false — todo consumidor que
+  //    já validou aquele cupom veria o selo "Utilizado" mentiroso. Este
+  //    contador deve ser 0 ANTES e DEPOIS do push.
+  // ------------------------------------------------------------------
+  console.log("\n== GATES DA FASE 6 (ambos devem ser 0) ==");
+  {
+    const { count, error } = await svc
+      .from("cupons")
+      .select("*", { count: "exact", head: true })
+      .lt("prazo_ativacao_horas", 5);
+    console.log(
+      `  cupons com prazo_ativacao_horas < 5 : ${error ? `ERRO(${error.message})` : count}` +
+        (count ? "   <-- BLOQUEIA O PUSH (CHECK da migration 16)" : ""),
+    );
+  }
+  {
+    const { count, error } = await svc
+      .from("cupons")
+      .select("*", { count: "exact", head: true })
+      .is("limite_por_usuario", null);
+    console.log(
+      `  cupons com limite_por_usuario NULL  : ${error ? `ERRO(${error.message})` : count}` +
+        (count ? "   <-- INESPERADO antes do push (não há backfill)" : ""),
+    );
+  }
 }
 main().catch((e) => { console.error("FALHOU:", e.message); process.exit(1); });
