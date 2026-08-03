@@ -7,8 +7,10 @@ import { Check, X, Eye } from "lucide-react";
 import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaId } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
+import { regrasParaExibir } from "@/lib/cupom-campos";
 import { cn, formatBRL, formatShortDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { DataTable, type Column } from "@/components/admin/data-table";
@@ -26,6 +28,13 @@ const STATUS: Record<string, { variant: BadgeProps["variant"]; label: string }> 
   expirado: { variant: "muted", label: "Expirado" },
 };
 
+function mensagemErro(motivo: string): string {
+  if (motivo === "sem_permissao") return "Sua conta não tem permissão de moderação.";
+  if (motivo === "motivo_obrigatorio") return "Escreva o motivo da recusa.";
+  if (motivo === "nao_encontrado") return "Este cupom já foi moderado por outra pessoa.";
+  return "Não foi possível concluir. Tente novamente.";
+}
+
 const FILTROS = ["todos", "pendente", "ativo", "rejeitado"] as const;
 const FILTRO_LABEL: Record<string, string> = {
   todos: "Todos",
@@ -40,27 +49,37 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
   const [detalhe, setDetalhe] = React.useState<AdminCupom | null>(null);
   const [processando, setProcessando] = React.useState<string | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
+  /** Fase 6.5/C5: cupom aguardando o motivo da rejeição. */
+  const [rejeitando, setRejeitando] = React.useState<AdminCupom | null>(null);
 
   const filtrados =
     filtro === "todos" ? cupons : cupons.filter((c) => c.status === filtro);
 
-  async function moderar(id: string, acao: "aprovar" | "rejeitar") {
+  async function aprovar(id: string) {
     setProcessando(id);
     setErro(null);
-    const r =
-      acao === "aprovar"
-        ? await aprovarCupomAction(id)
-        : await rejeitarCupomAction(id);
+    const r = await aprovarCupomAction(id);
     setProcessando(null);
     if (r.ok) {
       setDetalhe(null);
       router.refresh();
     } else {
-      setErro(
-        r.motivo === "sem_permissao"
-          ? "Sua conta não tem permissão de moderação."
-          : "Não foi possível concluir. Tente novamente.",
-      );
+      setErro(mensagemErro(r.motivo));
+    }
+  }
+
+  /** Rejeitar SEMPRE passa pelo modal — o motivo é obrigatório no servidor. */
+  async function rejeitarComMotivo(id: string, motivo: string) {
+    setProcessando(id);
+    setErro(null);
+    const r = await rejeitarCupomAction(id, motivo);
+    setProcessando(null);
+    if (r.ok) {
+      setRejeitando(null);
+      setDetalhe(null);
+      router.refresh();
+    } else {
+      setErro(mensagemErro(r.motivo));
     }
   }
 
@@ -117,7 +136,7 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
             <>
               <Button
                 size="sm"
-                onClick={() => moderar(c.id, "aprovar")}
+                onClick={() => aprovar(c.id)}
                 disabled={processando === c.id}
               >
                 <Check className="h-4 w-4" /> Aprovar
@@ -125,7 +144,7 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => moderar(c.id, "rejeitar")}
+                onClick={() => setRejeitando(c)}
                 disabled={processando === c.id}
               >
                 Rejeitar
@@ -177,10 +196,99 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
           cupom={detalhe}
           processando={processando === detalhe.id}
           onClose={() => setDetalhe(null)}
-          onModerar={moderar}
+          onAprovar={aprovar}
+          onRejeitar={setRejeitando}
+        />
+      )}
+
+      {rejeitando && (
+        <RejeitarModal
+          cupom={rejeitando}
+          processando={processando === rejeitando.id}
+          onClose={() => setRejeitando(null)}
+          onConfirmar={rejeitarComMotivo}
         />
       )}
     </>
+  );
+}
+
+/**
+ * Modal de rejeição (Fase 6.5/C5). O motivo é obrigatório — o botão fica
+ * desabilitado enquanto o campo está vazio, e a RPC recusa de qualquer
+ * forma (`motivo_obrigatorio`), então a UI não é a barreira: é a cortesia.
+ *
+ * O texto vai INTEIRO para o lojista, então o placeholder empurra para algo
+ * acionável ("o que corrigir") em vez de um "não aprovado" genérico.
+ */
+function RejeitarModal({
+  cupom,
+  processando,
+  onClose,
+  onConfirmar,
+}: {
+  cupom: AdminCupom;
+  processando: boolean;
+  onClose: () => void;
+  onConfirmar: (id: string, motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = React.useState("");
+  const vazio = motivo.trim().length === 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div className="animate-fade-up relative w-full max-w-[520px] rounded-card bg-surface p-6 shadow-2xl">
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={onClose}
+          className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full hover:bg-muted"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <h2 className="pr-8 text-lg font-extrabold leading-tight">
+          Rejeitar “{cupom.titulo}”
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {cupom.estabelecimentoNome} — o lojista verá este texto e poderá
+          corrigir e reenviar.
+        </p>
+
+        <label
+          htmlFor="motivo-rejeicao"
+          className="mt-5 block text-sm font-semibold text-foreground"
+        >
+          Motivo da recusa
+        </label>
+        <Textarea
+          id="motivo-rejeicao"
+          className="mt-1.5"
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          placeholder="Ex.: o benefício não deixa claro o que está incluso. Descreva o que o cliente recebe."
+          autoFocus
+        />
+
+        <div className="mt-5 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            className="flex-1"
+            disabled={vazio || processando}
+            onClick={() => onConfirmar(cupom.id, motivo)}
+          >
+            {processando ? "Rejeitando…" : "Rejeitar cupom"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -207,12 +315,14 @@ function DetalheModal({
   cupom,
   processando,
   onClose,
-  onModerar,
+  onAprovar,
+  onRejeitar,
 }: {
   cupom: AdminCupom;
   processando: boolean;
   onClose: () => void;
-  onModerar: (id: string, acao: "aprovar" | "rejeitar") => void;
+  onAprovar: (id: string) => void;
+  onRejeitar: (cupom: AdminCupom) => void;
 }) {
   const cat = getCategoria(cupom.categoriaId as CategoriaId);
   const s = STATUS[cupom.status] ?? STATUS.ativo;
@@ -286,8 +396,12 @@ function DetalheModal({
             valor={`${cupom.estabelecimentoNome} (${cupom.estabelecimentoStatus})`}
             full
           />
-          {cupom.regras.length > 0 && (
-            <Linha label="Regras" valor={cupom.regras.join(" · ")} full />
+          {regrasParaExibir(cupom.regras, cupom.beneficio).length > 0 && (
+            <Linha
+              label="Regras"
+              valor={regrasParaExibir(cupom.regras, cupom.beneficio).join(" · ")}
+              full
+            />
           )}
         </dl>
 
@@ -295,7 +409,7 @@ function DetalheModal({
           <div className="mt-6 flex gap-3">
             <Button
               className="flex-1"
-              onClick={() => onModerar(cupom.id, "aprovar")}
+              onClick={() => onAprovar(cupom.id)}
               disabled={processando}
             >
               <Check className="h-4 w-4" /> Aprovar
@@ -303,7 +417,7 @@ function DetalheModal({
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => onModerar(cupom.id, "rejeitar")}
+              onClick={() => onRejeitar(cupom)}
               disabled={processando}
             >
               Rejeitar

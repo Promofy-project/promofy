@@ -107,17 +107,39 @@ port = 55424
 # sender_name = "Admin"
 
 [storage]
-# Desabilitado na Fase 1 (sem uploads) — container storage-api e instavel no Windows.
+# DESLIGADO — mas o motivo mudou, e o registro importa (Fase 6.5/C4).
+#
+# O comentario original ("container storage-api e instavel no Windows", Fase 1)
+# ENVELHECEU: em 03/08/2026 outros dois projetos desta mesma maquina rodavam
+# storage-api healthy (v1.65.1 e v1.54.1), e ligando aqui o servico FUNCIONOU
+# — logs mostram GET /bucket 200 e POST /bucket 200 criando o cupom-imagens
+# com a config declarada.
+#
+# O que bloqueia e o HEALTHCHECK do container na v1.67.8 (a que este CLI
+# 2.100.1 puxa): o `wget http://127.0.0.1:5000/status` de dentro do container
+# leva "Connection refused" mesmo com o servidor logando "Started
+# Successfully" e respondendo requisicoes. Consequencia pratica: o CLI aborta
+# com "container is not ready: unhealthy" — e derruba o stack inteiro.
+#
+# Isso quebra o `npm run db:reset` (4m30s ate abortar), que e o PRIMEIRO passo
+# do `npm run verify`. Ou seja: com storage ligado, o criterio de aceite da
+# fase nao consegue ficar verde. Intermitente, ainda por cima — um
+# `supabase start` falhou e o seguinte passou.
+#
+# Reativar exige: CLI mais novo (2.111.0 disponivel) ou storage-api com
+# healthcheck corrigido. Ver FASE-6.5-RELATORIO.md.
 enabled = false
-# The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Bucket das imagens de cupom (Fase 6.5/C4) — pronto para quando o Storage
+# voltar a subir. Comprovadamente criado pelo CLI a partir daqui.
+# PUBLICO com caminho nao-adivinhavel `<cupom_id>/<32 hex>.<ext>`: a leitura
+# e servida por /object/public sem RLS, e quem protege arte nao publicada e a
+# LISTAGEM ser fechada por policy de storage.objects.
+# [storage.buckets.cupom-imagens]
+# public = true
+# file_size_limit = "2MiB"
+# allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]

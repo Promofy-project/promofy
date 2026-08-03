@@ -109,8 +109,11 @@ async function main(): Promise<number> {
     console.log("[moderação — negativos via RPC]");
     check("lojista NÃO aprova cupom (RPC) → sem_permissao",
       motivo((await lojista.rpc("aprovar_cupom", { p_cupom_id: PEND })).data as Jsonb) === "sem_permissao");
+    // A assinatura ganhou `p_motivo` na Fase 6.5 (migration 21) — a asserção
+    // é a mesma, só o call site acompanhou. Sem isto a chamada morre em
+    // PGRST202 e o teste passaria a falhar por motivo errado.
     check("consumidor NÃO rejeita cupom (RPC) → sem_permissao",
-      motivo((await consumidor.rpc("rejeitar_cupom", { p_cupom_id: PEND })).data as Jsonb) === "sem_permissao");
+      motivo((await consumidor.rpc("rejeitar_cupom", { p_cupom_id: PEND, p_motivo: "tentativa" })).data as Jsonb) === "sem_permissao");
     check("lojista NÃO suspende estabelecimento (RPC) → sem_permissao",
       motivo((await lojista.rpc("definir_status_estabelecimento", { p_est_id: "e1", p_status: "suspenso" })).data as Jsonb) === "sem_permissao");
 
@@ -140,7 +143,10 @@ async function main(): Promise<number> {
       check("cupom aprovado aparece p/ anon (estab ativo)", (data?.length ?? 0) === 1);
     }
     {
-      const r = (await admin.rpc("rejeitar_cupom", { p_cupom_id: PEND_REJ })).data as Jsonb;
+      const r = (await admin.rpc("rejeitar_cupom", {
+        p_cupom_id: PEND_REJ,
+        p_motivo: "Fora do padrão (teste da Fase 3).",
+      })).data as Jsonb;
       check("admin rejeita pendente → ok, status rejeitado", okr(r) && statusOf(r) === "rejeitado", JSON.stringify(r));
       const { data } = await anonC.from("cupons").select("id").eq("id", PEND_REJ);
       check("cupom rejeitado NÃO aparece p/ anon", (data?.length ?? 0) === 0);

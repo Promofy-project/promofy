@@ -117,6 +117,29 @@ export function rotuloEconomia(valorFormatado: string, variavel?: boolean): stri
 }
 
 /**
+ * Regras a EXIBIR, sem repetir o benefício (Fase 6.5/EXTRA).
+ *
+ * Desde a Fase 2 a `criarCupomAction` copiava o benefício para `regras`
+ * (`regras: [beneficio]`), e a tela de detalhe concatenava os dois — o
+ * texto aparecia duas vezes. A action parou de copiar, mas os cupons já
+ * gravados continuam com a duplicata no banco, e não vale uma migration de
+ * dados para isso: a deduplicação acontece na EXIBIÇÃO.
+ *
+ * Compara normalizado (trim + minúsculas) porque a cópia antiga passava
+ * pelo `.trim()` da action e pode divergir do benefício por espaços.
+ */
+export function regrasParaExibir(
+  regras: readonly string[] | undefined,
+  beneficio: string | undefined,
+): string[] {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const alvo = norm(beneficio ?? "");
+  return (regras ?? [])
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0 && (alvo === "" || norm(r) !== alvo));
+}
+
+/**
  * Prazo de ativação saneado: inteiro, nunca abaixo do mínimo.
  *
  * O mínimo de 5h é regra de negócio (o consumidor precisa de tempo para

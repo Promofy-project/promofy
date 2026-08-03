@@ -3,6 +3,7 @@ import "server-only";
 import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
 import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
+import { motivoAtual } from "@/lib/moderacao";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -234,6 +235,82 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
 }
 
 /**
+ * Cupom do lojista logado para PRÉ-PREENCHER o formulário de edição.
+ *
+ * Existe porque `ItemCupomPortal`/`Cupom` NÃO servem para editar:
+ *  - `Cupom` não carrega `prazo_ativacao_horas` (é dado de operação, não de
+ *    vitrine);
+ *  - `linhaParaCupom` COLAPSA o status (`indisponivel` ou `ativo`), então um
+ *    cupom `rejeitado` ou `pendente` chegaria ao form como `ativo` — o que
+ *    quebraria também a tela de rejeição do C5.
+ * Este DTO é fiel à linha: o que o form lê é o que está no banco.
+ *
+ * Restrito ao dono pela própria RLS (`cupons: lojista le os proprios`);
+ * cupom de outro estabelecimento simplesmente não volta.
+ */
+export interface CupomParaEdicao {
+  id: string;
+  titulo: string;
+  beneficio: string;
+  categoriaId: string;
+  economia: number;
+  economiaVariavel: boolean;
+  taxas: string[];
+  formasConsumo: string[];
+  regras: string[];
+  imagem: string;
+  validadeInicio: string | null;
+  validadeFim: string;
+  ocultarAteInicio: boolean;
+  prazoAtivacaoHoras: number;
+  limiteUsuario: number | null;
+  limiteTotal: number | null;
+  dias: string[];
+  horaInicio: string;
+  horaFim: string;
+  /** Status REAL da coluna — sem colapso. */
+  status: string;
+}
+
+export async function buscarCupomParaEdicao(
+  id: string,
+): Promise<CupomParaEdicao | null> {
+  const supabase = createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) return null;
+
+  const { data } = await supabase.from("cupons").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+
+  const h =
+    data.horarios && typeof data.horarios === "object" && !Array.isArray(data.horarios)
+      ? (data.horarios as Record<string, unknown>)
+      : {};
+  return {
+    id: data.id,
+    titulo: data.titulo,
+    beneficio: data.beneficio,
+    categoriaId: data.categoria_id,
+    economia: Number(data.economia),
+    economiaVariavel: data.economia_variavel,
+    taxas: sanearTaxas(data.taxas),
+    formasConsumo: sanearFormasConsumo(data.formas_consumo),
+    regras: regrasDeJson(data.regras),
+    imagem: data.imagem,
+    validadeInicio: data.validade_inicio,
+    validadeFim: data.validade_fim,
+    ocultarAteInicio: data.ocultar_ate_inicio,
+    prazoAtivacaoHoras: data.prazo_ativacao_horas,
+    limiteUsuario: data.limite_por_usuario,
+    limiteTotal: data.limite_total,
+    dias: diasDeJson(data.horarios) ?? [],
+    horaInicio: typeof h.inicio === "string" ? h.inicio : "",
+    horaFim: typeof h.fim === "string" ? h.fim : "",
+    status: data.status,
+  };
+}
+
+/**
  * Cupons visíveis dos estabelecimentos favoritados do usuário logado
  * (página /m/favoritos, Fase 4). Anônimo → lista vazia (a página mostra
  * o convite a logar).
@@ -383,6 +460,8 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
       },
     limiteTotal: row.limite_total ?? 1000, // fallback: paridade com o mock
     limiteUsuario: row.limite_por_usuario, // Fase 6: null = ilimitado
+    // Fase 6.5/C5: motivo derivado do historico; so vem com status rejeitado
+    motivoRejeicao: motivoAtual(row.moderacao_historico, row.status),
     dataInicio: row.validade_inicio ?? undefined,
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));

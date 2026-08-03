@@ -2,7 +2,11 @@
 
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
-import { linhaParaCupom } from "@/lib/data/cupons";
+import {
+  buscarCupomParaEdicao,
+  linhaParaCupom,
+  type CupomParaEdicao,
+} from "@/lib/data/cupons";
 import {
   PRAZO_ATIVACAO_MIN_HORAS,
   sanearFormasConsumo,
@@ -10,6 +14,7 @@ import {
   sanearPrazoAtivacao,
   sanearTaxas,
 } from "@/lib/cupom-campos";
+import { montarPatchCupom, type CamposEdicaoCupom } from "@/lib/cupom-patch";
 import { economiaDeJson, type EconomiaDTO } from "@/lib/economia";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -308,7 +313,11 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       // não reconhece.
       taxas: sanearTaxas(input.taxas),
       formas_consumo: sanearFormasConsumo(input.formasConsumo),
-      regras: input.beneficio.trim() ? [input.beneficio.trim()] : [],
+      // Fase 6.5/EXTRA: `regras` NÃO é mais cópia do benefício. Copiar
+      // fazia a folha do cupom exibir o mesmo texto duas vezes (o detalhe
+      // concatena benefício + regras). `regras` é campo próprio e opcional;
+      // vazio é o default honesto.
+      regras: [],
       horarios,
       // O trigger `forcar_status_pendente` (migration 19) garante isto
       // mesmo se alguém chamar o PostgREST direto; aqui é explícito.
@@ -335,5 +344,170 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     return { ok: true, item };
   } catch {
     return { ok: false, erro: "Não foi possível salvar o cupom." };
+  }
+}
+
+/**
+ * Entrada de EDIÇÃO — PARCIAL, e isso é o ponto (Fase 6.5).
+ *
+ * NÃO é `NovoCupomInput`. O formulário do `/e` é um subconjunto declarado:
+ * ele não tem estado para dias/horário/agendamento/prazo e manda LITERAIS
+ * no submit (`dias: []`, `horaInicio: "00:00"`, `prazoAtivacao: 5`…), e a
+ * `criarCupomAction` ainda acrescenta `imagem: ""` (e, até o EXTRA desta
+ * fase, também `regras: [beneficio]`).
+ * Se a edição aceitasse o input completo, corrigir um typo no título pelo
+ * totem APAGARIA a janela, o agendamento, o prazo, as regras curadas e a
+ * imagem — e, como horarios/regras/imagem são materiais, ainda rebaixaria o
+ * cupom para 'pendente', tirando-o da vitrine.
+ *
+ * Regra desta action: **só grava as chaves que vieram**. `undefined` nunca
+ * vira default, nunca vira "" e nunca vira [].
+ */
+type CarregarEdicaoResult =
+  | { ok: true; cupom: CupomParaEdicao }
+  | { ok: false; erro: string };
+
+/**
+ * Carrega o cupom para pré-preencher o formulário de edição.
+ *
+ * Existe como Action (e não como fetch no client) porque a leitura é feita
+ * sob a sessão do lojista no SERVIDOR — a RLS `cupons: lojista le os
+ * proprios` é quem garante que ele não abra o cupom de outro. O portal é um
+ * client component e não tem como chamar `buscarCupomParaEdicao` direto
+ * (ela é `server-only`).
+ */
+export async function carregarCupomParaEdicaoAction(
+  cupomId: string,
+): Promise<CarregarEdicaoResult> {
+  try {
+    const cupom = await buscarCupomParaEdicao(cupomId);
+    if (!cupom) return { ok: false, erro: "Cupom não encontrado no seu estabelecimento." };
+    return { ok: true, cupom };
+  } catch {
+    return { ok: false, erro: "Não foi possível abrir o cupom para edição." };
+  }
+}
+
+type ReenviarResult = { ok: true } | { ok: false; erro: string };
+
+/** Lojista devolve o próprio cupom rejeitado à fila de moderação (C5). */
+export async function reenviarCupomAction(cupomId: string): Promise<ReenviarResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("reenviar_cupom_moderacao", {
+      p_cupom_id: cupomId,
+    });
+    if (error) return { ok: false, erro: "Não foi possível reenviar o cupom." };
+    const r = data as unknown as { ok?: boolean; motivo?: string } | null;
+    if (r?.ok) return { ok: true };
+    const MSG: Record<string, string> = {
+      sem_sessao: "Sessão expirada. Entre novamente.",
+      sem_permissao: "Este cupom não é do seu estabelecimento.",
+      nao_rejeitado: "Só é possível reenviar um cupom que foi rejeitado.",
+      nao_encontrado: "Cupom não encontrado.",
+    };
+    return { ok: false, erro: MSG[r?.motivo ?? ""] ?? "Não foi possível reenviar o cupom." };
+  } catch {
+    return { ok: false, erro: "Não foi possível reenviar o cupom." };
+  }
+}
+
+export interface EditarCupomInput extends CamposEdicaoCupom {
+  id: string;
+  /** Fora de `CamposEdicaoCupom`: validar categoria exige ler o banco. */
+  categoria?: string;
+}
+
+type EditarResult = { ok: true; item: ItemCupomPortal } | { ok: false; erro: string };
+
+/** Mensagens dos SQLSTATEs do trigger `checar_edicao_cupom` (migration 20). */
+const ERRO_EDICAO = new Set(["P0601", "P0602", "P0603", "P0604", "P0605", "P0606"]);
+
+/**
+ * Lojista edita o próprio cupom. A REGRA vive no trigger (barreira real,
+ * cobre o PostgREST direto); aqui é a camada de mensagem — a action não
+ * reimplementa a matriz, ela traduz o que o banco recusou.
+ */
+export async function editarCupomAction(
+  input: EditarCupomInput,
+): Promise<EditarResult> {
+  try {
+    const supabase = createClient();
+    if (!input.id) return { ok: false, erro: "Cupom não informado." };
+
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false, erro: "Sessão expirada. Entre novamente." };
+
+    const { data: est } = await supabase
+      .from("estabelecimentos")
+      .select("id, nome, categoria_id")
+      .eq("owner_id", uid)
+      .maybeSingle();
+    if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
+
+    // Monta o patch CHAVE A CHAVE, em `src/lib/cupom-patch.ts` — módulo puro
+    // e testável sem servidor. É a barreira que impede o form reduzido do
+    // `/e` de apagar janela/agendamento/prazo/regras/imagem em silêncio.
+    const montado = montarPatchCupom(input);
+    if (!montado.ok) return { ok: false, erro: montado.erro };
+    const patch = montado.patch;
+
+    // A categoria fica aqui (e não no módulo puro) porque depende do banco:
+    // precisa das categorias cadastradas DESTE estabelecimento.
+    if (input.categoria !== undefined) {
+      const { data: cats } = await supabase
+        .from("estabelecimento_categorias")
+        .select("categoria_id")
+        .eq("estabelecimento_id", est.id);
+      const conjunto = new Set((cats ?? []).map((c) => c.categoria_id));
+      conjunto.add(est.categoria_id);
+      if (!conjunto.has(input.categoria)) {
+        return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+      }
+      patch.categoria_id = input.categoria;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { ok: false, erro: "Nada para alterar." };
+    }
+
+    const { data: row, error } = await supabase
+      .from("cupons")
+      .update(patch)
+      .eq("id", input.id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      // O trigger fala a linguagem do lojista — repassar é melhor do que
+      // traduzir para uma frase genérica que esconde o motivo.
+      if (ERRO_EDICAO.has(error.code ?? "")) return { ok: false, erro: error.message };
+      return { ok: false, erro: "Não foi possível salvar as alterações." };
+    }
+    // 0 linhas = a policy filtrou (cupom de outro estabelecimento).
+    if (!row) return { ok: false, erro: "Cupom não encontrado no seu estabelecimento." };
+
+    const item: ItemCupomPortal = {
+      cupom: linhaParaCupom(row, est.nome),
+      statusPortal:
+        row.status === "esgotado"
+          ? "esgotado"
+          : row.status === "expirado"
+            ? "expirado"
+            : row.status === "pendente"
+              ? "pendente"
+              : row.status === "rejeitado"
+                ? "rejeitado"
+                : "ativo",
+      metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
+      limiteTotal: row.limite_total ?? 1000,
+      limiteUsuario: row.limite_por_usuario,
+      dataInicio: row.validade_inicio ?? undefined,
+      ocultarAteInicio: row.ocultar_ate_inicio,
+    };
+    return { ok: true, item };
+  } catch {
+    return { ok: false, erro: "Não foi possível salvar as alterações." };
   }
 }

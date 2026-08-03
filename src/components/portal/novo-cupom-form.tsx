@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { CouponCard } from "@/components/coupon-card";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
-import { criarCupomAction } from "@/lib/actions/cupons";
+import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
+import type { CupomParaEdicao } from "@/lib/data/cupons";
 
 // formato canônico dos dias vive em src/lib/dias.ts (Fase 4)
 const DIAS = DIAS_SEMANA;
@@ -43,46 +44,81 @@ function Field({
   );
 }
 
+/**
+ * Formulário de cupom do portal — CRIAR e EDITAR no mesmo componente
+ * (Fase 6.5/C2). O portal é a tela completa: controla todos os campos, então
+ * o payload de edição carrega todos eles. Quem tem subconjunto é o `/e`.
+ */
 export function NovoCupomForm({
   estabelecimentoNome,
   categorias,
   categoriaPrincipal,
+  cupomInicial,
   onSalvar,
   onCancelar,
 }: {
   estabelecimentoNome: string;
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
+  /** Presente = modo EDITAR (DTO fiel à linha, ver buscarCupomParaEdicao). */
+  cupomInicial?: CupomParaEdicao;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
-  const [titulo, setTitulo] = React.useState("");
-  const [beneficio, setBeneficio] = React.useState("");
+  const editando = Boolean(cupomInicial);
+  const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
+  const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
   // Fase 4: o estabelecimento pode ter N categorias — seleção entre elas,
   // principal pré-setada. O servidor valida contra o conjunto (junção).
   const [categoriaSel, setCategoriaSel] = React.useState<string>(
-    categoriaPrincipal ?? categorias[0]?.id ?? "alimentacao",
+    cupomInicial?.categoriaId ?? categoriaPrincipal ?? categorias[0]?.id ?? "alimentacao",
   );
   const categoria = categoriaSel as CategoriaId;
   const categoriaLabel =
     categorias.find((c) => c.id === categoriaSel)?.label ?? categoriaSel;
-  const [economia, setEconomia] = React.useState("");
+  const [economia, setEconomia] = React.useState(
+    cupomInicial ? String(cupomInicial.economia) : "",
+  );
   // Fase 6/C3: com a flag, `economia` passa a ser o MÍNIMO garantido.
-  const [economiaVariavel, setEconomiaVariavel] = React.useState(false);
+  const [economiaVariavel, setEconomiaVariavel] = React.useState(
+    cupomInicial?.economiaVariavel ?? false,
+  );
   // Fase 6/C1: multivalorados, saneados de novo no servidor.
-  const [taxas, setTaxas] = React.useState<string[]>([]);
-  const [formasConsumo, setFormasConsumo] = React.useState<string[]>([]);
-  const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(false);
-  const [limiteTotalIlimitado, setLimiteTotalIlimitado] = React.useState(false);
-  const [validade, setValidade] = React.useState("");
-  const [dataInicio, setDataInicio] = React.useState("");
-  const [ocultarAteInicio, setOcultarAteInicio] = React.useState(false);
-  const [prazoAtivacao, setPrazoAtivacao] = React.useState("5");
-  const [dias, setDias] = React.useState<string[]>(["Sex", "Sáb", "Dom"]);
-  const [horaInicio, setHoraInicio] = React.useState("18:00");
-  const [horaFim, setHoraFim] = React.useState("23:00");
-  const [limiteUsuario, setLimiteUsuario] = React.useState("1");
-  const [limiteTotal, setLimiteTotal] = React.useState("500");
+  const [taxas, setTaxas] = React.useState<string[]>(cupomInicial?.taxas ?? []);
+  const [formasConsumo, setFormasConsumo] = React.useState<string[]>(
+    cupomInicial?.formasConsumo ?? [],
+  );
+  const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(
+    cupomInicial ? cupomInicial.limiteUsuario === null : false,
+  );
+  const [limiteTotalIlimitado, setLimiteTotalIlimitado] = React.useState(
+    cupomInicial ? cupomInicial.limiteTotal === null : false,
+  );
+  const [validade, setValidade] = React.useState(cupomInicial?.validadeFim ?? "");
+  const [dataInicio, setDataInicio] = React.useState(cupomInicial?.validadeInicio ?? "");
+  const [ocultarAteInicio, setOcultarAteInicio] = React.useState(
+    cupomInicial?.ocultarAteInicio ?? false,
+  );
+  const [prazoAtivacao, setPrazoAtivacao] = React.useState(
+    cupomInicial ? String(cupomInicial.prazoAtivacaoHoras) : "5",
+  );
+  // Cupom legado sem janela estruturada abre com os campos vazios — e o
+  // `horarioIncompleto` abaixo só cobra hora quando há dias marcados.
+  const [dias, setDias] = React.useState<string[]>(
+    cupomInicial ? cupomInicial.dias : ["Sex", "Sáb", "Dom"],
+  );
+  const [horaInicio, setHoraInicio] = React.useState(
+    cupomInicial ? cupomInicial.horaInicio : "18:00",
+  );
+  const [horaFim, setHoraFim] = React.useState(
+    cupomInicial ? cupomInicial.horaFim : "23:00",
+  );
+  const [limiteUsuario, setLimiteUsuario] = React.useState(
+    cupomInicial?.limiteUsuario != null ? String(cupomInicial.limiteUsuario) : "1",
+  );
+  const [limiteTotal, setLimiteTotal] = React.useState(
+    cupomInicial?.limiteTotal != null ? String(cupomInicial.limiteTotal) : "500",
+  );
   const [salvando, setSalvando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
 
@@ -147,15 +183,16 @@ export function NovoCupomForm({
     if (!podeSalvar || salvando) return;
     setErro(null);
     setSalvando(true);
-    // estabelecimento_id é derivado no SERVIDOR (owner_id) — nunca do form
-    const r = await criarCupomAction({
+    // Payload montado SEMPRE a partir dos estados que este form controla —
+    // nunca de literais. Aqui o portal controla todos, então criar e editar
+    // mandam o mesmo conjunto; no `/e` (subconjunto) isso não vale.
+    const campos = {
       titulo,
       beneficio,
       categoria,
       economia: Number(economia),
       economiaVariavel,
       validade,
-      dataInicio: dataInicio || undefined,
       ocultarAteInicio,
       prazoAtivacao: Number(prazoAtivacao) || PRAZO_ATIVACAO_MIN_HORAS,
       dias,
@@ -167,7 +204,19 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
-    });
+    };
+    // estabelecimento_id é derivado no SERVIDOR (owner_id) — nunca do form
+    const r = cupomInicial
+      ? await editarCupomAction({
+          id: cupomInicial.id,
+          ...campos,
+          // `null` (e não `undefined`) para LIMPAR o agendamento de propósito:
+          // no contrato parcial, `undefined` significaria "não mexer".
+          dataInicio: dataInicio || null,
+          // `regras` é campo próprio (EXTRA da fase) e este form ainda não o
+          // edita — fica de fora do payload em vez de virar cópia do benefício.
+        })
+      : await criarCupomAction({ ...campos, dataInicio: dataInicio || undefined });
     setSalvando(false);
     if (r.ok) {
       onSalvar(r.item);
@@ -180,7 +229,7 @@ export function NovoCupomForm({
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       {/* Formulário */}
       <Card className="p-5 lg:p-6">
-        <h2 className="text-lg font-bold">Dados da oferta</h2>
+        <h2 className="text-lg font-bold">{editando ? "Editar oferta" : "Dados da oferta"}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Preencha os campos — a pré-visualização atualiza em tempo real.
         </p>
@@ -477,7 +526,7 @@ export function NovoCupomForm({
 
         <div className="mt-6 flex items-center gap-3">
           <Button onClick={salvar} disabled={!podeSalvar || salvando}>
-            <Check className="h-4 w-4" /> {salvando ? "Salvando…" : "Salvar cupom"}
+            <Check className="h-4 w-4" /> {salvando ? "Salvando…" : editando ? "Salvar alteracoes" : "Salvar cupom"}
           </Button>
           <Button variant="ghost" onClick={onCancelar}>
             Cancelar
