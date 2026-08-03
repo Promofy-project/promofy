@@ -1,5 +1,8 @@
+import { AlertTriangle, Pencil, RotateCcw } from "lucide-react";
+
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatNumber } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
@@ -14,7 +17,19 @@ const STATUS_BADGE = {
   rejeitado: { variant: "danger" as const, label: "Rejeitado" },
 };
 
-export function CouponPortalCard({ item }: { item: ItemCupomPortal }) {
+export function CouponPortalCard({
+  item,
+  onEditar,
+  onReenviar,
+  reenviando,
+}: {
+  item: ItemCupomPortal;
+  /** Fase 6.5/C2: ausente = card só de leitura (landing, seed). */
+  onEditar?: (item: ItemCupomPortal) => void;
+  /** Fase 6.5/C5: reenviar cupom rejeitado para moderação. */
+  onReenviar?: (item: ItemCupomPortal) => void;
+  reenviando?: boolean;
+}) {
   const { cupom, statusPortal, metricas } = item;
   const categoria = getCategoria(cupom.categoria);
   const badge = STATUS_BADGE[statusPortal];
@@ -82,6 +97,34 @@ export function CouponPortalCard({ item }: { item: ItemCupomPortal }) {
         </div>
         <FunnelChart etapas={etapas} />
       </div>
+
+      {/* Fase 6.5/C5 — o motivo da rejeição fica ao lado da ação de corrigir:
+          ler o porquê e não ter onde agir seria pior do que não mostrar. */}
+      {statusPortal === "rejeitado" && item.motivoRejeicao && (
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+          <span>
+            <b className="font-semibold">Motivo da recusa:</b>{" "}
+            {item.motivoRejeicao}
+          </span>
+        </p>
+      )}
+
+      {(onEditar || onReenviar) && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {onEditar && (
+            <Button size="sm" variant="outline" onClick={() => onEditar(item)}>
+              <Pencil className="h-4 w-4" /> Editar
+            </Button>
+          )}
+          {onReenviar && statusPortal === "rejeitado" && (
+            <Button size="sm" onClick={() => onReenviar(item)} disabled={reenviando}>
+              <RotateCcw className="h-4 w-4" />
+              {reenviando ? "Enviando…" : "Reenviar para análise"}
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

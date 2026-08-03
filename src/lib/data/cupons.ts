@@ -3,6 +3,7 @@ import "server-only";
 import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
 import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
+import { motivoAtual } from "@/lib/moderacao";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -459,6 +460,8 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
       },
     limiteTotal: row.limite_total ?? 1000, // fallback: paridade com o mock
     limiteUsuario: row.limite_por_usuario, // Fase 6: null = ilimitado
+    // Fase 6.5/C5: motivo derivado do historico; so vem com status rejeitado
+    motivoRejeicao: motivoAtual(row.moderacao_historico, row.status),
     dataInicio: row.validade_inicio ?? undefined,
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, AlertTriangle } from "lucide-react";
 
 import { buscarCuponsPortal } from "@/lib/data/cupons";
 import { Button } from "@/components/ui/button";
+import { ReenviarCupomButton } from "@/components/estab/reenviar-cupom-button";
 import { cn, formatBRLValue, formatShortDate } from "@/lib/utils";
 import {
   listarPtBr,
@@ -102,6 +103,31 @@ export default async function CuponsPage() {
                   </span>
                   <span>Validade {formatShortDate(it.cupom.validade)}</span>
                   {it.limiteUsuario == null && <span>Ilimitado por cliente</span>}
+                </div>
+
+                {/* Fase 6.5/C5 — o motivo fica junto da ação de corrigir. */}
+                {it.statusPortal === "rejeitado" && it.motivoRejeicao && (
+                  <p className="mt-3 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+                    <span>
+                      <b className="font-semibold">Motivo da recusa:</b>{" "}
+                      {it.motivoRejeicao}
+                    </span>
+                  </p>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/e/cupom/${it.cupom.id}/editar`}>
+                      <Pencil className="h-4 w-4" /> Editar
+                    </Link>
+                  </Button>
+                  {it.statusPortal === "rejeitado" && (
+                    <ReenviarCupomButton
+                      cupomId={it.cupom.id}
+                      titulo={it.cupom.titulo}
+                    />
+                  )}
                 </div>
               </li>
             );

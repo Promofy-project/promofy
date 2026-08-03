@@ -21,4 +21,10 @@ export interface ItemCupomPortal {
   dataInicio?: string;
   /** ocultar o cupom até a data de início */
   ocultarAteInicio?: boolean;
+  /**
+   * Fase 6.5/C5: motivo da ÚLTIMA rejeição, derivado do histórico de
+   * moderação. Só faz sentido com `statusPortal === "rejeitado"` — depois
+   * do reenvio o cupom volta a 'pendente' e o motivo vira histórico.
+   */
+  motivoRejeicao?: string;
 }

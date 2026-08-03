@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { criarCupomAction } from "@/lib/actions/cupons";
+import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
+import type { CupomParaEdicao } from "@/lib/data/cupons";
 import {
   FORMAS_CONSUMO,
   PRAZO_ATIVACAO_MIN_HORAS,
@@ -73,26 +74,48 @@ function Chips({
 export function NovoCupomForm({
   categorias,
   categoriaPrincipal,
+  cupomInicial,
 }: {
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
+  /**
+   * Presente = modo EDITAR (edição rápida). Este form é um SUBCONJUNTO
+   * declarado: os campos que ele não controla (janela, agendamento, prazo)
+   * são exibidos como leitura e NUNCA entram no payload.
+   */
+  cupomInicial?: CupomParaEdicao;
 }) {
   const router = useRouter();
-  const [titulo, setTitulo] = React.useState("");
-  const [beneficio, setBeneficio] = React.useState("");
-  const [economia, setEconomia] = React.useState("");
+  const editando = Boolean(cupomInicial);
+  const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
+  const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
+  const [economia, setEconomia] = React.useState(
+    cupomInicial ? String(cupomInicial.economia) : "",
+  );
   // Fase 6/C3 e C1 — os mesmos campos do portal, no formato do totem:
   // switches e chips, sem digitação onde der para tocar.
-  const [economiaVariavel, setEconomiaVariavel] = React.useState(false);
-  const [formasConsumo, setFormasConsumo] = React.useState<string[]>([]);
-  const [taxas, setTaxas] = React.useState<string[]>([]);
-  const [validade, setValidade] = React.useState("");
-  const [limiteUsuario, setLimiteUsuario] = React.useState("1");
-  const [limiteTotal, setLimiteTotal] = React.useState("100");
-  const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(false);
-  const [limiteTotalIlimitado, setLimiteTotalIlimitado] = React.useState(false);
+  const [economiaVariavel, setEconomiaVariavel] = React.useState(
+    cupomInicial?.economiaVariavel ?? false,
+  );
+  const [formasConsumo, setFormasConsumo] = React.useState<string[]>(
+    cupomInicial?.formasConsumo ?? [],
+  );
+  const [taxas, setTaxas] = React.useState<string[]>(cupomInicial?.taxas ?? []);
+  const [validade, setValidade] = React.useState(cupomInicial?.validadeFim ?? "");
+  const [limiteUsuario, setLimiteUsuario] = React.useState(
+    cupomInicial?.limiteUsuario != null ? String(cupomInicial.limiteUsuario) : "1",
+  );
+  const [limiteTotal, setLimiteTotal] = React.useState(
+    cupomInicial?.limiteTotal != null ? String(cupomInicial.limiteTotal) : "100",
+  );
+  const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(
+    cupomInicial ? cupomInicial.limiteUsuario === null : false,
+  );
+  const [limiteTotalIlimitado, setLimiteTotalIlimitado] = React.useState(
+    cupomInicial ? cupomInicial.limiteTotal === null : false,
+  );
   const [categoriaId, setCategoriaId] = React.useState<string | null>(
-    categoriaPrincipal ?? categorias[0]?.id ?? null,
+    cupomInicial?.categoriaId ?? categoriaPrincipal ?? categorias[0]?.id ?? null,
   );
   const [erro, setErro] = React.useState<string | null>(null);
   const [salvando, setSalvando] = React.useState(false);
@@ -105,27 +128,41 @@ export function NovoCupomForm({
       return;
     }
     setSalvando(true);
-    const r = await criarCupomAction({
+
+    // Campos que ESTE form realmente controla. Tudo o mais (janela,
+    // agendamento, prazo) fica de fora — na criação vai por default da
+    // action; na EDIÇÃO simplesmente não é enviado, e o servidor preserva.
+    const controlados = {
       titulo,
       beneficio,
       categoria: categoriaId,
       economia: Number(economia.replace(",", ".")) || 0,
       economiaVariavel,
       validade,
-      ocultarAteInicio: false,
-      // regra de negócio; a action recusa abaixo disso e o CHECK da
-      // coluna cobre o PostgREST direto
-      prazoAtivacao: PRAZO_ATIVACAO_MIN_HORAS,
-      dias: [],
-      horaInicio: "00:00",
-      horaFim: "23:59",
       limiteUsuario: Number(limiteUsuario) || 1,
       limiteTotal: Number(limiteTotal) || 1,
       limiteUsuarioIlimitado,
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
-    });
+    };
+
+    const r = cupomInicial
+      ? // EDIÇÃO RÁPIDA: nenhum literal. Mandar `dias: []` ou
+        // `prazoAtivacao: 5` aqui apagaria a janela e o prazo que o
+        // lojista configurou pelo portal — o bug que o contrato parcial
+        // existe para impedir.
+        await editarCupomAction({ id: cupomInicial.id, ...controlados })
+      : await criarCupomAction({
+          ...controlados,
+          ocultarAteInicio: false,
+          // regra de negócio; a action recusa abaixo disso e o CHECK da
+          // coluna cobre o PostgREST direto
+          prazoAtivacao: PRAZO_ATIVACAO_MIN_HORAS,
+          dias: [],
+          horaInicio: "00:00",
+          horaFim: "23:59",
+        });
     setSalvando(false);
     if (r.ok) {
       router.push("/e/cupons");
@@ -276,14 +313,54 @@ export function NovoCupomForm({
         </span>
       </div>
 
+      {/* Fase 6.5/C2 — o que este form NÃO controla fica visível como
+          leitura. Sem isto o lojista não saberia que o cupom tem janela e
+          poderia achar que a edição a apagou. */}
+      {editando && (
+        <div className="rounded-xl border border-border bg-muted/50 p-3.5 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground">Preservado nesta edição</p>
+          <dl className="mt-2 space-y-1">
+            <div className="flex justify-between gap-3">
+              <dt>Dias e horário</dt>
+              <dd className="text-right font-medium text-foreground">
+                {cupomInicial!.dias.length > 0 || cupomInicial!.horaInicio
+                  ? `${cupomInicial!.dias.length ? cupomInicial!.dias.join(", ") : "Todos os dias"}${
+                      cupomInicial!.horaInicio && cupomInicial!.horaFim
+                        ? `, ${cupomInicial!.horaInicio} às ${cupomInicial!.horaFim}`
+                        : ""
+                    }`
+                  : "Sem restrição"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt>Prazo de ativação</dt>
+              <dd className="font-medium text-foreground">
+                {cupomInicial!.prazoAtivacaoHoras}h
+              </dd>
+            </div>
+            {cupomInicial!.validadeInicio && (
+              <div className="flex justify-between gap-3">
+                <dt>Início da campanha</dt>
+                <dd className="font-medium text-foreground">
+                  {cupomInicial!.validadeInicio}
+                </dd>
+              </div>
+            )}
+          </dl>
+          <p className="mt-2">Ajuste esses campos pelo portal.</p>
+        </div>
+      )}
+
       {erro && <p className="text-sm font-semibold text-danger">{erro}</p>}
 
       <div className="mt-auto pt-4">
         <Button type="submit" size="lg" className="w-full" disabled={salvando}>
-          {salvando ? "Salvando…" : "Criar cupom"}
+          {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Criar cupom"}
         </Button>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          O cupom passa por análise antes de aparecer no app.
+          {editando
+            ? "Alterações relevantes fazem o cupom voltar para análise."
+            : "O cupom passa por análise antes de aparecer no app."}
         </p>
       </div>
     </form>

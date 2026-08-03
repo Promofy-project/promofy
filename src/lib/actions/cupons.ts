@@ -2,7 +2,11 @@
 
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
-import { linhaParaCupom } from "@/lib/data/cupons";
+import {
+  buscarCupomParaEdicao,
+  linhaParaCupom,
+  type CupomParaEdicao,
+} from "@/lib/data/cupons";
 import {
   PRAZO_ATIVACAO_MIN_HORAS,
   sanearFormasConsumo,
@@ -353,6 +357,55 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
  * Regra desta action: **só grava as chaves que vieram**. `undefined` nunca
  * vira default, nunca vira "" e nunca vira [].
  */
+type CarregarEdicaoResult =
+  | { ok: true; cupom: CupomParaEdicao }
+  | { ok: false; erro: string };
+
+/**
+ * Carrega o cupom para pré-preencher o formulário de edição.
+ *
+ * Existe como Action (e não como fetch no client) porque a leitura é feita
+ * sob a sessão do lojista no SERVIDOR — a RLS `cupons: lojista le os
+ * proprios` é quem garante que ele não abra o cupom de outro. O portal é um
+ * client component e não tem como chamar `buscarCupomParaEdicao` direto
+ * (ela é `server-only`).
+ */
+export async function carregarCupomParaEdicaoAction(
+  cupomId: string,
+): Promise<CarregarEdicaoResult> {
+  try {
+    const cupom = await buscarCupomParaEdicao(cupomId);
+    if (!cupom) return { ok: false, erro: "Cupom não encontrado no seu estabelecimento." };
+    return { ok: true, cupom };
+  } catch {
+    return { ok: false, erro: "Não foi possível abrir o cupom para edição." };
+  }
+}
+
+type ReenviarResult = { ok: true } | { ok: false; erro: string };
+
+/** Lojista devolve o próprio cupom rejeitado à fila de moderação (C5). */
+export async function reenviarCupomAction(cupomId: string): Promise<ReenviarResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("reenviar_cupom_moderacao", {
+      p_cupom_id: cupomId,
+    });
+    if (error) return { ok: false, erro: "Não foi possível reenviar o cupom." };
+    const r = data as unknown as { ok?: boolean; motivo?: string } | null;
+    if (r?.ok) return { ok: true };
+    const MSG: Record<string, string> = {
+      sem_sessao: "Sessão expirada. Entre novamente.",
+      sem_permissao: "Este cupom não é do seu estabelecimento.",
+      nao_rejeitado: "Só é possível reenviar um cupom que foi rejeitado.",
+      nao_encontrado: "Cupom não encontrado.",
+    };
+    return { ok: false, erro: MSG[r?.motivo ?? ""] ?? "Não foi possível reenviar o cupom." };
+  } catch {
+    return { ok: false, erro: "Não foi possível reenviar o cupom." };
+  }
+}
+
 export interface EditarCupomInput {
   id: string;
   titulo?: string;

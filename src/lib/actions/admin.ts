@@ -31,12 +31,24 @@ export async function aprovarCupomAction(cupomId: string): Promise<ModResult> {
   }
 }
 
-/** Admin rejeita um cupom pendente → rejeitado (não aparece no /m). */
-export async function rejeitarCupomAction(cupomId: string): Promise<ModResult> {
+/**
+ * Admin rejeita um cupom pendente → rejeitado (não aparece no /m).
+ *
+ * Fase 6.5/C5: o MOTIVO passou a ser obrigatório. Ele é o produto do
+ * ciclo — sem ele o lojista não sabe o que corrigir e o "editar e
+ * reenviar" não fecha. A checagem aqui é só para não gastar ida ao banco;
+ * quem recusa de verdade é a RPC (`motivo_obrigatorio`).
+ */
+export async function rejeitarCupomAction(
+  cupomId: string,
+  motivo: string,
+): Promise<ModResult> {
   try {
+    if (!motivo?.trim()) return { ok: false, motivo: "motivo_obrigatorio" };
     const supabase = createClient();
     const { data, error } = await supabase.rpc("rejeitar_cupom", {
       p_cupom_id: cupomId,
+      p_motivo: motivo.trim(),
     });
     if (error) return { ok: false, motivo: "erro" };
     const r = parse(data);
