@@ -337,3 +337,211 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     return { ok: false, erro: "Não foi possível salvar o cupom." };
   }
 }
+
+/**
+ * Entrada de EDIÇÃO — PARCIAL, e isso é o ponto (Fase 6.5).
+ *
+ * NÃO é `NovoCupomInput`. O formulário do `/e` é um subconjunto declarado:
+ * ele não tem estado para dias/horário/agendamento/prazo e manda LITERAIS
+ * no submit (`dias: []`, `horaInicio: "00:00"`, `prazoAtivacao: 5`…), e a
+ * `criarCupomAction` ainda acrescenta `regras: [beneficio]` e `imagem: ""`.
+ * Se a edição aceitasse o input completo, corrigir um typo no título pelo
+ * totem APAGARIA a janela, o agendamento, o prazo, as regras curadas e a
+ * imagem — e, como horarios/regras/imagem são materiais, ainda rebaixaria o
+ * cupom para 'pendente', tirando-o da vitrine.
+ *
+ * Regra desta action: **só grava as chaves que vieram**. `undefined` nunca
+ * vira default, nunca vira "" e nunca vira [].
+ */
+export interface EditarCupomInput {
+  id: string;
+  titulo?: string;
+  beneficio?: string;
+  categoria?: string;
+  economia?: number;
+  economiaVariavel?: boolean;
+  validade?: string;
+  dataInicio?: string | null;
+  ocultarAteInicio?: boolean;
+  prazoAtivacao?: number;
+  /** jsonb COMPOSTO: só é remontado se os três vierem juntos. */
+  dias?: string[];
+  horaInicio?: string;
+  horaFim?: string;
+  limiteUsuario?: number;
+  limiteTotal?: number;
+  limiteUsuarioIlimitado?: boolean;
+  limiteTotalIlimitado?: boolean;
+  taxas?: string[];
+  formasConsumo?: string[];
+  regras?: string[];
+  imagem?: string;
+}
+
+type EditarResult = { ok: true; item: ItemCupomPortal } | { ok: false; erro: string };
+
+/** Mensagens dos SQLSTATEs do trigger `checar_edicao_cupom` (migration 20). */
+const ERRO_EDICAO = new Set(["P0601", "P0602", "P0603", "P0604", "P0605", "P0606"]);
+
+/**
+ * Lojista edita o próprio cupom. A REGRA vive no trigger (barreira real,
+ * cobre o PostgREST direto); aqui é a camada de mensagem — a action não
+ * reimplementa a matriz, ela traduz o que o banco recusou.
+ */
+export async function editarCupomAction(
+  input: EditarCupomInput,
+): Promise<EditarResult> {
+  try {
+    const supabase = createClient();
+    if (!input.id) return { ok: false, erro: "Cupom não informado." };
+
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false, erro: "Sessão expirada. Entre novamente." };
+
+    const { data: est } = await supabase
+      .from("estabelecimentos")
+      .select("id, nome, categoria_id")
+      .eq("owner_id", uid)
+      .maybeSingle();
+    if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
+
+    // Monta o patch CHAVE A CHAVE. Cada saneador só roda se a chave veio.
+    const patch: Database["public"]["Tables"]["cupons"]["Update"] = {};
+
+    if (input.titulo !== undefined) {
+      if (!input.titulo.trim()) return { ok: false, erro: "Informe o título do cupom." };
+      patch.titulo = input.titulo.trim();
+    }
+    if (input.beneficio !== undefined) patch.beneficio = input.beneficio.trim();
+    if (input.economia !== undefined) {
+      if (!(input.economia > 0)) return { ok: false, erro: "Informe a economia (R$)." };
+      patch.economia = input.economia;
+    }
+    if (input.economiaVariavel !== undefined) {
+      patch.economia_variavel = Boolean(input.economiaVariavel);
+    }
+    if (input.validade !== undefined) {
+      if (!input.validade) return { ok: false, erro: "Informe a validade da oferta." };
+      patch.validade_fim = input.validade;
+    }
+    if (input.dataInicio !== undefined) patch.validade_inicio = input.dataInicio || null;
+    if (input.ocultarAteInicio !== undefined) {
+      patch.ocultar_ate_inicio = input.ocultarAteInicio;
+    }
+    if (input.prazoAtivacao !== undefined) {
+      if (Math.trunc(Number(input.prazoAtivacao)) < PRAZO_ATIVACAO_MIN_HORAS) {
+        return {
+          ok: false,
+          erro: `O prazo de ativação deve ser de no mínimo ${PRAZO_ATIVACAO_MIN_HORAS} horas.`,
+        };
+      }
+      patch.prazo_ativacao_horas = sanearPrazoAtivacao(input.prazoAtivacao);
+    }
+    if (input.taxas !== undefined) patch.taxas = sanearTaxas(input.taxas);
+    if (input.formasConsumo !== undefined) {
+      patch.formas_consumo = sanearFormasConsumo(input.formasConsumo);
+    }
+    if (input.regras !== undefined) {
+      patch.regras = input.regras.map((r) => r.trim()).filter(Boolean);
+    }
+    if (input.imagem !== undefined) patch.imagem = input.imagem;
+    if (input.limiteUsuario !== undefined || input.limiteUsuarioIlimitado !== undefined) {
+      patch.limite_por_usuario = sanearLimite(
+        input.limiteUsuario,
+        Boolean(input.limiteUsuarioIlimitado),
+      );
+    }
+    if (input.limiteTotal !== undefined || input.limiteTotalIlimitado !== undefined) {
+      patch.limite_total = sanearLimite(
+        input.limiteTotal,
+        Boolean(input.limiteTotalIlimitado),
+      );
+    }
+    if (input.categoria !== undefined) {
+      const { data: cats } = await supabase
+        .from("estabelecimento_categorias")
+        .select("categoria_id")
+        .eq("estabelecimento_id", est.id);
+      const conjunto = new Set((cats ?? []).map((c) => c.categoria_id));
+      conjunto.add(est.categoria_id);
+      if (!conjunto.has(input.categoria)) {
+        return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+      }
+      patch.categoria_id = input.categoria;
+    }
+
+    // `horarios` é jsonb COMPOSTO: recebê-lo pela metade é o mesmo bug em
+    // miniatura (gravaria uma janela que o lojista não pediu). Ou vêm os
+    // três, ou não se toca no campo.
+    const temJanela =
+      input.dias !== undefined &&
+      input.horaInicio !== undefined &&
+      input.horaFim !== undefined;
+    if (temJanela) {
+      const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test((h ?? "").trim());
+      const hi = horaValida(input.horaInicio!) ? input.horaInicio!.trim() : null;
+      const hf = horaValida(input.horaFim!) ? input.horaFim!.trim() : null;
+      const diasLimpos = (input.dias ?? []).filter(
+        (d) => typeof d === "string" && d.length > 0,
+      );
+      const faixa = hi && hf ? `${hi} às ${hf}` : "qualquer horário";
+      const descricao = `${diasLimpos.length ? diasLimpos.join(", ") : "Todos os dias"}, ${faixa}`;
+      patch.horarios =
+        hi && hf
+          ? { descricao, dias: diasLimpos, inicio: hi, fim: hf }
+          : { descricao, dias: diasLimpos };
+    } else if (
+      input.dias !== undefined ||
+      input.horaInicio !== undefined ||
+      input.horaFim !== undefined
+    ) {
+      return {
+        ok: false,
+        erro: "Para alterar o horário, informe dias, início e fim juntos.",
+      };
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { ok: false, erro: "Nada para alterar." };
+    }
+
+    const { data: row, error } = await supabase
+      .from("cupons")
+      .update(patch)
+      .eq("id", input.id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      // O trigger fala a linguagem do lojista — repassar é melhor do que
+      // traduzir para uma frase genérica que esconde o motivo.
+      if (ERRO_EDICAO.has(error.code ?? "")) return { ok: false, erro: error.message };
+      return { ok: false, erro: "Não foi possível salvar as alterações." };
+    }
+    // 0 linhas = a policy filtrou (cupom de outro estabelecimento).
+    if (!row) return { ok: false, erro: "Cupom não encontrado no seu estabelecimento." };
+
+    const item: ItemCupomPortal = {
+      cupom: linhaParaCupom(row, est.nome),
+      statusPortal:
+        row.status === "esgotado"
+          ? "esgotado"
+          : row.status === "expirado"
+            ? "expirado"
+            : row.status === "pendente"
+              ? "pendente"
+              : row.status === "rejeitado"
+                ? "rejeitado"
+                : "ativo",
+      metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
+      limiteTotal: row.limite_total ?? 1000,
+      limiteUsuario: row.limite_por_usuario,
+      dataInicio: row.validade_inicio ?? undefined,
+      ocultarAteInicio: row.ocultar_ate_inicio,
+    };
+    return { ok: true, item };
+  } catch {
+    return { ok: false, erro: "Não foi possível salvar as alterações." };
+  }
+}
