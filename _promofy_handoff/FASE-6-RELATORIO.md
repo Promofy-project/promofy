@@ -242,12 +242,108 @@ confiar em `dentroDaJanela` no cliente nativo.
 5. **Portas locais mudaram** (5532x → 5542x) porque o Windows reservou 55012–55411. Afeta só
    o ambiente de desenvolvimento; `.env.local` já foi ajustado.
 
-## 13. Estado dos ambientes
+## 13. Deploy — coreografia executada em 03/08/2026
 
-- **Local:** `verify` verde do zero; banco no estado do seed (o `db:reset` foi a última operação).
-- **Hospedado (`bpeqpxvxgdyjjdcoycgp`):** **intocado**. Nenhuma migration aplicada, nenhuma
-  suíte rodada, nenhum dado do cliente tocado.
-- **Vercel:** **sem deploy.** A `main` segue com a Fase 5 no ar.
+Banco antes do código, cada passo com OK explícito. **Concluído: a Fase 6 está no ar.**
+
+### Passo 0 — gates de leitura (antes de tudo)
+
+`scripts/_baseline-hosted.ts` (somente-leitura, conferido linha a linha antes de rodar; alvo
+confirmado como `bpeqpxvxgdyjjdcoycgp`):
+
+| Gate | Antes | Depois do push |
+|---|---|---|
+| `cupons` com `prazo_ativacao_horas < 5` | **0** | 0 |
+| `cupons` com `limite_por_usuario is null` | **0** | **0** (a migration 17 não faz backfill — regra, não acaso) |
+
+Baseline capturado: `consumidor@` 1410 · `convidado@` 1460 · cupons 20 · estabelecimentos 6 ·
+`cupons_usuario` 10 · `favoritos` 2 · `cupom_eventos` 20514 · `profiles` 5.
+
+### Passo 1 — migrations 16–19 no hospedado
+
+**`supabase db push --linked` direto — sem `migration repair`.** Na Fase 5 o push não estava
+disponível e foi preciso o desvio via MCP + `repair`, cuja prova de fidelidade era justamente
+"a linha ficou idêntica à que um `db push` teria gravado". Desta vez o CLI alcançou o remoto
+(`migration list --linked` e `--dry-run` confirmaram antes de qualquer escrita), então usou-se
+o caminho canônico: versão e `statements` gravados nativamente, **zero passos corretivos**.
+
+> **Registrar como caminho padrão daqui em diante:** verificar `migration list --linked` e
+> `db push --dry-run` primeiro; havendo conectividade, `db push` direto. O par MCP + `repair`
+> é o plano B para quando o CLI não alcançar o banco.
+
+Resultado: as 4 aplicaram em ordem, sem erro (o único `NOTICE` foi o `drop trigger if exists`
+da 19 numa primeira aplicação). `migration list` mostra as 4 com **Local e Remote preenchidos**
+e versões idênticas às dos arquivos; `db push --dry-run` responde *"Remote database is up to
+date"*. Todas as contagens e as duas contas do cliente ficaram **idênticas ao baseline**.
+
+Schema conferido no ar: `taxas`/`formas_consumo` (jsonb not null), `economia_variavel`,
+`limite_por_usuario` **nullable**, `CHECK (prazo_ativacao_horas >= 5)`, trigger
+`trg_cupons_status_pendente` habilitado, e **as duas RPCs coexistindo** (`economia_consumidor`
+jsonb + `economia_total_consumidor` numeric).
+
+**A janela de deploy foi medida, não suposta.** Com o banco já na Fase 6 e o código da Fase 5
+ainda no ar, logado como `convidado@`: `economia_total_consumidor` devolveu **162** (idêntico
+ao que o cliente via), `economia_consumidor` devolveu `{total:162, inclui_variavel:false}`, e
+`usos[]` já trazia `pode_reusar` como campo extra — que o código antigo simplesmente ignora.
+É exatamente a razão de a RPC nova ser **aditiva** em vez de trocar o tipo de retorno.
+
+### Passo 2 — merge e build
+
+`merge --no-ff` → `main` → push `23846ac..45ce99c`. Deployment
+**`dpl_FAXnfb23JhdkxUbfL7S8HSzCuT4B`** (commit `45ce99c`): build **READY em 39s**, 47 páginas,
+`promofy-pro.vercel.app` apontando para ele.
+
+**Correção de premissa registrada:** o plano falava em fazer rollback para o commit `8486863`,
+mas ele era um commit **só de documentação que nunca havia sido enviado** — `origin/main`
+estava em `23846ac`, e era **esse** o deployment em produção
+(`dpl_12rbY3gTHaFSSzNj3mdPys35VkWa`, `isRollbackCandidate: true`). O commit de docs subiu junto
+neste push. Segundo candidato disponível: `dpl_AxT2JZeW3UwhKQMhXVaZDsfo3G3R` (Fase 4,
+`05c3071`). Rollback não foi necessário.
+
+### Passo 3 — smoke em produção (`convidado@`; `consumidor@` nunca tocado)
+
+| | Verificação | Resultado |
+|---|---|---|
+| a | Economia de conta só-fixos | **R$ 162,00 exato, sem "mais de"** — o número do cliente não se moveu |
+| b | **Ataque de moderação** | `INSERT` direto via PostgREST como `lojista@` forçando `status:'ativo'` → **nasceu `pendente`**. O trigger da migration 19 provado **em produção** |
+| b | Cadastro pelo formulário `/e` | rótulo virou "Economia mínima garantida"; cupom listado "Em análise" com "a partir de R$ 8,00", "No local e Retirada", "Não inclui taxa de entrega e taxa de serviço", "Ilimitado por cliente" |
+| b | Folha `/m` | "Estou economizando **a partir de** R$ 8,00", seção "Formas de consumo", "O benefício não cobre…" |
+| c | Ilimitado ponta a ponta | ativar → validar → **sem F5 o botão voltou a oferecer** → 2ª ativação com **código novo** (`AHR7-W5AQ` → `S7U4-RP97`) |
+| c | Selo | ilimitado validado **sem** selo; `c01` (cota 1, validado) **com** selo e sem botão — a discriminação que `pode_reusar` entrega |
+| e | "mais de" | **"mais de R$ 170,00"** (162 + 8 do mínimo garantido). Pontos 1.460 → 1.510 |
+| d | Fase 5 | janela real no `c01` (Ter–Dom 18:00–23:00, Seg "—", "Hoje, Dom") · `/cadastro` 200 · animação de pontos · validação por código |
+| d | Fase 4 | busca (10 cupons) · chips de dia com "Dom hoje" · favoritos (2) · novidades e estabelecimentos 200 · multi-categoria no `/e` |
+| d | H5 | home 12 cards → Beleza 4 · `?cat=xpto` 200 sem quebrar · `/m/filtros` "Aplicar" → `/m/buscar?cat=fitness` |
+
+**Zero erro de console** em toda a sessão.
+
+### Estado final dos ambientes
+
+- **Hospedado:** Fase 6 aplicada. **`consumidor@` intocado** (1410, 3 linhas, 1 favorito —
+  idêntico ao baseline). **`convidado@` 1510**, 9 linhas de ciclo (7 do baseline + 2 do cupom
+  de teste), 1 favorito — rastro esperado, é conta de demonstração.
+- **Vercel:** `45ce99c` em produção.
+- **Catálogo: 21 cupons** (era 20). O cupom do ataque foi removido; ficou **um**, renomeado
+  para a vitrine (ver abaixo).
+- **Local:** `verify` verde do zero; banco no estado do seed.
+
+### Cupom-exemplo que ficou no catálogo
+
+**`Café do dia`** (`84e451a7-7cef-485d-9f66-6ccb8760b1b6`, Sabor & Cia) — ativo, R$ 8
+**variável**, **ilimitado por usuário**, taxas entrega+serviço, formas no local+retirada. É o
+único cupom que exercita os três recursos novos ao mesmo tempo, do mesmo jeito que o `c01` é a
+demonstração viva da barreira de janela.
+
+Renomeado após o smoke (id e as 2 linhas de histórico do `convidado@` preservadas): título
+"F6 smoke — café do dia" → **"Café do dia"**; benefício → "Um expresso por visita — sem limite
+de uso". Jargão técnico não aparece na vitrine do cliente.
+
+**Achado durante a renomeação:** o bloco "Benefícios Exclusivos" do detalhe mostrava o texto
+**duplicado**, porque `criarCupomAction` copia o benefício para `regras` (`regras: [beneficio]`)
+e a tela concatena os dois. É **pré-existente** (vale para todo cupom criado pelo formulário,
+desde a Fase 2) e não é regressão desta fase. Contornado no dado deste cupom (as `regras`
+passaram a complementar: "Não acumulável com outras promoções."); a correção de código está no
+backlog.
 
 ## 14. Backlog
 
@@ -255,8 +351,20 @@ confiar em `dentroDaJanela` no cliente nativo.
 **parcial**: chips e as duas seções com lastro filtram de verdade; o filtro completo depende da
 taxonomia) · 12.4 (validade divergente) · dívida da suíte-armadilha · auto-publish no INSERT.
 
-**Fase 6.5 (cortada de propósito):** C2 editar cupom · C5 rejeição com motivo (o critério
-completo — "edita e reenvia" — depende do C2) · C4 upload de imagem/Storage.
+**Fase 6.5 (cortada de propósito, na ordem em que se encaixam):**
+- **C2 — editar cupom.** RPC de edição restrita ao dono + admin; imutabilidade pós-resgate
+  (não reduzir limite abaixo do já consumido); política de re-moderação quando a edição for
+  material. Desenho já existe em `docs/modelo/estabelecimento-mobile/Cupons ativos.png`
+  (ícones lápis/lixeira). É o pré-requisito dos outros dois.
+- **C5 — rejeição com motivo.** Coluna de motivo + `rejeitar_cupom` estendida (mudar a
+  assinatura exige `DROP FUNCTION` + recriar, e **o `EXECUTE` precisa ser reconcedido**);
+  motivo visível ao lojista, que **edita e reenvia** — e é aí que depende do C2.
+- **C4 — upload de imagem/Storage.** Liga o Supabase Storage pela 1ª vez (hoje
+  `[storage] enabled = false` no `config.toml`, sem bucket em migration nenhuma). Bucket
+  dedicado, políticas dono-only provadas por teste negativo, validação de tipo/tamanho no
+  servidor, input de arquivo isolado atrás de ponto trocável (no nativo vira picker/câmera).
+  ⚠️ O `config.toml` registra que o container `storage-api` é instável no Windows — vale
+  verificar isso antes de planejar a fase.
 
 **Resta:** taxonomia Segmento→Categoria e o filtro completo (localização, promoção, frequência,
 valor, relevância — as 5 seções removidas de `/m/filtros`) · validação por identidade nome+CPF ·
@@ -266,8 +374,16 @@ adicionais · relatório de NPS do lojista · QR scanner real · `/admin/configu
 tokens · assets órfãos em `public/lp/consumidores/`.
 
 **Novos, achados nesta fase:**
-- **Periodicidade de uso** ("1 por dia") — o que o switch "Ilimitado" *não* cobre; precisa de
-  coluna nova e janela de contagem em `ativar_cupom`.
+- **⚠️ Periodicidade de uso ("1 por dia") — PENDENTE DE DECISÃO DO CLIENTE.** É o que o switch
+  "Ilimitado" *não* cobre (ver §4.1): hoje "ilimitado" é literal, sem intervalo, e cada
+  validação credita pontos e soma economia de novo. Precisa de coluna nova (`periodo_limite`)
+  e de uma janela de contagem em `ativar_cupom`. **Se a resposta do cliente for "eu queria 1
+  por dia", o switch entregue na Fase 6 não atende** e a periodicidade precisa entrar antes de
+  o cupom ilimitado ir para uso comercial.
+- **Benefício duplicado no detalhe.** `criarCupomAction` grava `regras: [beneficio]` e
+  `/m/cupom/[id]` concatena `beneficio` + `regras[0]` — quando são o mesmo texto, a tela repete.
+  Pré-existente desde a Fase 2; visível em todo cupom criado pelo formulário. Correção: ou a
+  action para de copiar, ou a tela deduplica. Contornado no dado do cupom-exemplo.
 - **Auto-cadastro de empresa** — o desenho já existe em
   `docs/modelo/estabelecimento-mobile/Cadastro-1..5.png` (razão social, CNPJ, ramo, documento,
   responsável). O H2 deliberadamente **não** o implementou: o papel `lojista` só é atribuído por
