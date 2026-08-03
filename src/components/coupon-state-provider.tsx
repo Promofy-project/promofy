@@ -3,11 +3,11 @@
 import * as React from "react";
 
 import type { Cupom } from "@/lib/types";
+import type { EconomiaDTO } from "@/lib/economia";
 import {
   ativarCupomAction,
   consultarCupomAction,
   responderNpsAction,
-  type EconomiaDTO,
   type EstadoCupomDTO,
   type UsoCupomDTO,
 } from "@/lib/actions/cupons";

@@ -10,11 +10,8 @@ import {
 } from "@/components/favorites-provider";
 import { AuthSync } from "@/components/auth-sync";
 import { createClient } from "@/lib/supabase/server";
-import {
-  economiaDeJson,
-  type EstadoCupomDTO,
-  type UsoCupomDTO,
-} from "@/lib/actions/cupons";
+import { economiaDeJson } from "@/lib/economia";
+import type { EstadoCupomDTO, UsoCupomDTO } from "@/lib/actions/cupons";
 
 const INICIAL_ANONIMO: EstadoInicial = {
   logado: false,

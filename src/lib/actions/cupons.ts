@@ -10,6 +10,7 @@ import {
   sanearPrazoAtivacao,
   sanearTaxas,
 } from "@/lib/cupom-campos";
+import { economiaDeJson, type EconomiaDTO } from "@/lib/economia";
 import type { Database } from "@/lib/supabase/database.types";
 
 // DTOs serializáveis devolvidos ao cliente. Nenhuma action lança:
@@ -52,28 +53,9 @@ export interface UsoCupomDTO {
   pode_reusar: boolean;
 }
 
-/**
- * Total economizado + se o acumulado inclui algum cupom "a partir de"
- * (Fase 6/C3). `total` soma a economia MÍNIMA garantida; a flag é o que
- * autoriza a UI a escrever "mais de R$ X".
- */
-export interface EconomiaDTO {
-  total: number;
-  incluiVariavel: boolean;
-}
-
-const ECONOMIA_ZERO: EconomiaDTO = { total: 0, incluiVariavel: false };
-
-/** jsonb da RPC `economia_consumidor` → DTO, defensivo contra formato. */
-export function economiaDeJson(valor: unknown): EconomiaDTO {
-  if (!valor || typeof valor !== "object") return ECONOMIA_ZERO;
-  const j = valor as { total?: unknown; inclui_variavel?: unknown };
-  const total = Number(j.total);
-  return {
-    total: Number.isFinite(total) ? total : 0,
-    incluiVariavel: j.inclui_variavel === true,
-  };
-}
+// `EconomiaDTO` e `economiaDeJson` vivem em @/lib/economia: num arquivo
+// "use server" todo export precisa ser função async, e um helper síncrono
+// aqui derruba o `next build` — restrição que o `tsc` não pega.
 
 type AtivarResult =
   | { ok: true; ja_ativo: boolean; estado: EstadoCupomDTO }
