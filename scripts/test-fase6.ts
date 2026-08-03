@@ -1,6 +1,26 @@
 /**
  * Testes da Fase 6.
  *
+ * ONDA 2 (cupom) — contra o banco, com fixtures `f6-*` e conta `qa-f6`
+ * criada e destruída aqui (o seed NÃO é tocado):
+ *  - C1 campos: taxas/formas persistem e voltam SANEADAS contra o
+ *    vocabulário; valor fora da whitelist não é gravado;
+ *  - C1 ilimitado: `limite_por_usuario NULL` deixa reativar depois de
+ *    validar, e `usos` devolve limite/restantes null + pode_reusar true —
+ *    os três casos que uma implementação "óbvia" erra (GREATEST devolve
+ *    0, não null; `null > 0` é false; a UI não teria caminho para a 2ª
+ *    ativação). Inclui PARIDADE: `pode_reusar` concorda com o que
+ *    `ativar_cupom` realmente faz, cupom a cupom;
+ *  - C1 prazo: < 5h é recusado pelo CHECK mesmo no PostgREST direto;
+ *  - C1 moderação: lojista não auto-publica (INSERT com status 'ativo'
+ *    nasce 'pendente');
+ *  - C3 economia: fixo soma exato; variável soma o MÍNIMO e marca
+ *    `inclui_variavel`; misto soma os dois e marca;
+ *  - C3 NÃO-REGRESSÃO (o critério que o usuário pediu explicitamente):
+ *    para cupons FIXOS, `economia_consumidor().total` é IDÊNTICO ao
+ *    `economia_total_consumidor()` que já está no ar. O número que o
+ *    cliente vê hoje não muda.
+ *
  * ONDA 1 (higiene) — asserções PURAS, sem banco:
  *  - PARIDADE tabela↔barreira: a tabela "Regras de Uso" do detalhe descreve o
  *    MESMO objeto `janela` que `dentroDaJanela`/`dentro_da_janela` usam para
@@ -19,6 +39,12 @@
  *
  * ONDA 2 (cupom) entra aqui depois, com fixtures `f6-*` e conta `qa-f6`.
  */
+import { config } from "dotenv";
+const hosted = process.argv.includes("--hosted");
+const envFile = hosted ? ".env.hosted.local" : ".env.local";
+config({ path: envFile });
+
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { dentroDaJanela, type JanelaConsumo } from "../src/lib/janela";
 import { DIAS_SEMANA, diaSemanaBrt, type DiaSemana } from "../src/lib/dias";
 import {
@@ -26,6 +52,16 @@ import {
   linhasDaJanela,
   temRestricao,
 } from "../src/lib/janela-formato";
+import { sanearTaxas, sanearFormasConsumo } from "../src/lib/cupom-campos";
+import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !anonKey || !serviceRole) {
+  console.error(`Faltam variáveis em ${envFile}.`);
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
@@ -230,5 +266,371 @@ console.log("\n[linhas e resumo]");
   );
 }
 
-console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-process.exit(failed > 0 ? 1 : 0);
+// ================================================================
+// ONDA 2 — contra o banco
+// ================================================================
+
+const svc = createClient(url!, serviceRole!, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+const anon = () =>
+  createClient(url!, anonKey!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+async function logar(email: string, senha: string): Promise<SupabaseClient> {
+  const c = anon();
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
+  if (error) throw new Error(`login ${email}: ${error.message}`);
+  return c;
+}
+
+type Jsonb = Record<string, unknown> | null;
+const motivo = (r: Jsonb) => (r as { motivo?: string })?.motivo;
+const okr = (r: Jsonb) => (r as { ok?: boolean })?.ok === true;
+const codigoDe = (r: Jsonb) =>
+  (r as { estado?: { codigo?: string } })?.estado?.codigo ?? "";
+
+// fixtures desta fase (prefixo próprio; o seed não é tocado)
+const FIXO = "f6-fixo";
+const VARIAVEL = "f6-variavel";
+const ILIMITADO = "f6-ilimitado";
+const LIMITADO = "f6-limitado";
+const TODOS_F6 = [FIXO, VARIAVEL, ILIMITADO, LIMITADO];
+
+interface UsoLinha {
+  cupom_id: string;
+  consumidos: number;
+  limite: number | null;
+  restantes: number | null;
+  pode_reusar: boolean;
+}
+const usosDe = (r: Jsonb): UsoLinha[] =>
+  ((r as { usos?: UsoLinha[] })?.usos ?? []);
+const usoDe = (r: Jsonb, id: string) => usosDe(r).find((u) => u.cupom_id === id);
+
+let qa: ContaQa | null = null;
+
+async function main(): Promise<number> {
+  console.log(
+    `\n[test-fase6] Onda 2 — banco: ${hosted ? "HOSPEDADO (muta dados!)" : "local"} (${new URL(url!).host})\n`,
+  );
+
+  qa = await criarContaQa(svc, "f6", { nome: "QA Fase6" });
+  console.log(`[conta efêmera] ${qa.email}`);
+  const consumidor = await logar(qa.email, qa.senha);
+  const uid = qa.id;
+  const lojista = await logar("lojista@promofy.test", "promofy123"); // dono de e1
+
+  // categoria válida do e1 (o trigger da Fase 4 exige pertencer ao conjunto)
+  const { data: e1 } = await svc
+    .from("estabelecimentos")
+    .select("categoria_id")
+    .eq("id", "e1")
+    .single();
+  const cat = e1!.categoria_id as string;
+  const base = {
+    estabelecimento_id: "e1",
+    categoria_id: cat,
+    validade_fim: "2030-12-31",
+    status: "ativo" as const,
+    horarios: { descricao: "Todos os dias" }, // sem janela: ativável a qualquer hora
+  };
+
+  try {
+    await svc.from("cupons").delete().in("id", TODOS_F6);
+    // TODAS as linhas com AS MESMAS CHAVES: num insert em lote o PostgREST
+    // monta a lista de colunas a partir do primeiro objeto e recusa o
+    // conjunto se os demais divergirem (PGRST102). E o erro é capturado —
+    // um insert que falha em silêncio faz as asserções seguintes passarem
+    // vazias (um UPDATE que casa 0 linhas não devolve erro).
+    const { error: errFix } = await svc.from("cupons").insert([
+      { ...base, id: FIXO, titulo: "F6 fixo", economia: 10, economia_variavel: false, limite_por_usuario: 1 },
+      { ...base, id: VARIAVEL, titulo: "F6 variável", economia: 7, economia_variavel: true, limite_por_usuario: 1 },
+      { ...base, id: ILIMITADO, titulo: "F6 ilimitado", economia: 3, economia_variavel: false, limite_por_usuario: null },
+      { ...base, id: LIMITADO, titulo: "F6 limitado", economia: 5, economia_variavel: false, limite_por_usuario: 1 },
+    ]);
+    if (errFix) throw new Error(`fixtures f6-*: ${errFix.message}`);
+
+    // ---------------------------------------------------------------
+    console.log("[C1 — taxas e formas de consumo]");
+    {
+      const { data: gravado, error } = await svc
+        .from("cupons")
+        .update({
+          taxas: ["entrega", "servico"],
+          formas_consumo: ["local", "delivery"],
+        })
+        .eq("id", FIXO)
+        .select("id");
+      // `.select()` encadeado de propósito: sem ele, um update que casa 0
+      // linhas devolve `error: null` e a asserção passaria vazia.
+      check(
+        "grava taxas e formas de consumo",
+        !error && gravado?.length === 1,
+        error?.message ?? `linhas=${gravado?.length}`,
+      );
+
+      const { data } = await consumidor
+        .from("cupons")
+        .select("taxas, formas_consumo")
+        .eq("id", FIXO)
+        .single();
+      check(
+        "consumidor lê os dois campos de volta",
+        JSON.stringify(data?.taxas) === '["entrega","servico"]' &&
+          JSON.stringify(data?.formas_consumo) === '["local","delivery"]',
+        JSON.stringify(data),
+      );
+    }
+    {
+      // O jsonb não tem CHECK de domínio de propósito (migration 16): quem
+      // garante o vocabulário é o servidor. Aqui provamos o OUTRO lado da
+      // decisão — lixo gravado direto NÃO chega à tela.
+      await svc
+        .from("cupons")
+        .update({ taxas: ["entrega", "xpto", 42, null], formas_consumo: "nao-array" })
+        .eq("id", FIXO);
+      const { data } = await consumidor
+        .from("cupons")
+        .select("taxas, formas_consumo")
+        .eq("id", FIXO)
+        .single();
+      check(
+        "valor fora do vocabulário é ignorado na leitura (só sobra 'entrega')",
+        JSON.stringify(sanearTaxas(data?.taxas)) === '["entrega"]',
+        JSON.stringify(sanearTaxas(data?.taxas)),
+      );
+      check(
+        "formas_consumo fora do formato (string) vira lista vazia, não exceção",
+        JSON.stringify(sanearFormasConsumo(data?.formas_consumo)) === "[]",
+      );
+      await svc.from("cupons").update({ taxas: ["entrega", "servico"] }).eq("id", FIXO);
+    }
+
+    // ---------------------------------------------------------------
+    console.log("\n[C1 — prazo mínimo de ativação: o CHECK cobre o PostgREST direto]");
+    {
+      const { error } = await lojista
+        .from("cupons")
+        .update({ prazo_ativacao_horas: 4 })
+        .eq("id", FIXO);
+      check(
+        "lojista NÃO grava prazo de 4h direto (CHECK recusa)",
+        !!error,
+        error ? "" : "passou!",
+      );
+      const { error: ok5 } = await lojista
+        .from("cupons")
+        .update({ prazo_ativacao_horas: 6 })
+        .eq("id", FIXO);
+      check("…mas 6h é aceito", !ok5, ok5?.message);
+    }
+
+    // ---------------------------------------------------------------
+    console.log("\n[C1 — moderação: lojista não auto-publica no INSERT]");
+    {
+      const AUTO = "f6-autopublish";
+      await svc.from("cupons").delete().eq("id", AUTO);
+      const { data, error } = await lojista
+        .from("cupons")
+        .insert({
+          id: AUTO,
+          estabelecimento_id: "e1",
+          categoria_id: cat,
+          titulo: "F6 tentativa de auto-publish",
+          economia: 1,
+          validade_fim: "2030-12-31",
+          status: "ativo", // <- o ataque
+        })
+        .select("status")
+        .single();
+      check(
+        "INSERT com status 'ativo' nasce 'pendente' (trigger)",
+        !error && data?.status === "pendente",
+        error?.message ?? String(data?.status),
+      );
+      await svc.from("cupons").delete().eq("id", AUTO);
+    }
+
+    // ---------------------------------------------------------------
+    console.log("\n[C1 — limite ilimitado por usuário]");
+    {
+      const a1 = (await consumidor.rpc("ativar_cupom", { p_cupom_id: ILIMITADO })).data as Jsonb;
+      check("ativa cupom ilimitado", okr(a1), JSON.stringify(a1));
+      await lojista.rpc("validar_cupom", { p_codigo: codigoDe(a1) });
+
+      const estado = (await consumidor.rpc("meu_estado_consumidor")).data as Jsonb;
+      const uso = usoDe(estado, ILIMITADO);
+      check("usos.limite vem null (ilimitado)", uso?.limite === null, JSON.stringify(uso));
+      check(
+        "usos.restantes vem null — NÃO 0 (greatest() puro devolveria 0)",
+        uso?.restantes === null,
+        JSON.stringify(uso),
+      );
+      check("usos.pode_reusar = true depois de validar", uso?.pode_reusar === true);
+
+      const a2 = (await consumidor.rpc("ativar_cupom", { p_cupom_id: ILIMITADO })).data as Jsonb;
+      check(
+        "2ª ativação é ACEITA logo após a validação (ok, não idempotente)",
+        okr(a2) && (a2 as { ja_ativo?: boolean }).ja_ativo === false,
+        JSON.stringify(a2),
+      );
+    }
+    {
+      // controle de não-regressão: com limite 1, tudo como na Fase 5
+      const a = (await consumidor.rpc("ativar_cupom", { p_cupom_id: LIMITADO })).data as Jsonb;
+      await lojista.rpc("validar_cupom", { p_codigo: codigoDe(a) });
+      const estado = (await consumidor.rpc("meu_estado_consumidor")).data as Jsonb;
+      const uso = usoDe(estado, LIMITADO);
+      check("limite 1 validado → restantes 0 e pode_reusar false",
+        uso?.restantes === 0 && uso?.pode_reusar === false, JSON.stringify(uso));
+      const a2 = (await consumidor.rpc("ativar_cupom", { p_cupom_id: LIMITADO })).data as Jsonb;
+      check("…e a 2ª ativação é recusada com limite_usuario",
+        motivo(a2) === "limite_usuario", JSON.stringify(a2));
+    }
+    {
+      // PARIDADE — o mesmo tipo de prova que a Fase 5 fez para
+      // `consumidos`: se o contrato divergir da RPC, a UI mente sobre a
+      // regra do servidor.
+      //
+      // O que se compara é a COTA POR USUÁRIO, e só ela — que é o escopo
+      // exato de `pode_reusar` (por isso o campo não se chama
+      // `pode_ativar`). Comparar contra o `ok` genérico da RPC daria um
+      // verde falso: com uma ativação VIGENTE, `ativar_cupom` devolve
+      // `ok:true, ja_ativo:true` pelo ramo idempotente — que vem ANTES
+      // da checagem de limite — enquanto `pode_reusar` pode ser false
+      // porque a linha ativa já consome a vaga. Não é divergência: são
+      // perguntas diferentes. (E a UI acerta esse caso por outro
+      // caminho: com linha ativa o status é "ativo" e a tela mostra
+      // "Ver cupom ativo", sem consultar `pode_reusar`.)
+      const estado = (await consumidor.rpc("meu_estado_consumidor")).data as Jsonb;
+      let divergencias = "";
+      for (const uso of usosDe(estado)) {
+        const r = (await consumidor.rpc("ativar_cupom", { p_cupom_id: uso.cupom_id }))
+          .data as Jsonb;
+        const barradoPorCota = motivo(r) === "limite_usuario";
+        // pode_reusar=false ⇔ a RPC barra por cota (nunca um sem o outro)
+        if (barradoPorCota === uso.pode_reusar) {
+          divergencias += ` ${uso.cupom_id}(pode_reusar=${uso.pode_reusar},motivo=${motivo(r)})`;
+        }
+      }
+      check(
+        "PARIDADE pode_reusar ⇔ ativar_cupom barra por cota, cupom a cupom",
+        divergencias === "",
+        divergencias,
+      );
+    }
+    {
+      // O caso que a versão ingênua da paridade deixaria passar: cupom
+      // com cota esgotada por uma ativação VIGENTE (não validada).
+      const NOVO = "f6-vigente";
+      await svc.from("cupons").delete().eq("id", NOVO);
+      await svc.from("cupons").insert({
+        ...base, id: NOVO, titulo: "F6 vigente", economia: 1,
+        economia_variavel: false, limite_por_usuario: 1,
+      });
+      const a = (await consumidor.rpc("ativar_cupom", { p_cupom_id: NOVO })).data as Jsonb;
+      check("ativa o cupom de cota 1 (linha vigente, não validada)", okr(a));
+      const estado = (await consumidor.rpc("meu_estado_consumidor")).data as Jsonb;
+      const uso = usoDe(estado, NOVO);
+      check(
+        "ativação vigente consome a vaga: pode_reusar false, restantes 0",
+        uso?.pode_reusar === false && uso?.restantes === 0,
+        JSON.stringify(uso),
+      );
+      const r2 = (await consumidor.rpc("ativar_cupom", { p_cupom_id: NOVO })).data as Jsonb;
+      check(
+        "…e a RPC responde pelo ramo IDEMPOTENTE (ok + ja_ativo), não por cota",
+        okr(r2) && (r2 as { ja_ativo?: boolean }).ja_ativo === true,
+        JSON.stringify(r2),
+      );
+      await svc.from("cupons_usuario").delete().eq("cupom_id", NOVO);
+      await svc.from("cupons").delete().eq("id", NOVO);
+    }
+
+    // ---------------------------------------------------------------
+    console.log("\n[C3 — economia variável]");
+    // estado limpo: só o que este bloco validar entra na conta
+    await svc.from("cupons_usuario").delete().eq("usuario_id", uid);
+    await svc.from("pontos_transacoes").delete().eq("usuario_id", uid);
+
+    const eco = async () =>
+      (await consumidor.rpc("economia_consumidor")).data as unknown as {
+        total: number;
+        inclui_variavel: boolean;
+      };
+    const ecoAntiga = async () =>
+      Number((await consumidor.rpc("economia_total_consumidor")).data);
+
+    {
+      const e = await eco();
+      check("sem validação: total 0 e inclui_variavel false",
+        Number(e.total) === 0 && e.inclui_variavel === false, JSON.stringify(e));
+    }
+    {
+      const a = (await consumidor.rpc("ativar_cupom", { p_cupom_id: FIXO })).data as Jsonb;
+      await lojista.rpc("validar_cupom", { p_codigo: codigoDe(a) });
+      const e = await eco();
+      check("cupom FIXO soma exato (10) e NÃO marca variável",
+        Number(e.total) === 10 && e.inclui_variavel === false, JSON.stringify(e));
+      check(
+        "NÃO-REGRESSÃO: total == economia_total_consumidor() (o número já no ar)",
+        Number(e.total) === (await ecoAntiga()),
+        `${e.total} vs ${await ecoAntiga()}`,
+      );
+    }
+    {
+      const a = (await consumidor.rpc("ativar_cupom", { p_cupom_id: VARIAVEL })).data as Jsonb;
+      await lojista.rpc("validar_cupom", { p_codigo: codigoDe(a) });
+      const e = await eco();
+      check(
+        "com cupom VARIÁVEL: soma o MÍNIMO garantido (10+7=17) e marca 'mais de'",
+        Number(e.total) === 17 && e.inclui_variavel === true,
+        JSON.stringify(e),
+      );
+      check(
+        "a soma continua idêntica à RPC antiga — a flag é ADITIVA, não muda o valor",
+        Number(e.total) === (await ecoAntiga()),
+        `${e.total} vs ${await ecoAntiga()}`,
+      );
+    }
+    {
+      const anonC = anon();
+      const r = await anonC.rpc("economia_consumidor");
+      check("anon NÃO chama economia_consumidor (execute revogado)",
+        r.error !== null, r.error ? "" : `vazou ${JSON.stringify(r.data)}`);
+    }
+    {
+      // isolamento: a economia de A não vaza para B
+      const outro = await criarContaQa(svc, "f6b", { nome: "QA Fase6 B" });
+      try {
+        const cB = await logar(outro.email, outro.senha);
+        const eB = (await cB.rpc("economia_consumidor")).data as unknown as {
+          total: number;
+        };
+        check("economia de outro usuário é 0 (isolada por auth.uid)",
+          Number(eB.total) === 0, JSON.stringify(eB));
+      } finally {
+        await destruirContaQa(svc, outro.id);
+      }
+    }
+  } finally {
+    // restauração — só o que este arquivo criou (a conta qa some no fim)
+    await svc.from("cupons_usuario").delete().eq("usuario_id", uid);
+    await svc.from("cupons").delete().in("id", TODOS_F6);
+  }
+
+  return encerrar(passed, failed);
+}
+
+/** `process.exit` NÃO executa `finally` — ver scripts/_qa-conta.ts. */
+main()
+  .then(async (code) => {
+    await destruirContaQa(svc, qa?.id);
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-fase6 falhou:", err);
+    await destruirContaQa(svc, qa?.id);
+    process.exit(1);
+  });
