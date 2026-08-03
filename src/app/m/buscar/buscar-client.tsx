@@ -4,6 +4,7 @@ import * as React from "react";
 import { Search, ArrowDownUp, SearchX } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
+import type { CategoriaFiltro } from "@/lib/data/categorias";
 import { DIAS_SEMANA, cupomDisponivelNoDia } from "@/lib/dias";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -17,17 +18,28 @@ const chips = ["Ordenar", "Mais próximos", "Maior economia", "Melhor avaliados"
  * component e o filtro por dia da semana roda aqui. `diaHoje` é calculado
  * NO SERVIDOR (BRT) — o client na Vercel roda em UTC e marcaria o dia
  * errado à noite.
+ *
+ * Fase 6/H5: aceita a seleção inicial vinda do "Aplicar" de /m/filtros
+ * (`?cat=`/`?dia=`, já saneados no server component) e filtra por
+ * categoria com o mesmo shape do filtro de dia.
  */
 export function BuscarClient({
   cupons,
   diaHoje,
+  categorias = [],
+  catInicial,
+  diaInicial,
 }: {
   cupons: Cupom[];
   diaHoje: string;
+  categorias?: CategoriaFiltro[];
+  catInicial?: string;
+  diaInicial?: string;
 }) {
   const [query, setQuery] = React.useState("");
   const [chip, setChip] = React.useState("Ordenar");
-  const [dia, setDia] = React.useState<string>("Todos");
+  const [dia, setDia] = React.useState<string>(diaInicial ?? "Todos");
+  const [cat, setCat] = React.useState<string>(catInicial ?? "Todos");
 
   const termo = query.trim().toLowerCase();
   const resultados = cupons
@@ -37,7 +49,11 @@ export function BuscarClient({
         c.titulo.toLowerCase().includes(termo) ||
         c.estabelecimento.toLowerCase().includes(termo),
     )
+    .filter((c) => cat === "Todos" || c.categoria === cat)
     .filter((c) => dia === "Todos" || cupomDisponivelNoDia(c.dias, dia));
+
+  const labelCat =
+    cat === "Todos" ? null : (categorias.find((c) => c.id === cat)?.label ?? cat);
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-6 pt-5">
@@ -76,6 +92,31 @@ export function BuscarClient({
           );
         })}
       </div>
+
+      {/* Filtro por categoria (Fase 6) — só aparece quando há categorias */}
+      {categorias.length > 0 && (
+        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+          {[{ id: "Todos", label: "Todas" }, ...categorias].map((c) => {
+            const selected = cat === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCat(c.id)}
+                aria-pressed={selected}
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors",
+                  selected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Filtro por dia da semana (Fase 4) */}
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
@@ -132,7 +173,9 @@ export function BuscarClient({
             <p className="mt-1.5 text-sm text-muted-foreground">
               {termo
                 ? `Não encontramos resultados para “${query}”. Tente outro termo de busca.`
-                : `Nenhum cupom disponível em “${dia}”. Tente outro dia.`}
+                : labelCat
+                  ? `Nenhum cupom de “${labelCat}”${dia !== "Todos" ? ` em “${dia}”` : ""}. Tente outro filtro.`
+                  : `Nenhum cupom disponível em “${dia}”. Tente outro dia.`}
             </p>
           </div>
         </div>

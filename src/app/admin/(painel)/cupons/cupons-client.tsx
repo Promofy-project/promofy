@@ -263,13 +263,21 @@ function DetalheModal({
             }
           />
           <Linha label="Validade" valor={formatShortDate(cupom.validadeFim)} />
+          {/* Fase 6: null = ilimitado nos DOIS limites (antes só no total,
+              e o "—" do total era ambíguo entre "sem teto" e "não sei"). */}
           <Linha
             label="Limite por usuário"
-            valor={String(cupom.limitePorUsuario)}
+            valor={
+              cupom.limitePorUsuario != null
+                ? String(cupom.limitePorUsuario)
+                : "Ilimitado"
+            }
           />
           <Linha
             label="Limite total"
-            valor={cupom.limiteTotal != null ? String(cupom.limiteTotal) : "—"}
+            valor={
+              cupom.limiteTotal != null ? String(cupom.limiteTotal) : "Ilimitado"
+            }
           />
           <Linha label="Prazo de ativação" valor={`${cupom.prazoAtivacaoHoras}h`} />
           <Linha label="Horários" valor={cupom.horarios || "Todos os dias"} full />

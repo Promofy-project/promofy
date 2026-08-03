@@ -1,0 +1,57 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "_promofy_handoff/08-REPOMIX-CLIENTES-LPS.xml",
+    "style": "xml",
+    "headerText": "PROMOFY — PACOTE CLIENTES + LANDING PAGES. App do consumidor mobile-first (/m: home, busca, cupom, favoritos, perfil, planos, premiacoes, onboarding, login/cadastro mock), landing raiz + tela de acesso (/), landing de clientes (/para-voce), landing de estabelecimentos (/para-empresas) e todos os componentes de consumo/landing. Candidato primario a migracao mobile nativa. Dados de src/lib/mock-data.ts (ver PACOTE CORE). Sem backend/banco/auth reais.",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": true,
+    "compress": false,
+    "copyToClipboard": false
+  },
+  "include": [
+    "src/app/page.tsx",
+    "src/app/m/**",
+    "src/app/para-voce/**",
+    "src/app/para-empresas/**",
+    "src/components/landing/**",
+    "src/components/app-mockup.tsx",
+    "src/components/banner-carousel.tsx",
+    "src/components/bottom-nav.tsx",
+    "src/components/category-chips.tsx",
+    "src/components/coupon-card.tsx",
+    "src/components/coupon-gallery.tsx",
+    "src/components/coupon-list-item.tsx",
+    "src/components/cupom-acao-usar.tsx",
+    "src/components/cupom-ativo-sheet.tsx",
+    "src/components/favorite-button.tsx",
+    "src/components/feedback-carousel.tsx",
+    "src/components/home-category-chips.tsx",
+    "src/components/home-header.tsx",
+    "src/components/home-search-bar.tsx",
+    "src/components/mobile-page-header.tsx",
+    "src/components/nps-dialog.tsx",
+    "src/components/phone-frame.tsx",
+    "src/components/plan-card.tsx",
+    "src/components/podium.tsx",
+    "src/components/points-card.tsx",
+    "src/components/points-summary.tsx",
+    "src/components/qr-fake.tsx",
+    "src/components/ranking-block.tsx",
+    "src/components/star-rating.tsx",
+    "src/components/tutorial-dialog.tsx",
+    "src/components/wave-background.tsx"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.webp", "**/*.svg",
+      "**/*.ico", "**/*.gif", "**/*.avif",
+      "_promofy_handoff/**", "repomix-promofy.xml", ".next/**"
+    ]
+  }
+}

@@ -9,13 +9,17 @@ import { useCouponState } from "@/components/coupon-state-provider";
  * Selo "Utilizado" sobre o card/linha do cupom na home e nas listas.
  *
  * REGRA (do servidor, não daqui): aparece quando o usuário já validou o
- * cupom E não tem mais uso disponível. Com `limite_por_usuario > 1` e
- * cota sobrando, NÃO aparece — o cupom continua utilizável e marcá-lo
- * como usado seria mentira.
+ * cupom E não tem mais uso disponível. Com cota sobrando — ou com cupom
+ * ILIMITADO — NÃO aparece: o cupom continua utilizável e marcá-lo como
+ * usado seria mentira.
  *
- * Quem calcula `restantes` é `meu_estado_consumidor` (mesma expressão de
- * `ativar_cupom`); aqui é só leitura. Enquanto o servidor não reportar
- * uso nenhum (`getUsos` = null), nada é renderizado.
+ * Fase 6: a decisão vem pronta em `pode_reusar`, calculado por
+ * `meu_estado_consumidor` com a MESMA expressão de `ativar_cupom`.
+ * NUNCA voltar a decidir por `restantes` aqui: era
+ * `if (uso.restantes > 0) return null`, e tanto `null > 0` (ilimitado)
+ * quanto `0 > 0` dão false — o selo aparecia justamente no cupom que o
+ * servidor deixaria reusar. `restantes` é dado de exibição; a condição
+ * é `pode_reusar`.
  *
  * Renderiza `null` na esmagadora maioria dos cards, então o overlay não
  * cobra layout de quem não usou o cupom.
@@ -32,7 +36,7 @@ export function CupomSeloUtilizado({
 
   if (getStatus(cupomId) !== "validado") return null;
   const uso = getUsos(cupomId);
-  if (!uso || uso.restantes > 0) return null;
+  if (!uso || uso.pode_reusar) return null;
 
   return (
     <div

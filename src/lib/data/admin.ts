@@ -27,8 +27,9 @@ export interface AdminCupom {
   validadeInicio: string | null;
   validadeFim: string;
   ocultarAteInicio: boolean;
+  /** null = ilimitado (Fase 6 alinhou os dois limites no mesmo vocabulário). */
   limiteTotal: number | null;
-  limitePorUsuario: number;
+  limitePorUsuario: number | null;
   prazoAtivacaoHoras: number;
   regras: string[];
   horarios: string;

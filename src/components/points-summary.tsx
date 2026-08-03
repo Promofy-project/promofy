@@ -41,7 +41,11 @@ export function PointsSummary() {
   }
 
   const pontos = getPontos();
-  const economia = getEconomia();
+  // Fase 6/C3: `total` soma a economia MÍNIMA garantida de cada cupom
+  // validado. Quando algum deles é "a partir de", o total é um piso —
+  // e dizer "R$ 120" seria subdeclarar o que a pessoa economizou. Quem
+  // decide isso é o servidor (`economia_consumidor.inclui_variavel`).
+  const { total: economia, incluiVariavel } = getEconomia();
   const { nivel } = calcularNivel(pontos);
   const cor = CORES_NIVEL[nivel];
 
@@ -78,15 +82,20 @@ export function PointsSummary() {
 
       <Link
         href="/m/perfil"
-        aria-label={`Total economizado: ${formatBRL(economia)}`}
+        aria-label={`Total economizado: ${incluiVariavel ? "mais de " : ""}${formatBRL(economia)}`}
         className="flex items-center gap-2.5 p-3.5 transition-colors hover:bg-muted/40"
       >
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
           <Wallet className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-lg font-extrabold leading-none tabular-nums text-foreground">
-            {formatBRL(economia)}
+          <p className="truncate text-lg font-extrabold leading-none text-foreground">
+            {incluiVariavel && (
+              <span className="mr-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                mais de
+              </span>
+            )}
+            <span className="tabular-nums">{formatBRL(economia)}</span>
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">economizados</p>
         </div>

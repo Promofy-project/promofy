@@ -21,6 +21,12 @@ config({ path: envFile });
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { abrirJanela, restaurarJanela, type SnapshotJanela } from "./_janela-fixture";
+import {
+  criarContaQa,
+  destruirContaQa,
+  encerrar,
+  type ContaQa,
+} from "./_qa-conta";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -52,9 +58,9 @@ function novoClient(): SupabaseClient {
   });
 }
 
-async function logar(email: string): Promise<SupabaseClient> {
+async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
   const c = novoClient();
-  const { error } = await c.auth.signInWithPassword({ email, password: SENHA });
+  const { error } = await c.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(`login ${email}: ${error.message}`);
   return c;
 }
@@ -66,9 +72,15 @@ const svc = createClient(url!, serviceRole!, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 let snapJanela: SnapshotJanela = [];
+let qa: ContaQa | null = null;
 
-async function main() {
+async function main(): Promise<number> {
   snapJanela = await abrirJanela(svc);
+  // Fase 6/H4: a conta de consumo é CRIADA E DESTRUÍDA por esta suíte.
+  // Antes era `consumidor@promofy.test` — conta de demonstração do cliente —
+  // e a limpeza apagava por usuario_id, não pelo que o teste criou.
+  qa = await criarContaQa(svc, "rls", { nome: "QA RLS", cpf: "111.222.333-44" });
+  console.log(`[conta de consumo efêmera] ${qa.email}`);
 
   const anon = novoClient();
 
@@ -122,7 +134,7 @@ async function main() {
   }
 
   console.log("\n[consumidor]");
-  const consumidor = await logar("consumidor@promofy.test");
+  const consumidor = await logar(qa.email, qa.senha);
   const meuId = (await consumidor.auth.getUser()).data.user!.id;
   {
     const { data } = await consumidor.from("profiles").select("id,role");
@@ -251,21 +263,27 @@ async function main() {
     check("admin lê todos os estabelecimentos (6)", !error && data?.length === 6, error?.message);
   }
 
-  // Limpeza COMPLETA dos artefatos (service_role bypassa RLS) — inclui
-  // eventos e pontos criados pelas RPCs, p/ não poluir test-fase2.
-  await svc.from("avaliacoes").delete().eq("usuario_nome", "Teste RLS");
-  await svc.from("cupons_usuario").delete().eq("usuario_id", meuId);
-  await svc.from("cupom_eventos").delete().eq("usuario_id", meuId);
-  await svc.from("pontos_transacoes").delete().eq("usuario_id", meuId).neq("acao", "bonus");
-  await svc.from("profiles").update({ cidade: null }).eq("id", meuId);
-  await restaurarJanela(svc, snapJanela);
-
-  console.log(`\nResultado: ${passed} PASS, ${failed} FAIL`);
-  process.exit(failed > 0 ? 1 : 0);
+  // A limpeza em bloco por `usuario_id` SAIU: quem destrói os artefatos é a
+  // destruição da conta no `finally` — escopo por construção, não por
+  // promessa. A avaliação criada aqui some junto (delete explícito no helper,
+  // porque a FK é `set null` e ela ficaria anônima e visível no app).
+  return encerrar(passed, failed);
 }
 
-main().catch(async (err) => {
-  console.error("test-rls falhou:", err);
-  await restaurarJanela(svc, snapJanela); // não deixa o seed alterado numa falha
-  process.exit(1);
-});
+/**
+ * `process.exit` NÃO executa `finally` — por isso `main()` DEVOLVE o código
+ * e quem sai é daqui, depois de restaurar a janela e destruir a conta.
+ * Sem isso, a conta qa-* ficaria pendurada no caminho de sucesso.
+ */
+main()
+  .then(async (code) => {
+    await restaurarJanela(svc, snapJanela);
+    await destruirContaQa(svc, qa?.id);
+    process.exit(code);
+  })
+  .catch(async (err) => {
+    console.error("test-rls falhou:", err);
+    await restaurarJanela(svc, snapJanela); // não deixa o seed alterado numa falha
+    await destruirContaQa(svc, qa?.id);
+    process.exit(1);
+  });

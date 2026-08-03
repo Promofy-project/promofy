@@ -10,14 +10,21 @@ import {
   Store,
   ShieldCheck,
   BadgeCheck,
+  Utensils,
+  Info,
 } from "lucide-react";
 
-import { getCupom } from "@/lib/mock-data";
 import {
   formatBRLValue,
   formatDistance,
   formatShortDate,
 } from "@/lib/utils";
+import {
+  listarPtBr,
+  rotuloEconomia,
+  rotulosFormasConsumo,
+  rotulosTaxas,
+} from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QrFake } from "@/components/qr-fake";
@@ -29,10 +36,23 @@ import { useCouponState } from "@/components/coupon-state-provider";
  * balcão. A validação acontece de verdade no portal do estabelecimento —
  * aqui fazemos polling (5s) e, quando o servidor marca 'validado', o NPS
  * abre sozinho.
+ *
+ * Fase 6 (H3): o cupom exibido vem do PROVIDER (`sheetCupom`), que o recebeu
+ * de quem abriu a folha — ou seja, do banco, via server component. Antes vinha
+ * de `getCupom()` do mock, o que fazia esta tela — justamente a que o
+ * consumidor mostra no caixa — anunciar uma validade diferente da home, e
+ * abrir EM BRANCO para cupom que só existe no banco (criado no /e e aprovado).
  */
 export function CupomAtivoSheet() {
-  const { sheetId, getEstado, usuario, fecharCupomAtivo, consultarCupom, abrirNps } =
-    useCouponState();
+  const {
+    sheetId,
+    sheetCupom,
+    getEstado,
+    usuario,
+    fecharCupomAtivo,
+    consultarCupom,
+    abrirNps,
+  } = useCouponState();
   const [copiado, setCopiado] = React.useState(false);
 
   React.useEffect(() => setCopiado(false), [sheetId]);
@@ -57,7 +77,7 @@ export function CupomAtivoSheet() {
   }, [sheetId, statusAtual, consultarCupom]);
 
   if (!sheetId) return null;
-  const cupom = getCupom(sheetId);
+  const cupom = sheetCupom;
   const estado = estadoAtual;
   if (!cupom || !estado) return null;
 
@@ -179,9 +199,31 @@ export function CupomAtivoSheet() {
               <CalendarClock className="h-4 w-4 shrink-0" />
               Válido até {formatShortDate(cupom.validade)}
             </span>
+            {/* Fase 6/C1: onde o cupom vale. Lista vazia = não informado —
+                a linha some, em vez de prometer "todas as formas". */}
+            {(cupom.formasConsumo?.length ?? 0) > 0 && (
+              <span className="flex items-center gap-2">
+                <Utensils className="h-4 w-4 shrink-0" />
+                {listarPtBr(rotulosFormasConsumo(cupom.formasConsumo ?? []))}
+              </span>
+            )}
           </div>
+
+          {/* Fase 6/C1: taxas que NÃO entram no benefício. É a informação
+              que evita discussão no balcão — por isso fica na folha, e
+              não só no detalhe. */}
+          {(cupom.taxas?.length ?? 0) > 0 && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Não inclui {listarPtBr(rotulosTaxas(cupom.taxas ?? []))
+                  .toLowerCase()}
+                .
+              </span>
+            </p>
+          )}
           <p className="mt-3 inline-flex w-fit items-center rounded-md bg-yellow-soft px-2 py-1 text-sm font-extrabold text-[#8a6d0b]">
-            Economize R$ {formatBRLValue(cupom.economia)}
+            Economize {rotuloEconomia(`R$ ${formatBRLValue(cupom.economia)}`, cupom.economiaVariavel)}
           </p>
         </div>
       </div>

@@ -1,109 +1,47 @@
-"use client";
+import { buscarCategorias, categoriaValida } from "@/lib/data/categorias";
+import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
+import { FiltrosClient } from "./filtros-client";
 
-import * as React from "react";
-import Link from "next/link";
-import { ArrowLeft, ChevronDown, Check } from "lucide-react";
+export const dynamic = "force-dynamic";
 
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-
-const secoes = [
-  { id: "categoria", label: "Categoria", opcoes: ["Todos", "Alimentação", "Lazer", "Compras", "Serviços"] },
-  { id: "localizacao", label: "Localização", opcoes: ["Todos", "Perto de mim", "Cidade toda", "Regiões próximas"] },
-  { id: "promocao", label: "Promoção", opcoes: ["Todos", "Desconto direto", "2 por 1", "Brinde grátis"] },
-  { id: "frequencia", label: "Frequência de uso", opcoes: ["Todos", "Diária", "Semanal", "Mensal"] },
-  { id: "valor", label: "Valor de compra (mínimo)", opcoes: ["Todos", "Até R$ 50", "R$ 50 – R$ 150", "Acima de R$ 150"] },
-  { id: "relevancia", label: "Por relevância ou afinidade", opcoes: ["Todos", "Relevância", "Afinidade", "Mais recentes"] },
-  { id: "diaSemana", label: "Dia da semana", opcoes: ["Todos", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"] },
-];
-
-export default function FiltrosPage() {
-  const [aberta, setAberta] = React.useState<string | null>(null);
-  const [selecao, setSelecao] = React.useState<Record<string, string>>(
-    Object.fromEntries(secoes.map((s) => [s.id, "Todos"])),
-  );
-
+/**
+ * Filtros do consumidor (backlog 12.3).
+ *
+ * Antes: SETE seções de opções literais (Categoria com rótulos que não
+ * existem no banco, Localização, Promoção, Frequência de uso, Valor de
+ * compra, Relevância, Dia da semana) e um "Aplicar" que era
+ * `<Link href="/m">` — navegava de volta e DESCARTAVA a seleção inteira.
+ *
+ * Agora: só as duas seções com lastro no modelo — Categoria (tabela
+ * `categorias`) e Dia da semana (`cupons.horarios.dias`) — e o "Aplicar"
+ * leva os parâmetros para /m/buscar, onde o filtro por dia JÁ funcionava
+ * desde a Fase 4 e o de categoria entra agora.
+ *
+ * As cinco seções removidas não tinham dado nenhum por trás: localização,
+ * promoção, frequência e valor de compra não existem no schema, e
+ * relevância/afinidade dependem da taxonomia Segmento→Categoria. Ficam
+ * registradas no backlog daquela fase — meia tela de filtro que não filtra
+ * é pior do que uma tela honesta.
+ */
+export default async function FiltrosPage({
+  searchParams,
+}: {
+  searchParams?: { cat?: string; dia?: string };
+}) {
+  const categorias = await buscarCategorias();
+  const dias = DIAS_SEMANA as readonly string[];
   return (
-    <div className="flex min-h-full flex-col">
-      {/* Header amarelo */}
-      <header className="sticky top-0 z-30 flex items-center gap-2 bg-yellow/90 px-3 py-4 backdrop-blur">
-        <Link
-          href="/m"
-          aria-label="Voltar"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground hover:bg-black/5"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="flex-1 text-center text-lg font-extrabold uppercase tracking-wide text-foreground">
-          Filtros
-        </h1>
-        <span className="h-9 w-9 shrink-0" aria-hidden />
-      </header>
-
-      {/* Seções */}
-      <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2">
-        {secoes.map((s) => {
-          const open = aberta === s.id;
-          return (
-            <div
-              key={s.id}
-              className="overflow-hidden rounded-card border border-border bg-surface shadow-card"
-            >
-              <button
-                type="button"
-                onClick={() => setAberta(open ? null : s.id)}
-                aria-expanded={open}
-                className="flex w-full items-center justify-between px-4 py-3.5 text-left"
-              >
-                <span className="text-sm font-bold text-foreground">
-                  {s.label}
-                </span>
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-                  {selecao[s.id]}
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 transition-transform",
-                      open && "rotate-180",
-                    )}
-                  />
-                </span>
-              </button>
-
-              {open && (
-                <ul className="border-t border-border">
-                  {s.opcoes.map((op) => {
-                    const sel = selecao[s.id] === op;
-                    return (
-                      <li key={op}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelecao((prev) => ({ ...prev, [s.id]: op }))
-                          }
-                          className={cn(
-                            "flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted",
-                            sel ? "font-semibold text-primary" : "text-foreground",
-                          )}
-                        >
-                          {op}
-                          {sel && <Check className="h-4 w-4" strokeWidth={3} />}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Rodapé fixo */}
-      <div className="sticky bottom-0 bg-gradient-to-t from-yellow via-yellow to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6">
-        <Button asChild variant="onYellow" className="w-full" size="lg">
-          <Link href="/m">Aplicar</Link>
-        </Button>
-      </div>
-    </div>
+    <FiltrosClient
+      categorias={categorias}
+      catInicial={categoriaValida(searchParams?.cat, categorias)}
+      // "hoje" resolvido NO SERVIDOR (BRT): o relógio do cliente na Vercel
+      // é UTC e marcaria o dia errado à noite — mesmo cuidado do /m/buscar.
+      diaHoje={diaSemanaBrt()}
+      diaInicial={
+        searchParams?.dia && dias.includes(searchParams.dia)
+          ? searchParams.dia
+          : undefined
+      }
+    />
   );
 }

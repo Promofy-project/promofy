@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import type { Cupom } from "@/lib/types";
+import type { EconomiaDTO } from "@/lib/economia";
 import {
   ativarCupomAction,
   consultarCupomAction,
@@ -35,8 +37,12 @@ export interface EstadoInicial {
   logado: boolean;
   usuario: UsuarioConsumidor | null;
   saldo: number;
-  /** Total economizado (soma da economia dos cupons validados). */
-  economia: number;
+  /**
+   * Total economizado + se o acumulado inclui algum cupom "a partir de"
+   * (Fase 6/C3). O `total` soma a economia MÍNIMA garantida; a flag é o
+   * que autoriza o "mais de R$ X".
+   */
+  economia: EconomiaDTO;
   config: ConfigPontos;
   estados: EstadoCupomDTO[];
   /** Uso por cupom (Fase 5) — insumo do selo "utilizado". */
@@ -74,13 +80,19 @@ interface CouponStateValue {
   getUsos: (id: string) => UsoCupomDTO | null;
   /** Saldo real do consumidor (SUM do ledger, hidratado do servidor). */
   getPontos: () => number;
-  /** Total economizado real (soma da economia dos cupons validados). */
-  getEconomia: () => number;
+  /** Total economizado + flag "inclui cupom variável" (Fase 6/C3). */
+  getEconomia: () => EconomiaDTO;
 
-  /** Ativa o cupom no servidor e abre o cupom ativo. Devolve o resultado. */
-  ativarCupom: (id: string) => Promise<ResultadoAtivacao>;
-  /** Reabre o cupom ativo já existente. */
-  verCupomAtivo: (id: string) => void;
+  /**
+   * Ativa o cupom no servidor e abre a folha. Recebe o CUPOM inteiro, não só
+   * o id (Fase 6/H3): a folha renderiza título, benefício, validade e economia,
+   * e antes ia buscá-los no mock — o que fazia a validade divergir da home e
+   * abria uma folha EM BRANCO para cupom que só existe no banco (criado no /e).
+   * Quem chama já tem o objeto vindo do servidor.
+   */
+  ativarCupom: (cupom: Cupom) => Promise<ResultadoAtivacao>;
+  /** Reabre a folha do cupom ativo já existente. */
+  verCupomAtivo: (cupom: Cupom) => void;
   fecharCupomAtivo: () => void;
   /** Consulta o estado atual no servidor (polling) e sincroniza. */
   consultarCupom: (id: string) => Promise<void>;
@@ -90,7 +102,10 @@ interface CouponStateValue {
   responderNps: (id: string, nota: number) => Promise<ResultadoNps>;
   fecharNps: () => void;
 
+  /** Id do cupom com a folha aberta (derivado de `sheetCupom`). */
   sheetId: string | null;
+  /** Cupom da folha aberta — dados de exibição, vindos do servidor. */
+  sheetCupom: Cupom | null;
   npsId: string | null;
 
   /** Animação "+N pontos" (Fase 5) — sempre com valor vindo do servidor. */
@@ -146,11 +161,13 @@ export function CouponStateProvider({
     () => estadosDeInicial(initial.estados),
   );
   const [saldo, setSaldo] = React.useState(initial.saldo);
-  const [economia, setEconomia] = React.useState(initial.economia);
+  const [economia, setEconomia] = React.useState<EconomiaDTO>(initial.economia);
   const [usos, setUsos] = React.useState<Record<string, UsoCupomDTO>>(() =>
     Object.fromEntries((initial.usos ?? []).map((u) => [u.cupom_id, u])),
   );
-  const [sheetId, setSheetId] = React.useState<string | null>(null);
+  // A folha guarda o CUPOM (não só o id) — ver `ativarCupom` no contrato.
+  const [sheetCupom, setSheetCupom] = React.useState<Cupom | null>(null);
+  const sheetId = sheetCupom?.id ?? null;
   const [npsId, setNpsId] = React.useState<string | null>(null);
   const [pontosPop, setPontosPop] = React.useState<PontosPopState | null>(null);
   const seqPop = React.useRef(0);
@@ -192,16 +209,16 @@ export function CouponStateProvider({
       getPontos: () => saldo,
       getEconomia: () => economia,
 
-      ativarCupom: async (id) => {
-        const r = await ativarCupomAction(id);
+      ativarCupom: async (cupom) => {
+        const r = await ativarCupomAction(cupom.id);
         if (!r?.ok) return { ok: false, motivo: r?.motivo ?? "erro" };
-        aplicarDto(id, r.estado);
-        setSheetId(id);
+        aplicarDto(cupom.id, r.estado);
+        setSheetCupom(cupom);
         return { ok: true };
       },
 
-      verCupomAtivo: (id) => setSheetId(id),
-      fecharCupomAtivo: () => setSheetId(null),
+      verCupomAtivo: (cupom) => setSheetCupom(cupom),
+      fecharCupomAtivo: () => setSheetCupom(null),
 
       consultarCupom: async (id) => {
         const r = await consultarCupomAction(id);
@@ -237,10 +254,11 @@ export function CouponStateProvider({
 
       fecharNps: () => {
         setNpsId(null);
-        setSheetId(null);
+        setSheetCupom(null);
       },
 
       sheetId,
+      sheetCupom,
       npsId,
 
       pontosPop,
@@ -252,6 +270,7 @@ export function CouponStateProvider({
       saldo,
       economia,
       usos,
+      sheetCupom,
       sheetId,
       npsId,
       pontosPop,
@@ -283,7 +302,7 @@ export function useCouponState(): CouponStateValue {
       getEstado: () => null,
       getUsos: () => null,
       getPontos: () => 0,
-      getEconomia: () => 0,
+      getEconomia: () => ({ total: 0, incluiVariavel: false }),
       ativarCupom: async () => ({ ok: false, motivo: "sem_sessao" }),
       verCupomAtivo: () => {},
       fecharCupomAtivo: () => {},
@@ -292,6 +311,7 @@ export function useCouponState(): CouponStateValue {
       responderNps: async () => ({ ok: false, motivo: "sem_sessao" }),
       fecharNps: () => {},
       sheetId: null,
+      sheetCupom: null,
       npsId: null,
       pontosPop: null,
       celebrarPontos: () => {},

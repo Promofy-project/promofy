@@ -10,13 +10,14 @@ import {
 } from "@/components/favorites-provider";
 import { AuthSync } from "@/components/auth-sync";
 import { createClient } from "@/lib/supabase/server";
+import { economiaDeJson } from "@/lib/economia";
 import type { EstadoCupomDTO, UsoCupomDTO } from "@/lib/actions/cupons";
 
 const INICIAL_ANONIMO: EstadoInicial = {
   logado: false,
   usuario: null,
   saldo: 0,
-  economia: 0,
+  economia: { total: 0, incluiVariavel: false },
   config: {},
   estados: [],
   usos: [],
@@ -50,7 +51,9 @@ export default async function MobileLayout({
       const [{ data, error }, { data: economiaData }, { data: favs }] =
         await Promise.all([
           supabase.rpc("meu_estado_consumidor"),
-          supabase.rpc("economia_total_consumidor"),
+          // Fase 6/C3: RPC nova, {total, inclui_variavel}. A antiga
+          // (numeric) fica no banco para a janela banco-antes-código.
+          supabase.rpc("economia_consumidor"),
           supabase.from("favoritos").select("estabelecimento_id"),
         ]);
       favoritos = {
@@ -75,7 +78,7 @@ export default async function MobileLayout({
             ? { nome: p.usuario.nome, cpfMascarado: p.usuario.cpf_mascarado }
             : null,
           saldo: p.saldo ?? 0,
-          economia: Number(economiaData ?? 0),
+          economia: economiaDeJson(economiaData),
           config: p.config ?? {},
           estados: p.estados ?? [],
           usos: p.usos ?? [],

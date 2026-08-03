@@ -15,6 +15,8 @@ export interface ItemCupomPortal {
   metricas: MetricasCupom;
   /** limite total de resgates da campanha (para o status "esgotado") */
   limiteTotal: number;
+  /** Fase 6: usos por cliente — `null` = ilimitado (vocabulário do banco). */
+  limiteUsuario?: number | null;
   /** data de início da campanha */
   dataInicio?: string;
   /** ocultar o cupom até a data de início */

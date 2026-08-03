@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Cupom } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatBRLValue } from "@/lib/utils";
+import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Icon } from "@/components/icon";
 import { FavoriteButton } from "@/components/favorite-button";
 
@@ -54,7 +55,7 @@ export function CouponListItem({
         </p>
         <p className="mt-1 flex items-center gap-1.5 text-xs">
           <span className="font-bold text-foreground">
-            Economize R$ {formatBRLValue(cupom.economia)}
+            Economize {rotuloEconomia(`R$ ${formatBRLValue(cupom.economia)}`, cupom.economiaVariavel)}
           </span>
           <span aria-hidden className="text-border">
             ·

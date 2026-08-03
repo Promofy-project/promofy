@@ -31,7 +31,14 @@ export interface Cupom {
   estabelecimento: string;
   estabelecimentoId: string;
   categoria: CategoriaId;
-  economia: number; // R$ economizado
+  /** R$ economizado. Fase 6: com `economiaVariavel`, é o MÍNIMO garantido. */
+  economia: number;
+  /** Fase 6: a economia é "a partir de" — o valor real pode ser maior. */
+  economiaVariavel?: boolean;
+  /** Fase 6: taxas que NÃO entram no benefício (ids de src/lib/cupom-campos). */
+  taxas?: string[];
+  /** Fase 6: onde o cupom vale (ids de src/lib/cupom-campos). Vazio = não informado. */
+  formasConsumo?: string[];
   precoDe?: number;
   precoPor?: number;
   distanciaKm: number;

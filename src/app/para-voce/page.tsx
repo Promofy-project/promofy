@@ -272,7 +272,8 @@ export default function ParaVocePage() {
             />
           </Link>
           <Button size="lg" variant="outline" className={LP_BTN_SECONDARY} asChild>
-            <Link href="/cadastro">Cadastrar-se</Link>
+            {/* público específico (consumidor) → direto ao form que existe */}
+            <Link href="/m/cadastro">Cadastrar-se</Link>
           </Button>
         </div>
       </header>

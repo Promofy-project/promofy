@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
+import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -70,6 +71,14 @@ export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupo
     estabelecimentoId: row.estabelecimento_id,
     categoria: row.categoria_id as CategoriaId,
     economia: Number(row.economia),
+    economiaVariavel: row.economia_variavel,
+    // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
+    // As duas colunas estão no grant de UPDATE do lojista, então o
+    // PostgREST direto pode gravar qualquer array — valor desconhecido
+    // é ignorado na exibição, nunca quebra a tela (mesma doutrina de
+    // `horarios` na Fase 5).
+    taxas: sanearTaxas(row.taxas),
+    formasConsumo: sanearFormasConsumo(row.formas_consumo),
     precoDe: row.preco_de != null ? Number(row.preco_de) : undefined,
     precoPor: row.preco_por != null ? Number(row.preco_por) : undefined,
     distanciaKm: Number(row.distancia_km ?? 0),
@@ -109,7 +118,10 @@ function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
  *   (comparação por data-string YYYY-MM-DD — determinística, sem Date local;
  *   fuso de referência do agendamento é decisão da Fase 2).
  */
-export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
+export async function buscarCuponsHome(
+  limite = 6,
+  categoriaId?: string,
+): Promise<Cupom[]> {
   const supabase = createClient();
 
   // Fase 4: para o usuário logado, cupons de estabelecimentos favoritados
@@ -123,7 +135,13 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
     .select("*, estabelecimentos(nome)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
-  if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
+  // Fase 6/H5: filtro dos chips da home. Roda NO SERVIDOR (é predicado de
+  // consulta, não `.filter()` no cliente) e o id já vem saneado contra a
+  // tabela `categorias` — ver categoriaValida em src/lib/data/categorias.ts.
+  if (categoriaId) query = query.eq("categoria_id", categoriaId);
+  // com filtro, a folga do limite não vale: o corte por categoria pode
+  // deixar de fora justamente os que sobrariam
+  if (!logado && !categoriaId) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
 
   const [{ data, error }, favSet] = await Promise.all([
     query,
@@ -364,6 +382,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
         resgates: 0,
       },
     limiteTotal: row.limite_total ?? 1000, // fallback: paridade com o mock
+    limiteUsuario: row.limite_por_usuario, // Fase 6: null = ilimitado
     dataInicio: row.validade_inicio ?? undefined,
     ocultarAteInicio: row.ocultar_ate_inicio,
   }));
