@@ -31,7 +31,7 @@
 | `48064b1` | **C2/UI + C5** — editar no portal e no `/e`; migration 21 (rejeição com motivo, `reenviar_cupom_moderacao`); `Textarea`; `src/lib/moderacao.ts` |
 | `d5b501e` | **C2/DB** — corrige o registro no histórico: vale para **qualquer** status (defeito meu, achado pelo teste do ciclo — §7) |
 | `ae8d52c` | **C4** — registra o resultado do GATE do Storage no `config.toml` (§8) |
-| `EXTRA_SHA` | **EXTRA** (benefício duplicado) + `src/lib/cupom-patch.ts` + `scripts/test-fase65.ts` + `test:fase65` no `verify` + call site da Fase 3 |
+| `a21311f` | **EXTRA** (benefício duplicado) + `src/lib/cupom-patch.ts` + `scripts/test-fase65.ts` + `test:fase65` no `verify` + call site da Fase 3 |
 
 ## 3. Critérios de aceite — como cada um foi provado
 
@@ -73,10 +73,10 @@ ficou como camada de **mensagem**: ela repassa o texto do trigger, não reimplem
 | demais | livres | — |
 
 Toda mensagem diz **quantas** ativações vivas existem e **quando a última vence** — sem isso o
-lojista fica sem saber quando poderá editar. Exemplo real da suíte:
+lojista fica sem saber quando poderá editar. Texto capturado no smoke, na tela do totem:
 
 > *"Benefício, taxas e formas de consumo não podem mudar agora: 1 cliente(s) têm este cupom
-> ativo. A última ativação vence em 03/08 20:14."*
+> ativo. A última ativação vence em 03/08 18:52."*
 
 **Materialidade** (rebaixa `ativo → pendente`): `beneficio`, `economia`, `economia_variavel`,
 `categoria_id`, `taxas`, `formas_consumo`, `horarios`, `regras`, `imagem`. `titulo` fica de fora
