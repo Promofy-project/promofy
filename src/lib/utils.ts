@@ -54,3 +54,29 @@ export function formatShortDate(iso: string): string {
     timeZone: "UTC",
   });
 }
+
+/**
+ * "DD/MM/AAAA HH:MM" em horário de Brasília — para a linha do tempo de
+ * moderação no admin (Fase 7/P4).
+ *
+ * Aqui o fuso é FIXADO em America/Sao_Paulo, não em UTC como `formatShortDate`.
+ * O motivo é outro: este carimbo é uma hora de RELÓGIO que o moderador vai
+ * comparar com "quando o lojista me ligou". Mostrá-lo em UTC seria mostrar uma
+ * hora que não aconteceu para ninguém. Fixar o fuso (em vez de deixar o local)
+ * mantém o determinismo que a nota acima exige.
+ *
+ * Só-web: usa `Intl`. Por isso vive aqui e não em `moderacao.ts`, que é puro e
+ * o app nativo reaproveita como está.
+ */
+export function formatDateTimeBRT(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
