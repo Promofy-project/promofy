@@ -90,17 +90,23 @@ env vars não estavam aplicadas ao build. Não é hipotético.
 
 ### Vercel — sem depender do OAuth
 
-O conector MCP é conveniência; o caminho estável é a CLI com token (`scripts/vercel-cli.ts`).
+O conector MCP é conveniência (e expirou duas vezes no meio de um deploy). O caminho estável é a **API
+REST** com token, em `scripts/vercel-api.ts`.
 
 ```
-npm run vercel:deployments        # lista deployments (o topo é o rollback candidate)
-npm run vercel:env                # env vars por ambiente
-npm run vercel:rollback -- <id>   # Instant Rollback
-npm run vercel -- <subcomando>    # qualquer outro
+npm run vercel:deployments                              # o topo é o rollback candidate
+npm run vercel:env                                      # NOMES por ambiente (nunca valores)
+npm run vercel:env:set -- CHAVE preview,production      # lê o valor do .env.local
+npm run vercel:rollback -- <deploymentId>
 ```
 
-Token em `VERCEL_TOKEN` no `.env.local` (gitignored). Escopo: o time **Promofy** (`promo-project`).
-**Nunca** passe o token por `--token` — argumento de processo é legível por outros processos.
+Token em `VERCEL_TOKEN` no `.env.local` (gitignored), com escopo do time **Promofy**.
+
+**Por que não a CLI da Vercel:** ela consulta `/v2/user` no arranque, e um token de escopo de time recebe
+404 ali — medido. Fazê-la funcionar exigiria um token de conta inteira, o oposto do que este projeto faz em
+todo o resto. Se um dia `vercel dev`/`logs`/`deploy` forem necessários, aí se discute um token amplo e
+temporário. O token vai no header, **nunca** em `--token`: argumento de processo é legível por outros
+processos.
 
 **Conta certa:** Supabase `bpeqpxvxgdyjjdcoycgp`, Vercel time `promo-project` / projeto `promofy` /
 `promofy-pro.vercel.app`. **Nunca** as contas "Vertexa" — é outro projeto.
