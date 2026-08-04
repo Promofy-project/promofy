@@ -117,6 +117,44 @@ async function envLs() {
   }
 }
 
+/**
+ * Remove uma env var de UM ambiente.
+ *
+ * A Vercel pode guardar a mesma chave como UM registro cobrindo varios
+ * ambientes, ou como registros separados. Remover "do preview" nao pode virar
+ * um DELETE que leva a producao junto — entao: se o registro cobre so o alvo
+ * pedido, apaga; se cobre mais, faz PATCH tirando apenas aquele alvo da lista.
+ */
+async function envRm(chave: string, alvo: string) {
+  const r = await api<{
+    envs: { id: string; key: string; target?: string[] }[];
+  }>(`/v9/projects/${PROJETO}/env`);
+
+  const registros = r.envs.filter(
+    (e) => e.key === chave && (e.target ?? []).includes(alvo),
+  );
+  if (registros.length === 0) {
+    console.log(`${chave} não está em ${alvo} — nada a fazer.`);
+    return;
+  }
+
+  for (const env of registros) {
+    const restantes = (env.target ?? []).filter((t) => t !== alvo);
+    if (restantes.length === 0) {
+      await api(`/v9/projects/${PROJETO}/env/${env.id}`, { method: "DELETE" });
+      console.log(`${chave}: registro apagado (cobria só ${alvo}).`);
+    } else {
+      await api(`/v9/projects/${PROJETO}/env/${env.id}`, {
+        method: "PATCH",
+        body: { target: restantes },
+      });
+      console.log(
+        `${chave}: registro agora cobre apenas ${restantes.join(", ")} — ${alvo} removido.`,
+      );
+    }
+  }
+}
+
 async function envSet(chave: string, alvos: string[]) {
   const valor = process.env[chave];
   if (!valor) {
@@ -164,6 +202,14 @@ const rotas: Record<string, () => Promise<void>> = {
       process.exit(1);
     }
     await envSet(chave, alvos.split(","));
+  },
+  "env:rm": async () => {
+    const [chave, alvo] = resto;
+    if (!chave || !alvo) {
+      console.error("Uso: npm run vercel:env:rm -- <CHAVE> <preview|production>");
+      process.exit(1);
+    }
+    await envRm(chave, alvo);
   },
   rollback: async () => {
     if (!resto[0]) {
