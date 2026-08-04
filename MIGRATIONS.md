@@ -258,3 +258,28 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 >
 > **Por que migration nova e não editar a 22:** a 22 já estava aplicada no QA, e `db push` não reaplica versão já
 > registrada — editar deixaria os ambientes divergentes em silêncio.
+
+## Fase 8 — Lado do estabelecimento
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 24 | `20260805120000_fase8_mural_avisos.sql` | Mural de recados: `avisos` + `avisos_destinatarios` + `avisos_lidos`, RLS, e as RPCs `marcar_aviso_lido` / `avisos_nao_lidos`. |
+
+> **Obs.:** o `/admin/avisos` existia desde a Fase 3 e era **100% mock** — dois literais em `useState`, "Enviar
+> aviso" só fazia `setAvisos(...)`, e recarregar zerava. Não havia tabela nenhuma. Esta migration é o backend que
+> a tela fingia ter.
+>
+> **Destinatários em tabela de junção, não `jsonb`.** O predicado de RLS fica `para_todos or exists(...)`,
+> indexável. O precedente da casa para "N de um lado" é junção (`estabelecimento_categorias`, Fase 4); o `jsonb`
+> sem CHECK da Fase 6 foi escolhido por outro motivo — evitar que dado sujo virasse exceção dentro de `security
+> definer` — que não se aplica quando o dado é uma FK.
+>
+> **`avisos_lidos` não recebe grant de escrita para ninguém**, nem para o dono: `lido_em` seria forjável. O único
+> caminho é a RPC `marcar_aviso_lido`, idempotente e com o mesmo predicado de visibilidade da policy de leitura —
+> marcar como lido um aviso que você não pode ler seria escrever linha para algo invisível.
+>
+> **A junção também é filtrada para o lojista.** Sem isso, a partir de um aviso `para_todos` ele descobriria quais
+> outros estabelecimentos existem e o que cada um recebe.
+>
+> `avisos_nao_lidos()` é **`security invoker`** de propósito: roda sob a RLS do chamador, que já filtra. Não
+> precisar de `definer` é uma superfície a menos.
