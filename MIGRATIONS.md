@@ -233,3 +233,28 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 >
 > **Não versionado aqui, mas parte do contrato:** o bucket também é declarado em `supabase/config.toml`, porque ele
 > **não sobrevive ao `db reset`** — o CLI o recria a partir de lá no `start`.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 23 | `20260804140000_fase7_storage_endurecimento.sql` | Fecha dois furos da 22: o `INSERT` passa a exigir a **forma do nome**, e o `DELETE` não alcança imagem de cupom já moderado. |
+
+> **Obs.:** achados da revisão de segurança do próprio C4, antes de qualquer deploy — e o primeiro invalida uma
+> afirmação escrita na 22.
+>
+> **A 22 dizia que, sem policy de UPDATE, "o único jeito de mudar o que o consumidor vê é escrever `cupons.imagem`".
+> Era falso.** Sem UPDATE fica bloqueada a *sobrescrita*, não o par **DELETE + INSERT na mesma chave**: o lojista
+> apaga o objeto e sobe outros bytes no mesmo caminho, `cupons.imagem` não muda, o trigger da 20 não dispara, e um
+> cupom **aprovado e ativo** passa a exibir conteúdo que ninguém moderou. `upsert: false` não protegia — é flag do
+> cliente, não controle de servidor. Agora o `DELETE` exige que o objeto **não** esteja referenciado por cupom fora
+> de `pendente`/`rejeitado`, via o helper `security definer` `private.imagem_de_cupom_moderado` (definer porque a
+> policy precisa enxergar cupons de qualquer dono; sob RLS o lojista só veria os seus e a checagem falharia para o
+> lado errado). Os usos legítimos continuam: órfão de insert que falhou é apagável, e a troca de imagem sobe chave
+> nova → grava em `cupons.imagem` → remodera → a chave antiga fica livre.
+>
+> **O segundo:** a forma do nome só existia em `src/lib/imagem-cupom.ts`, e a Server Action não é fronteira para
+> quem fala HTTP direto. Dava para guardar qualquer blob de 2 MiB em `<pasta>/qualquer-coisa.bin` — público, nunca
+> referenciado, invisível à moderação: hospedagem grátis sob o domínio do projeto. A regex agora vive **também** no
+> banco. Não era XSS (`allowed_mime_types` mantém a resposta em `image/*`, SVG fora), era abuso de marca.
+>
+> **Por que migration nova e não editar a 22:** a 22 já estava aplicada no QA, e `db push` não reaplica versão já
+> registrada — editar deixaria os ambientes divergentes em silêncio.

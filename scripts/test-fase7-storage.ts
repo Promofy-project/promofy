@@ -227,6 +227,58 @@ async function main(): Promise<number> {
     delOutro.error?.message ?? "o objeto sumiu — DELETE alheio passou",
   );
 
+  // ============================================================
+  console.log("\n[4b] Migration 23 — os furos que a 22 deixou abertos");
+  // ============================================================
+  // FURO 1: sem UPDATE, DELETE+INSERT na mesma chave dava o mesmo efeito —
+  // trocar os bytes de um cupom ATIVO sem passar por `cupons.imagem`, logo sem
+  // remoderação. Esta asserção teria reprovado a migration 22.
+  const imgRef = caminhoImagem("e1", hex32(0x55), "jpg");
+  await dono.storage
+    .from(BUCKET_IMAGENS)
+    .upload(imgRef, blob(), { contentType: "image/jpeg", upsert: false });
+  const ativo = (
+    await svc
+      .from("cupons")
+      .select("id, imagem")
+      .eq("estabelecimento_id", "e1")
+      .eq("status", "ativo")
+      .limit(1)
+  ).data?.[0];
+  check("há cupom ATIVO no e1 para o teste", Boolean(ativo), "seed sem cupom ativo em e1");
+  if (ativo) {
+    const original = ativo.imagem;
+    await svc.from("cupons").update({ imagem: imgRef }).eq("id", ativo.id);
+
+    const delRef = await dono.storage.from(BUCKET_IMAGENS).remove([imgRef]);
+    const aindaLa = await svc.storage.from(BUCKET_IMAGENS).list("e1");
+    check(
+      "o dono NÃO apaga imagem de cupom já moderado (fecha o DELETE+INSERT)",
+      (aindaLa.data ?? []).some((o) => imgRef.endsWith(o.name)),
+      delRef.error?.message ?? "o objeto sumiu — o furo segue aberto",
+    );
+
+    // Desreferenciada, a limpeza legítima tem de voltar a funcionar.
+    await svc.from("cupons").update({ imagem: original }).eq("id", ativo.id);
+    const delLivre = await dono.storage.from(BUCKET_IMAGENS).remove([imgRef]);
+    check(
+      "desreferenciada, volta a ser apagável (troca e limpeza seguem possíveis)",
+      !delLivre.error,
+      delLivre.error?.message,
+    );
+  }
+
+  // FURO 2: a forma do nome só era garantida pela Action, que não é fronteira
+  // para quem fala HTTP direto.
+  const upLivre = await dono.storage
+    .from(BUCKET_IMAGENS)
+    .upload("e1/qualquer-coisa.bin", blob(), { contentType: "image/jpeg", upsert: false });
+  check(
+    "nome fora do formato é recusado pelo BANCO, não só pela Action",
+    Boolean(upLivre.error),
+    upLivre.error?.message ?? "SUBIU blob arbitrário — hospedagem grátis no domínio",
+  );
+
   console.log("\n[5] Listagem — o índice não pode vazar");
   const listAnon = await anon.storage.from(BUCKET_IMAGENS).list("");
   check(
