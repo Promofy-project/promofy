@@ -27,6 +27,26 @@ export interface EntradaModeracao {
   motivo: string | null;
 }
 
+/**
+ * Rótulo humano da ação (Fase 7/P4).
+ *
+ * Espelha o `AcaoModeracao`, mas aceita `string` porque a leitura sempre
+ * aceitou: uma ação gravada por uma migration futura precisa APARECER na
+ * linha do tempo, não sumir dela. Valor desconhecido volta como veio — o
+ * moderador vê `algo_novo` em vez de um buraco.
+ */
+const ROTULOS: Record<AcaoModeracao, string> = {
+  rejeitado: "Rejeitado",
+  aprovado: "Aprovado",
+  reenviado: "Reenviado para análise",
+  editado: "Editado",
+  editado_material: "Editado (volta para análise)",
+};
+
+export function rotuloAcao(acao: string): string {
+  return ROTULOS[acao as AcaoModeracao] ?? acao;
+}
+
 /** jsonb → entradas válidas, na ordem em que o banco gravou (append-only). */
 export function historicoDeJson(valor: unknown): EntradaModeracao[] {
   if (!Array.isArray(valor)) return [];

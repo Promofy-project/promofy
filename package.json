@@ -25,8 +25,16 @@
     "test:fase6:hosted": "tsx scripts/test-fase6.ts --hosted",
     "test:fase65": "tsx scripts/test-fase65.ts",
     "test:fase65:hosted": "tsx scripts/test-fase65.ts --hosted",
+    "test:fase7": "tsx scripts/test-fase7.ts",
+    "test:fase7:hosted": "tsx scripts/test-fase7.ts --hosted",
+    "vercel:deployments": "tsx scripts/vercel-api.ts deployments",
+    "vercel:env": "tsx scripts/vercel-api.ts env",
+    "vercel:env:set": "tsx scripts/vercel-api.ts env:set",
+    "vercel:env:rm": "tsx scripts/vercel-api.ts env:rm",
+    "vercel:rollback": "tsx scripts/vercel-api.ts rollback",
     "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
-    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run build"
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run build",
+    "test:fase7:storage": "tsx scripts/test-fase7-storage.ts --qa"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",
@@ -34,6 +42,7 @@
     "@radix-ui/react-separator": "^1.1.10",
     "@radix-ui/react-slot": "^1.3.0",
     "@radix-ui/react-switch": "^1.3.1",
+    "@sentry/nextjs": "^10.69.0",
     "@supabase/ssr": "0.12.0",
     "@supabase/supabase-js": "2.110.2",
     "class-variance-authority": "^0.7.1",

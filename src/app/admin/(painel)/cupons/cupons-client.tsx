@@ -8,7 +8,8 @@ import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaId } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
 import { regrasParaExibir } from "@/lib/cupom-campos";
-import { cn, formatBRL, formatShortDate } from "@/lib/utils";
+import { rotuloAcao } from "@/lib/moderacao";
+import { cn, formatBRL, formatShortDate, formatDateTimeBRT } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -404,6 +405,44 @@ function DetalheModal({
             />
           )}
         </dl>
+
+        {/*
+          Linha do tempo da moderação (Fase 7/P4). O smoke da Fase 6.5 achou o
+          buraco: o histórico era gravado desde a migration 20 e NENHUMA tela o
+          mostrava — quem reabria um cupom reincidente decidia no escuro.
+          Só o admin vê a trilha completa; o lojista continua vendo apenas o
+          motivo vigente, via `motivoAtual`.
+        */}
+        <section className="mt-6">
+          <h3 className="text-xs uppercase tracking-wide text-muted-foreground">
+            Histórico de moderação
+          </h3>
+          {cupom.historico.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Sem registros — primeira submissão.
+            </p>
+          ) : (
+            <ol className="mt-3 space-y-3 border-l border-border pl-4">
+              {cupom.historico.map((e, i) => (
+                <li key={`${e.em}-${i}`} className="relative">
+                  <span
+                    aria-hidden
+                    className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-muted-foreground/40"
+                  />
+                  <p className="text-sm font-medium">{rotuloAcao(e.acao)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {e.porNome} · {formatDateTimeBRT(e.em)}
+                  </p>
+                  {e.motivo && (
+                    <p className="mt-1 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs">
+                      {e.motivo}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
 
         {cupom.status === "pendente" && (
           <div className="mt-6 flex gap-3">

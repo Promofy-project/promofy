@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Field } from "@/components/field";
+import { CampoImagem } from "@/components/campo-imagem";
 
 /** Alterna um id numa lista multivalorada. */
 function toggleEm(
@@ -75,6 +76,7 @@ export function NovoCupomForm({
   categorias,
   categoriaPrincipal,
   cupomInicial,
+  estabelecimentoId,
 }: {
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
@@ -84,6 +86,8 @@ export function NovoCupomForm({
    * são exibidos como leitura e NUNCA entram no payload.
    */
   cupomInicial?: CupomParaEdicao;
+  /** Fase 7/C4: pasta do bucket e validação da URL de exibição. */
+  estabelecimentoId?: string | null;
 }) {
   const router = useRouter();
   const editando = Boolean(cupomInicial);
@@ -100,6 +104,9 @@ export function NovoCupomForm({
   const [formasConsumo, setFormasConsumo] = React.useState<string[]>(
     cupomInicial?.formasConsumo ?? [],
   );
+  // `undefined` = o usuário não mexeu na imagem. Nunca vira "" sozinho: era
+  // assim que o form reduzido apagaria a foto em silêncio (Fase 6.5).
+  const [imagem, setImagem] = React.useState<string | undefined>(undefined);
   const [taxas, setTaxas] = React.useState<string[]>(cupomInicial?.taxas ?? []);
   const [validade, setValidade] = React.useState(cupomInicial?.validadeFim ?? "");
   const [limiteUsuario, setLimiteUsuario] = React.useState(
@@ -145,6 +152,8 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      // CONTRATO PARCIAL: a chave só entra quando o usuário mexeu na imagem.
+      ...(imagem !== undefined ? { imagem } : {}),
     };
 
     const r = cupomInicial
@@ -279,6 +288,17 @@ export function NovoCupomForm({
           </label>
         </div>
       </div>
+
+      {/* Fase 7/C4 — opcional. Sem estabelecimentoId (sessão sem loja
+          vinculada) o campo nem aparece: não há pasta onde subir. */}
+      {estabelecimentoId && (
+        <CampoImagem
+          valorAtual={cupomInicial?.imagem}
+          estabelecimentoId={estabelecimentoId}
+          onChange={setImagem}
+          avisarRemoderacao={cupomInicial?.status === "ativo"}
+        />
+      )}
 
       {/* Categoria: travada com 1; chips com 2+ (padrão do seletor de dias) */}
       <div className="flex flex-col gap-1.5">

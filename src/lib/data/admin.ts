@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { historicoDeJson, type EntradaModeracao } from "@/lib/moderacao";
 
 function horariosDesc(horarios: unknown): string {
   if (horarios && typeof horarios === "object" && !Array.isArray(horarios)) {
@@ -13,6 +14,17 @@ function regrasArr(regras: unknown): string[] {
   return Array.isArray(regras)
     ? regras.filter((r): r is string => typeof r === "string")
     : [];
+}
+
+/**
+ * Entrada do histórico já pronta para a tela (Fase 7/P4).
+ *
+ * `por` é uuid cru no jsonb — inútil para o moderador. A resolução acontece
+ * aqui, e não no módulo puro `moderacao.ts`, porque exige uma consulta.
+ */
+export interface EntradaHistoricoAdmin extends EntradaModeracao {
+  /** Nome do autor; senão o papel; senão "—" (autor nulo = seed/manutenção via SQL). */
+  porNome: string;
 }
 
 export interface AdminCupom {
@@ -34,6 +46,8 @@ export interface AdminCupom {
   regras: string[];
   horarios: string;
   criadoEm: string;
+  /** Trilha de moderação, cronológica. Vazia nos cupons anteriores à Fase 6.5. */
+  historico: EntradaHistoricoAdmin[];
 }
 
 /** Todos os cupons (para moderação). Só admin lê tudo (policy "admin le todos"). */
@@ -45,7 +59,32 @@ export async function buscarCuponsAdmin(): Promise<AdminCupom[]> {
     .order("criado_em", { ascending: false });
   if (error) throw new Error(`Falha ao buscar cupons (admin): ${error.message}`);
 
-  return (data ?? []).map((row) => ({
+  const linhas = data ?? [];
+
+  // Autores do histórico resolvidos em UMA consulta, não uma por entrada.
+  const historicos = new Map<string, EntradaModeracao[]>();
+  const autores = new Set<string>();
+  for (const row of linhas) {
+    const entradas = historicoDeJson(row.moderacao_historico);
+    historicos.set(row.id, entradas);
+    for (const e of entradas) if (e.por) autores.add(e.por);
+  }
+
+  const nomes = new Map<string, string>();
+  if (autores.size > 0) {
+    // Sem `throw` de propósito: histórico é informação de apoio. Se a consulta
+    // falhar, a linha do tempo aparece com "—" no autor em vez de derrubar a
+    // página inteira de moderação.
+    const { data: perfis } = await supabase
+      .from("profiles")
+      .select("id, nome, role")
+      .in("id", Array.from(autores)); // Array.from, não spread: o target do tsconfig não itera Set
+    for (const p of perfis ?? []) {
+      nomes.set(p.id, p.nome?.trim() || p.role || "—");
+    }
+  }
+
+  return linhas.map((row) => ({
     id: row.id,
     titulo: row.titulo,
     beneficio: row.beneficio,
@@ -63,6 +102,10 @@ export async function buscarCuponsAdmin(): Promise<AdminCupom[]> {
     regras: regrasArr(row.regras),
     horarios: horariosDesc(row.horarios),
     criadoEm: row.criado_em,
+    historico: (historicos.get(row.id) ?? []).map((e) => ({
+      ...e,
+      porNome: e.por ? (nomes.get(e.por) ?? "—") : "—",
+    })),
   }));
 }
 

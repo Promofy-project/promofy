@@ -19,6 +19,7 @@ import { CouponCard } from "@/components/coupon-card";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
+import { CampoImagem } from "@/components/campo-imagem";
 
 // formato canônico dos dias vive em src/lib/dias.ts (Fase 4)
 const DIAS = DIAS_SEMANA;
@@ -54,6 +55,7 @@ export function NovoCupomForm({
   categorias,
   categoriaPrincipal,
   cupomInicial,
+  estabelecimentoId,
   onSalvar,
   onCancelar,
 }: {
@@ -62,6 +64,8 @@ export function NovoCupomForm({
   categoriaPrincipal: string | null;
   /** Presente = modo EDITAR (DTO fiel à linha, ver buscarCupomParaEdicao). */
   cupomInicial?: CupomParaEdicao;
+  /** Fase 7/C4: pasta do bucket de imagens. */
+  estabelecimentoId?: string | null;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
@@ -120,6 +124,8 @@ export function NovoCupomForm({
     cupomInicial?.limiteTotal != null ? String(cupomInicial.limiteTotal) : "500",
   );
   const [salvando, setSalvando] = React.useState(false);
+  // `undefined` = intocado (CONTRATO PARCIAL da Fase 6.5).
+  const [imagem, setImagem] = React.useState<string | undefined>(undefined);
   const [erro, setErro] = React.useState<string | null>(null);
 
   const toggleDia = (d: string) =>
@@ -204,6 +210,8 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      // CONTRATO PARCIAL: só entra quando o usuário mexeu na imagem.
+      ...(imagem !== undefined ? { imagem } : {}),
     };
     // estabelecimento_id é derivado no SERVIDOR (owner_id) — nunca do form
     const r = cupomInicial
@@ -252,6 +260,16 @@ export function NovoCupomForm({
               placeholder="Ex.: 2 rodízios pelo preço de 1"
             />
           </Field>
+
+          {/* Fase 7/C4 — opcional; sem estabelecimento vinculado não há pasta. */}
+          {estabelecimentoId && (
+            <CampoImagem
+              valorAtual={cupomInicial?.imagem}
+              estabelecimentoId={estabelecimentoId}
+              onChange={setImagem}
+              avisarRemoderacao={cupomInicial?.status === "ativo"}
+            />
+          )}
 
           <Field label="Categoria">
             {categorias.length > 1 ? (
