@@ -126,20 +126,45 @@ port = 55424
 # fase nao consegue ficar verde. Intermitente, ainda por cima — um
 # `supabase start` falhou e o seguinte passou.
 #
-# Reativar exige: CLI mais novo (2.111.0 disponivel) ou storage-api com
-# healthcheck corrigido. Ver FASE-6.5-RELATORIO.md.
+# DESLIGADO — GATE DA FASE 7 REPROVADO, e agora com a causa-raiz fechada.
+#
+# A Fase 6.5 desligou apostando que um CLI mais novo traria um storage-api com
+# healthcheck corrigido. Medido em 04/08/2026: o CLI 2.111.0 puxa EXATAMENTE a
+# MESMA imagem, `public.ecr.aws/supabase/storage-api:v1.67.8`. A aposta estava
+# errada — nao e questao de esperar a proxima CLI.
+#
+# Sintoma identico ao da 6.5: healthcheck interno do container faz
+# `wget 127.0.0.1:5000/status` e leva "Connection refused"; o `supabase start`
+# aborta com LegacyHealthCheckTimeoutError e DERRUBA O STACK INTEIRO.
+#
+# Confundidor honesto: nesta rodada realtime, pg_meta e studio TAMBEM ficaram
+# unhealthy, com 20 containers de outros 3 projetos rodando na mesma maquina.
+# Contencao e real e nao foi isolada. Mas ela nao explica o item acima: a
+# imagem e a mesma, entao o caminho "esperar CLI nova" esta fechado de todo
+# jeito.
+#
+# DECISAO DA FASE 7: o Storage e validado num projeto Supabase de QA
+# descartavel; o local segue sem storage para nao quebrar o `db:reset`, que e
+# o primeiro passo do `npm run verify`.
 enabled = false
 file_size_limit = "50MiB"
 
-# Bucket das imagens de cupom (Fase 6.5/C4) — pronto para quando o Storage
-# voltar a subir. Comprovadamente criado pelo CLI a partir daqui.
-# PUBLICO com caminho nao-adivinhavel `<cupom_id>/<32 hex>.<ext>`: a leitura
-# e servida por /object/public sem RLS, e quem protege arte nao publicada e a
-# LISTAGEM ser fechada por policy de storage.objects.
-# [storage.buckets.cupom-imagens]
-# public = true
-# file_size_limit = "2MiB"
-# allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
+# Bucket das imagens de cupom (Fase 7/C4).
+# PUBLICO com caminho nao-adivinhavel `<estabelecimento_id>/<32 hex>.<ext>`: a
+# leitura e servida por /object/public SEM RLS, e quem protege arte nao
+# publicada e a LISTAGEM ser fechada por policy de storage.objects.
+#
+# A pasta e o ESTABELECIMENTO, nao o cupom (mudanca da Fase 7 em relacao ao
+# desenho da 6.5): o predicado da policy deixa de precisar de subquery em
+# `cupons` e o upload deixa de exigir que o cupom ja exista.
+#
+# ATENCAO: este bucket NAO sobrevive ao `db reset` — o CLI o recria a partir
+# daqui no `start`. As POLICIES vem da migration 22; a suite assere as duas
+# coisas, senao um bucket sem policy passaria despercebido.
+[storage.buckets.cupom-imagens]
+public = true
+file_size_limit = "2MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
