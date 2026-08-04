@@ -24,6 +24,8 @@
 | **V1–V3** Validação por identidade: migrations 26 e 27, `/e/validar` | ✅ |
 | Depoimentos fictícios do `/portal/avaliacoes` | ✅ removidos (decisão do checkpoint) |
 | Smoke na preview | ✅ sem regressão — mas ver §10: o schema lá é o da Fase 7 |
+| **Vazamento de senha na URL** (§11) — achado no smoke, corrigido nos 5 formulários | ✅ com prova sem-JS |
+| **Dashboard `/portal`** (§12) — números e depoimentos inventados | ✅ ligado ao que é real |
 | Deploy | ⛔ **não executado, por instrução** |
 
 ## 2. Entregas (por commit)
@@ -190,10 +192,10 @@ o mural exibe *"Nenhum recado por aqui"* — **iguaizinhos** ao estado vazio leg
 zerado" em vez de "não consegui carregar". É o mesmo erro que o `tem_dados` evita no eixo do *dado* e que continua
 aberto no eixo da *falha*. Backlog.
 
-## 11. Um achado de segurança fora do escopo, encontrado no smoke
+## 11. O achado mais grave do projeto — encontrado no smoke e corrigido
 
-Não é da Fase 8 — é de Fase 1–3 e está **em produção hoje**. Apareceu porque cliquei no login do admin antes de a
-página hidratar, e a navegação foi parar em:
+Não nasceu nesta fase: é de Fase 1–3 e está **em produção hoje**. Apareceu porque cliquei no login do admin antes
+de a página hidratar, e a navegação foi parar em:
 
 ```
 /admin/login?email=admin%40promofy.test&senha=promofy123
@@ -209,14 +211,76 @@ junto `cpf`, `nascimento` e `celular`.
 seguintes e — o pior — **nos logs de acesso da Vercel e de qualquer proxy no caminho**. Não exige atacante: vaza
 sozinho. No meu caso vazou só a credencial de teste que já está documentada no `CLAUDE.md`.
 
-**Correção canônica, e barata:** dar ao form um `action` de Server Action (`<form action={entrarAction}>`), que no
-Next 14 funciona **sem JavaScript** e nunca degrada para GET. `method="post"` sozinho já estanca o vazamento, mas
-não faz o login funcionar sem JS.
+**A correção:** `<form action={serverAction}>` com `src/lib/actions/auth.ts`. O Next 14 passa a emitir
+`method="POST"` de verdade — sem JavaScript o login **funciona**, e a credencial vai no corpo. `method="post"`
+sozinho estancaria o vazamento sem fazer o login funcionar; não era o pedido. A conferência de papel mudou-se
+junto para o servidor, onde deixa de ser burlável.
 
-**Não corrigi.** São cinco formulários, é pré-existente, e a instrução da fase era parar. Fica pronto para um
-"pode ir" — ou para uma fase própria, junto do resto do endurecimento de sessão.
+### A prova, com JavaScript DESABILITADO
 
-## 12. Um tropeço de ambiente
+Contra build de produção local, em contexto de navegador com `javaScriptEnabled: false`:
+
+| Caso | (a) funciona | (b) URL sem credencial |
+|---|---|---|
+| `/m/login` → `/m` · `/e/login` → `/e` · `/portal/login` → `/portal` · `/admin/login` → `/admin` | ✅ | ✅ |
+| `/m/cadastro` → `/m/onboarding` | ✅ | ✅ sem `cpf`, `nascimento` nem `celular` |
+| senha errada | mostra "E-mail ou senha incorretos." | ✅ |
+| papel errado (`/e`, `/admin`) | mostra a recusa | ✅ |
+| **recusa por papel deixa sessão?** | **não — zero cookie `sb-`**, e a sessão não sobrevive nem em `/m` nem em `/admin` | — |
+
+A última linha é o teste que a mudança torna obrigatória: `autenticar` autentica **antes** de conhecer o papel, e
+só então chama `signOut`. Vale com JS ligado e desligado.
+
+**O caminho hidratado não regrediu:** o erro aparece **sem recarregar**, os quatro redirects estão certos, o
+banner do código promocional reage, o checkbox marca pelo rótulo, zero erro de console. E o cliente do navegador
+continua enxergando a sessão criada no servidor — o cookie sai `httpOnly: false`, então o `AuthSync` não entra em
+descompasso e o logout dos dois papéis limpa tudo.
+
+**O aceite dos termos virou real.** Era o `disabled` do botão, decoração removível pelo DevTools. Agora é checkbox
+**nativo** com `required` (o navegador barra sem JS) **mais** checagem no servidor, que é a que vale.
+
+### A revisão de segurança sobre esta correção: zero achados ≥7
+
+E ela foi além do que eu tinha medido. Verificou no código do `@supabase/ssr` que a limpeza do cookie na recusa
+por papel é **estruturalmente** correta, não sorte: dentro de uma Server Action o `cookies().getAll()` lê o que
+acabou de ser escrito, então o passo `SIGNED_OUT` consegue expirar as chaves que o `signInWithPassword` criou.
+Confirmou também que um `profiles` sem linha (RLS, erro de rede) cai no ramo de recusa — **falha fechado** — e que
+`handle_new_user` só lê `role` de `raw_app_meta_data`, com whitelist, então `options.data` não alcança coluna
+privilegiada.
+
+### Uma armadilha nova, paga aqui
+
+Exportei `ESTADO_AUTH_INICIAL` — um **objeto** — do arquivo `"use server"`. O `CLAUDE.md` já avisa que todo export
+precisa ser `async`, mas registra que isso *"derruba o `next build`"*. **Não derrubou:** o build passou verde e a
+rota só explodiu na primeira requisição, com 500 e *"A 'use server' file can only export async functions, found
+object"*. O `tsc` também não vê. Por isso o estado mora em `src/lib/auth-estado.ts`.
+
+**Efeito colateral bem-vindo:** sem o client do Supabase nas telas de entrada, o First Load JS delas caiu de
+~235 kB para ~170 kB.
+
+## 12. O dashboard do portal deixa de inventar
+
+Extensão da mesma decisão que matou o "8,7". O `/portal` era **inteiramente** `mock-data`: "482 resgates",
+"9.680 visualizações", "24,6% de conversão", "avaliação média 4,8", os deltas "+12,4% vs. mês anterior", dois
+depoimentos assinados por pessoas que não existem, e o nome do estabelecimento como literal no cabeçalho.
+
+**O que ficou, ligado ao que já tinha fetcher:** KPIs e funil saem de `cupom_metricas` — view sobre
+`cupom_eventos`, `security_invoker`, então o lojista só soma eventos dos próprios cupons; NPS e últimas notas vêm
+da mesma RPC do `/e/indicadores`; os cupons são os de verdade; o nome do estabelecimento vem da sessão.
+
+**O que saiu, e por quê.** Os **deltas** precisam do período anterior, que ninguém calcula — "+12,4%" ao lado de
+um número real seria a mesma mentira em escala menor. A **série mensal** é derivável de `cupom_eventos`, mas o
+corte de mês teria de ser em BRT para casar com o `resgates_mes` que a RPC já calcula em SQL, e duas
+implementações da mesma conta divergem na borda — é o que o próprio `indicadores.ts` avisa. Virou estado honesto
+e item de backlog, não gráfico de enfeite.
+
+**Detalhe que repete o `tem_dados`:** conversão com zero visualizações mostra "—", não "0,0%". Zero de zero não é
+zero por cento; é "ainda não dá para dizer".
+
+**O mesmo dado fictício continua em três telas que não estavam no pedido** — ver backlog. Uma delas é a página de
+cupom do consumidor, e é a que mais incomoda.
+
+## 13. Um tropeço de ambiente
 
 O `verify` falhou uma vez com `error running container: exit 1` no `db:reset`, com 29 containers na máquina.
 Transitório e não de código: o stack se recuperou sozinho e a repetição passou limpa. É a contenção já registrada
@@ -264,15 +328,16 @@ cosmético "Lucas Orladi"/"9:41" · depoimentos fictícios do portal.
 
 **Próximo grande:** **taxonomia Segmento→Categoria e os filtros** — é o que resta de maior no produto.
 
-**Prioridade alta, achado do smoke (§11):** **formulários de login/cadastro sem `action`** degradam para GET e
-mandam a senha (e, no cadastro, CPF e nascimento) para a query string — logo, para os logs da Vercel. Cinco
-formulários, correção de uma linha cada.
+**Prioridade alta, e sobrou do §12:** **o mesmo dado fictício ainda vive em três telas** que não estavam no pedido.
+A pior é **`/m/cupom/[id]`**, a página de cupom **do consumidor**: um `FeedbackCarousel` cola depoimentos de
+*Mariana Alves* e *Rafael Souza* a um cupom **real**, como se fossem avaliações daquele cupom. As outras duas são o
+funil mock do **`/admin`** e os depoimentos da **landing** (esta última é peça de marketing — decisão diferente).
+Não toquei nelas porque a instrução nomeava o `/portal` e porque tirar a seção do cupom muda o que o Lucas mostra
+na demo. É uma decisão de uma linha.
 
-**Prioridade média:** **cards fictícios que sobraram no `/portal`** — o dashboard ainda traz "Avaliações recentes"
-com *Mariana Alves* e *Rafael Souza* inventados, além de "482 resgates", "9.680 visualizações" e "Avaliação média
-4,8". A decisão do checkpoint mandou limpar o `/portal/avaliacoes`, que foi limpo; o mesmo defeito vive na página
-ao lado, pelo mesmo motivo (dado real ao lado de dado inventado contamina o real) · **erro renderizado como zero**
-(§10) · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
+**Prioridade média:** **erro renderizado como zero** (§10) · **série mensal de resgates** no portal — derivável de
+`cupom_eventos`, mas precisa do corte de mês em BRT no SQL para não divergir do `resgates_mes`, então pede RPC, não
+conta em JS · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
 aceite é evento no painel) · **medir o build com o Sentry restrito ao `nodejs`** (52s → 128s na Fase 7) ·
 **retenção da auditoria de CPF** (nada apaga `private.validacao_tentativas`; ~14,4k linhas/dia/estabelecimento no
 teto, e é dado pessoal pseudonimizado — LGPD pede prazo) · relatório NPS completo no portal (mockup `NPS.png`) ·
@@ -285,6 +350,13 @@ amarelos fora dos tokens · auto-cadastro de empresa.
 
 **Pendente de decisão do cliente:** periodicidade de uso ("1 por dia") — se a resposta for essa, o switch de
 ilimitado da Fase 6 **não atende**.
+
+**Novos, levantados pela revisão de segurança do §11 (nenhum explorável hoje):** `src/lib/sentry-scrub.ts` limpa
+CPF, e-mail e código de cupom, mas **não tem padrão para senha** — hoje é inalcançável (`sendDefaultPii: false` e
+`tracesSampleRate: 0`, e o SDK não captura `FormData` de Server Action), só que a senha agora **atravessa o
+servidor Next**, o que antes não acontecia · `cadastrarAction` redireciona para `/m/onboarding` mesmo quando o
+`signUp` **não** devolve sessão, que é o que acontece com confirmação de e-mail ligada — comportamento herdado do
+código antigo, mas convém conferir a configuração de produção antes do deploy.
 
 **Novo (achado colateral, Fase 1):** `gerar_codigo_cupom` sorteia com `random()`, PRNG **não criptográfico** —
 a entropia real do código é menor que os 2⁴⁰ nominais. Não é urgente (o código também é protegido por posse e pelo
