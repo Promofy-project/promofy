@@ -306,3 +306,36 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 >
 > **Mês em BRT, não UTC:** `date_trunc('month', … at time zone 'America/Sao_Paulo')`. Em UTC o dia 1º começaria
 > às 21h do dia 30.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 26 | `20260805160000_fase8_validacao_cpf.sql` | Validação por identidade: `cpf_dv_valido`, auditoria/rate-limit, `buscar_ativacoes_por_cpf`, `validar_cupom_por_ativacao`. |
+| 27 | `20260805180000_fase8_cpf_endurecimento.sql` | Endurece a 26 com os sete achados da revisão de segurança. |
+
+> **Obs. (26):** quatro barreiras, nesta ordem — dígito verificador antes de tocar dado; rate limit contado **no
+> banco** (serverless não tem memória compartilhada, então contador em processo seria contador por instância);
+> **resposta única** para os três "não achei"; e posse.
+>
+> A **resposta única** é o centro. CPF inexistente, CPF de cliente de outro estabelecimento e CPF sem ativação
+> devolvem o **mesmo objeto**. Distinguir os três transformaria a RPC num oráculo que revela quem é cliente de
+> quem — e a suíte compara as três respostas byte a byte.
+>
+> A auditoria guarda **HMAC com pepper**, nunca o CPF: `sha256(cpf)` não anonimiza nada, porque existem ~10⁹ CPFs
+> válidos e uma tabela arco-íris de todos cabe num notebook.
+>
+> **Obs. (27) — sete achados, e o primeiro é um defeito introduzido ao corrigir outro.** A 26 deixou de devolver o
+> código da ativação (credencial ao portador de 2⁴⁰) e passou a devolver `cupons_usuario.id` — um **bigserial
+> pequeno e denso**. Só que `validar_cupom_por_ativacao` aceitava apenas esse id: sem CPF, sem rate limit, sem
+> auditoria. Um lojista percorrendo ids queimaria cupons dos **próprios clientes**, de forma **permanente** (a
+> unique `(usuario_id, cupom_id)` impede reativar), com pontos por visitas que nunca houve. Agora o confirm
+> **exige o CPF** — a posse do documento volta a ser a credencial.
+>
+> Os outros seis: **TOCTOU no rate limit** (`count` e `insert` separados pela consulta inteira em READ COMMITTED —
+> chamadas paralelas passavam juntas; corrigido com `pg_advisory_xact_lock`, e importa porque o argumento de que o
+> canal de tempo é inexplorável depende do teto valer); **pepper saía no `pg_dump`** (`supabase db dump -f
+> supabase/seed.sql` é caminho documentado e `seed.sql` é versionado — o pepper de produção iria para o git junto
+> com a tabela que ele protege; foi para o **Vault**, cuja chave vive fora do banco); **auditoria em `public`**
+> alcançável por `service_role` → movida para `private`; **o confirm ecoava o código**, desfazendo no fim a recusa
+> da busca; **bloqueado e DV-inválido não eram auditados**, então a tabela não mostrava a magnitude de um ataque;
+> **`profiles.cpf` sem índice**; e **`limit 1` sem `order by`** escolhia estabelecimento arbitrário para dono de
+> mais de um.

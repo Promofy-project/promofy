@@ -10,6 +10,8 @@ import { resolverAlvo } from "./_alvo";
 const alvo = resolverAlvo("test-fase8");
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
+import { cpfValido, completarCpfComDv } from "../src/lib/cpf";
 import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 
 const SENHA = "promofy123";
@@ -206,7 +208,159 @@ async function main(): Promise<number> {
     }
 
     check("lojista2 também recebe ok (mas com os SEUS números)", indOutro?.ok === true);
+
+    // ============================================================
+    console.log("\n[V2] CPF — dígito verificador (a barreira antes do banco)");
+    // ============================================================
+    // As duas implementações do DV (módulo puro e função do banco) precisam
+    // concordar caso a caso — senão o lojista vê "CPF inválido" na tela e o
+    // banco aceita, ou o contrário.
+    const casosDv = ["52998224725", "11111111111", "12345678900", "5299822472", "00000000000"];
+    let divergiu = 0;
+    for (const c of casosDv) {
+      const noTs = cpfValido(c);
+      const noPg = (await svc.rpc("cpf_dv_valido", { p_cpf: c })).data as boolean;
+      if (noTs !== noPg) divergiu++;
+    }
+    check("DV do módulo puro e do banco concordam em todos os casos", divergiu === 0, `${divergiu} divergência(s)`);
+    check("CPF válido conhecido passa", cpfValido("529.982.247-25"));
+    check("sequência repetida é recusada", !cpfValido("111.111.111-11"));
+
+    const dvRuim = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: "123.456.789-00" })).data as any;
+    check("CPF sem DV é barrado ANTES da consulta ('cpf_invalido')",
+      dvRuim?.motivo === "cpf_invalido", JSON.stringify(dvRuim));
+    const antesRuim = (await svc.from("validacao_tentativas").select("id", { count: "exact", head: true })).count ?? 0;
+    await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: "000.000.000-00" });
+    const depoisRuim = (await svc.from("validacao_tentativas").select("id", { count: "exact", head: true })).count ?? 0;
+    check("CPF inválido NÃO entra na auditoria (não polui a janela de rate limit)",
+      depoisRuim === antesRuim, `${antesRuim} → ${depoisRuim}`);
+
+    // ============================================================
+    console.log("\n[V2] CPF — ZERO ORÁCULO: os três 'não achei' são idênticos");
+    // ============================================================
+    // (a) CPF que não existe na base   (b) CPF de cliente de OUTRO
+    // estabelecimento   (c) CPF que existe mas sem ativação ativa aqui.
+    // Se qualquer um deles for distinguível, a RPC vira um oráculo que diz
+    // quem é cliente de quem.
+    const cpfInexistente = completarCpfComDv("999888777");
+    const rA = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfInexistente })).data as any;
+
+    // (b): a conta qa tem CPF e linhas em cupom do e1 — consultada pelo e2.
+    const cpfDoQa = (await svc.from("profiles").select("cpf").eq("id", qa!.id).single()).data?.cpf ?? "";
+    const rB = (await outro.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfDoQa })).data as any;
+
+    // (c): mesmo CPF, no estabelecimento certo, mas as linhas são 'validado'
+    // (não 'ativo') — existe cliente, não existe ativação viva.
+    const rC = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfDoQa })).data as any;
+
+    const sA = JSON.stringify(rA), sB = JSON.stringify(rB), sC = JSON.stringify(rC);
+    check("(a) CPF inexistente → sem_ativacao_aqui", rA?.motivo === "sem_ativacao_aqui", sA);
+    check("(b) CPF de cliente de OUTRO estabelecimento → resposta idêntica", sB === sA, `${sB} vs ${sA}`);
+    check("(c) CPF sem ativação ativa aqui → resposta idêntica", sC === sA, `${sC} vs ${sA}`);
+    check("os três 'não achei' são byte a byte idênticos", sA === sB && sB === sC);
+
+    // ============================================================
+    console.log("\n[V2] CPF — auditoria sem PII");
+    // ============================================================
+    const digitosQa = cpfDoQa.replace(/\D/g, "");
+    // Migration 27: a tabela saiu de `public` — nem o service_role a alcança
+    // por PostgREST, porque o schema `private` não está exposto na API.
+    const audServiceRole = await svc.from("validacao_tentativas" as never).select("*");
+    check(
+      "auditoria FORA do alcance do PostgREST, mesmo com service_role",
+      Boolean(audServiceRole.error),
+      `${(audServiceRole.data as unknown[] | null)?.length ?? 0} linhas legíveis`,
+    );
+    const lerAud = await dono.from("validacao_tentativas" as never).select("*");
+    check("lojista NÃO lê a tabela de auditoria", Boolean(lerAud.error));
+    const lerPepper = await dono.rpc("hmac_cpf" as never, { p_cpf: "1" } as never);
+    check("private.hmac_cpf não é exposta ao lojista", Boolean(lerPepper.error));
+    const lerSegredos = await svc.from("segredos" as never).select("*");
+    check("private.segredos não existe mais (pepper foi para o Vault)", Boolean(lerSegredos.error));
+
+    // ============================================================
+    console.log("\n[V1] CPF — caminho feliz e confirmação");
+    // ============================================================
+    const cupomAtivoE1 = (await svc.from("cupons").select("id").eq("estabelecimento_id", "e1").limit(1)).data?.[0];
+    const ativacao = await svc.from("cupons_usuario").insert({
+      usuario_id: qa!.id,
+      cupom_id: cupomAtivoE1!.id,
+      status: "ativo",
+      codigo: "PRMF-F8CP-FBUS",
+      ativado_em: new Date().toISOString(),
+      expira_em: new Date(Date.now() + 3600e3).toISOString(),
+    }).select("id").single();
+
+    const busca = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfDoQa })).data as any;
+    check("com ativação viva, a busca encontra", busca?.ok === true, JSON.stringify(busca)?.slice(0, 100));
+    const item = busca?.itens?.[0];
+    check("retorno traz row_id", typeof item?.row_id === "number");
+    check("retorno NÃO traz o código da ativação (credencial ao portador)",
+      !JSON.stringify(busca).includes("PRMF-F8CP-FBUS"), "o código vazou na resposta");
+    check("CPF volta MASCARADO", /^\d{3}\.\*{3}\.\*{3}-\d{2}$/.test(item?.cpf_mascarado ?? ""), item?.cpf_mascarado);
+    check("nome é só o primeiro", typeof item?.nome === "string" && !item.nome.includes(" "), item?.nome);
+
+    const semCpf = (await dono.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: "123.456.789-00" })).data as any;
+    check("confirmar com CPF que NÃO é o da ativação é recusado (row_id não basta)",
+      semCpf?.ok === false && semCpf?.motivo === "cpf_invalido", JSON.stringify(semCpf));
+    const cpfOutroValido = completarCpfComDv("111222333");
+    const cpfErrado = (await dono.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: cpfOutroValido })).data as any;
+    check("confirmar com CPF válido MAS de outra pessoa → resposta única",
+      cpfErrado?.motivo === "sem_ativacao_aqui", JSON.stringify(cpfErrado));
+
+    const confirmaAlheio = (await outro.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: cpfDoQa })).data as any;
+    check("lojista2 NÃO confirma ativação do e1 (row_id é adivinhável)",
+      confirmaAlheio?.ok === false && confirmaAlheio?.motivo === "sem_ativacao_aqui",
+      JSON.stringify(confirmaAlheio));
+
+    const confirma = (await dono.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: cpfDoQa })).data as any;
+    check("o dono confirma e a validação acontece", confirma?.ok === true, JSON.stringify(confirma)?.slice(0, 120));
+    check("o retorno da confirmação NÃO traz o código (a busca recusa; o confirm não pode desfazer)",
+      !JSON.stringify(confirma).includes("PRMF-F8CP-FBUS"), "o código voltou no confirm");
+    const reconfirma = (await dono.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: cpfDoQa })).data as any;
+    check("reconfirmar não valida de novo", reconfirma?.ok === false, JSON.stringify(reconfirma));
+
+    // ============================================================
+    console.log("\n[V2] CPF — rate limit");
+    // ============================================================
+    let bloqueou = false;
+    for (let i = 0; i < 25 && !bloqueou; i++) {
+      const r = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfInexistente })).data as any;
+      if (r?.motivo === "muitas_tentativas") bloqueou = true;
+    }
+    check("rate limit dispara dentro da janela", bloqueou, "não bloqueou em 25 tentativas");
+
+    // Sessão nova do MESMO lojista não contorna: a contagem é por
+    // estabelecimento no banco, não por sessão nem por processo.
+    const donoOutraSessao = await logar("lojista@promofy.test");
+    const rNovaSessao = (await donoOutraSessao.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfInexistente })).data as any;
+    check("sessão NOVA do mesmo lojista continua bloqueada",
+      rNovaSessao?.motivo === "muitas_tentativas", JSON.stringify(rNovaSessao));
+
+    // E o bloqueio é do lojista que abusou, não do vizinho.
+    const rVizinho = (await outro.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfInexistente })).data as any;
+    check("o bloqueio NÃO respinga em outro estabelecimento",
+      rVizinho?.motivo === "sem_ativacao_aqui", JSON.stringify(rVizinho));
+
+    // Destrava ao esvaziar a janela (simulada envelhecendo as linhas).
+    // A janela é temporal: destravar exige envelhecer as linhas. A auditoria
+    // vive em `private` e NÃO é alcançável por PostgREST (é o ponto da
+    // migration 27), então isto só se faz por psql — local. No alvo hospedado
+    // a asserção não roda, e isso fica DITO em vez de virar um verde falso.
+    if (alvo.nome === "local") {
+      const { execSync } = await import("node:child_process");
+      execSync(
+        `docker exec supabase_db_promofy psql -U postgres -c "update private.validacao_tentativas set criado_em = now() - interval '5 minutes'"`,
+        { stdio: "ignore" },
+      );
+      const rDestravou = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfInexistente })).data as any;
+      check("destrava quando a janela esvazia", rDestravou?.motivo === "sem_ativacao_aqui", JSON.stringify(rDestravou));
+    } else {
+      console.log("  ----  destrava quando a janela esvazia — NÃO EXECUTADO fora do alvo local (exige psql)");
+    }
   } finally {
+    // a auditoria vive em `private` e nao e alcancavel por PostgREST; ela e
+    // recriada a cada db:reset e nao guarda PII, entao nao ha o que limpar.
     if (criados.length) {
       await svc.from("avisos").delete().in("id", criados);
       console.log(`\n[limpeza] ${criados.length} aviso(s) removido(s)`);

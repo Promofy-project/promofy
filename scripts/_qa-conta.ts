@@ -25,6 +25,7 @@
  * dois por `usuario_id` ENQUANTO ele ainda existe, e só então o usuário.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { completarCpfComDv } from "../src/lib/cpf";
 
 /** Senha única das contas de teste (a mesma do seed-users). */
 export const SENHA_QA = "promofy123";
@@ -55,7 +56,14 @@ export function emailQa(slug: string): string {
 export function cpfQa(slug: string): string {
   let n = 7;
   for (const ch of slug) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
-  const d = String(n).padStart(11, "0").slice(-11);
+  // Fase 8/V2: os 9 primeiros dígitos seguem determinísticos por slug, mas os
+  // DOIS ÚLTIMOS passam a ser os dígitos verificadores corretos.
+  //
+  // Antes bastavam 11 dígitos quaisquer, porque o único consumidor era
+  // `mascarar_cpf` (que só exige comprimento). Com a busca por CPF validando
+  // o DV ANTES de consultar o banco, um CPF sem DV coerente tornaria o caminho
+  // feliz intestável — a suíte nunca chegaria à consulta.
+  const d = completarCpfComDv(String(n).padStart(9, "0").slice(-9));
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 

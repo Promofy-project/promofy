@@ -743,6 +743,8 @@ export type Database = {
       aprovar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       avisos_nao_lidos: { Args: never; Returns: number }
+      buscar_ativacoes_por_cpf: { Args: { p_cpf: string }; Returns: Json }
+      cpf_dv_valido: { Args: { p_cpf: string }; Returns: boolean }
       definir_status_estabelecimento: {
         Args: { p_est_id: string; p_status: string }
         Returns: Json
@@ -783,6 +785,10 @@ export type Database = {
       }
       saldo_pontos: { Args: never; Returns: number }
       validar_cupom: { Args: { p_codigo: string }; Returns: Json }
+      validar_cupom_por_ativacao: {
+        Args: { p_cpf: string; p_row_id: number }
+        Returns: Json
+      }
     }
     Enums: {
       acao_pontos: "resgate" | "nps" | "indicacao" | "visita" | "bonus"
