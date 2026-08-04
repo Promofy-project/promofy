@@ -762,6 +762,7 @@ export type Database = {
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
       hora_ou_null: { Args: { p_hora: string }; Returns: string }
+      indicadores_estabelecimento: { Args: never; Returns: Json }
       marcar_aviso_lido: { Args: { p_aviso_id: string }; Returns: Json }
       marcar_novidades_vistas: { Args: never; Returns: Json }
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }

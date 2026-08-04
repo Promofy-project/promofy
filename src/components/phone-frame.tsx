@@ -11,6 +11,7 @@ import { SideMenu } from "@/components/side-menu";
 import { CupomAtivoSheet } from "@/components/cupom-ativo-sheet";
 import { NpsDialog } from "@/components/nps-dialog";
 import { PontosPop } from "@/components/pontos-pop";
+import { RelogioStatusBar } from "@/components/relogio-status-bar";
 
 const ENTRY_ROUTES = ["/m/login", "/m/cadastro", "/m/onboarding"];
 // Abas com bottom nav (todas as outras telas de /m são telas cheias)
@@ -48,7 +49,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           {/* status bar (apenas no device desktop) */}
           <div className="hidden items-center justify-between px-7 pt-3 text-[11px] font-semibold text-foreground lg:flex">
-            <span>9:41</span>
+            <RelogioStatusBar />
             <div className="flex items-center gap-1.5">
               <Signal className="h-3.5 w-3.5" />
               <Wifi className="h-3.5 w-3.5" />

@@ -38,6 +38,7 @@ async function main(): Promise<number> {
   const outro = await logar("lojista2@promofy.test"); // e2
 
   const criados: string[] = [];
+  let qa: ContaQa | null = null;
 
   try {
     // ============================================================
@@ -139,10 +140,82 @@ async function main(): Promise<number> {
 
     const contagemAdmin = (await admin.from("avisos_lidos").select("*")).data ?? [];
     check("admin enxerga as leituras (para contar quem leu)", contagemAdmin.length >= 1, String(contagemAdmin.length));
+    // ============================================================
+    console.log("\n[M2] Indicadores — NPS do próprio estabelecimento");
+    // ============================================================
+    const indDono = (await dono.rpc("indicadores_estabelecimento")).data as any;
+    const indOutro = (await outro.rpc("indicadores_estabelecimento")).data as any;
+    check("RPC responde ok para o lojista", indDono?.ok === true, JSON.stringify(indDono)?.slice(0, 120));
+
+    // `tem_dados` existe para a UI não ter de decidir se 0 respostas são
+    // "score zero" ou "ainda sem avaliações".
+    check(
+      "zero respostas → tem_dados=false e score NULL (não score 0)",
+      indDono.respostas === 0 ? indDono.tem_dados === false && indDono.score === null : true,
+      `respostas=${indDono?.respostas} score=${indDono?.score}`,
+    );
+
+    // Fixture própria: o seed não cria `cupons_usuario` (essas linhas nascem
+    // do uso). Conta qa-* efêmera para que a suíte seja segura também com
+    // --hosted, onde tocar linha de conta do cliente é proibido.
+    qa = await criarContaQa(svc, "f8", { nome: "Fulano Sobrenome Teste" });
+    const cupomE1 = (await svc.from("cupons").select("id").eq("estabelecimento_id", "e1").limit(1)).data?.[0];
+    const notas = [10, 9, 7, 3];
+    const fixtures: number[] = [];
+    if (cupomE1 && qa) {
+      for (let i = 0; i < notas.length; i++) {
+        const ins = await svc
+          .from("cupons_usuario")
+          .insert({
+            usuario_id: qa.id,
+            cupom_id: cupomE1.id,
+            status: "validado",
+            codigo: `PRMF-F8T${i}-NPS${i}`,
+            nps: notas[i],
+            ativado_em: new Date(Date.now() - 3600e3).toISOString(),
+            validado_em: new Date(Date.now() - 1800e3 + i * 1000).toISOString(),
+          })
+          .select("id")
+          .single();
+        if (ins.data) fixtures.push(ins.data.id);
+      }
+    }
+    if (fixtures.length === notas.length) {
+      const ind2 = (await dono.rpc("indicadores_estabelecimento")).data as any;
+      check("distribuição correta (2 prom · 1 neutro · 1 detrator)",
+        ind2.promotores === 2 && ind2.neutros === 1 && ind2.detratores === 1,
+        `${ind2.promotores}/${ind2.neutros}/${ind2.detratores}`);
+      check("score = %promotores − %detratores = 25", Number(ind2.score) === 25, String(ind2.score));
+      check("tem_dados vira true", ind2.tem_dados === true);
+      check("últimas notas trazem só o PRIMEIRO nome (sem sobrenome)",
+        (ind2.ultimas ?? []).every((u: any) => typeof u.nome === "string" && !u.nome.includes(" ")),
+        JSON.stringify(ind2.ultimas)?.slice(0, 140));
+      check("últimas notas NÃO carregam id/cpf/email do consumidor",
+        !/usuario_id|cpf|email/i.test(JSON.stringify(ind2.ultimas ?? [])));
+
+      // TESTE NEGATIVO DE POSSE: o lojista2 não pode ver nada disso.
+      const ind3 = (await outro.rpc("indicadores_estabelecimento")).data as any;
+      check(
+        "lojista2 NÃO vê o NPS do e1 (números diferentes, isolados por posse)",
+        ind3.promotores !== 2 || ind3.detratores !== 1 || ind3.respostas !== 4,
+        `e2 devolveu ${ind3.promotores}/${ind3.neutros}/${ind3.detratores} em ${ind3.respostas}`,
+      );
+
+    } else {
+      check("fixture de NPS criada (4 linhas)", false, `criou ${fixtures.length}`);
+    }
+
+    check("lojista2 também recebe ok (mas com os SEUS números)", indOutro?.ok === true);
   } finally {
     if (criados.length) {
       await svc.from("avisos").delete().in("id", criados);
       console.log(`\n[limpeza] ${criados.length} aviso(s) removido(s)`);
+    }
+    // A conta qa-* leva junto as linhas de `cupons_usuario` (cascade a partir
+    // de profiles). Sem isto, uma rodada `--hosted` deixaria conta órfã.
+    if (qa) {
+      await destruirContaQa(svc, qa.id);
+      console.log("[limpeza] conta qa-f8 destruída");
     }
   }
 

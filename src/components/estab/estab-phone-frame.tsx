@@ -5,12 +5,13 @@ import { Signal, Wifi, BatteryFull } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { EstabBottomNav } from "@/components/estab/estab-bottom-nav";
+import { RelogioStatusBar } from "@/components/relogio-status-bar";
 
 // Abas com bottom nav; /e/validar, /e/cupom/novo e /e/login são telas cheias.
 // Match EXATO: uma rota fora desta lista renderiza sem bottom nav. Ao
 // acrescentar uma aba, ela TEM de entrar aqui — senão a aba some justamente
 // ao ser aberta (armadilha achada na Fase 8).
-const NAV_ROUTES = ["/e", "/e/cupons", "/e/mural", "/e/perfil"];
+const NAV_ROUTES = ["/e", "/e/cupons", "/e/mural", "/e/indicadores", "/e/perfil"];
 
 /**
  * Moldura de aparelho do app do estabelecimento — irmã do PhoneFrame do
@@ -28,7 +29,7 @@ export function EstabPhoneFrame({ children }: { children: React.ReactNode }) {
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           {/* status bar (apenas no device desktop) */}
           <div className="hidden items-center justify-between px-7 pt-3 text-[11px] font-semibold text-foreground lg:flex">
-            <span>9:41</span>
+            <RelogioStatusBar />
             <div className="flex items-center gap-1.5">
               <Signal className="h-3.5 w-3.5" />
               <Wifi className="h-3.5 w-3.5" />

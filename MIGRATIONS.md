@@ -283,3 +283,26 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 >
 > `avisos_nao_lidos()` é **`security invoker`** de propósito: roda sob a RLS do chamador, que já filtra. Não
 > precisar de `definer` é uma superfície a menos.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 25 | `20260805140000_fase8_indicadores.sql` | `indicadores_estabelecimento()`: NPS, distribuição, resgates do mês e últimas notas do estabelecimento do chamador. |
+
+> **Obs.:** o NPS é coletado desde a Fase 2 e **nunca foi agregado**. O `/portal/avaliacoes` exibia
+> *"NPS médio recebido: 8,7"* — string **hardcoded** desde a Fase 3. Esta migration é o número de verdade, e o
+> card passou a lê-la.
+>
+> **`security definer` é obrigatório aqui.** A RLS de `cupons_usuario` mostra ao consumidor as *suas* linhas; o
+> lojista não lê linha de ninguém. Sob invoker o lojista veria zero e o NPS seria sempre nulo. Como definer, o
+> filtro por posse **dentro** da função é a única barreira — daí ele vir antes de qualquer leitura.
+>
+> **O que não sai daqui:** nome completo, e-mail, CPF e `usuario_id`. As últimas notas levam só o **primeiro
+> nome** (`split_part(nome,' ',1)`). Omitir o `usuario_id` é deliberado: com ele, o lojista cruzaria notas entre
+> cupons e reconstruiria o histórico de uma pessoa.
+>
+> **`tem_dados` existe para a UI não decidir.** Zero respostas **não** é score 0 — são coisas diferentes, e
+> derivar isso na tela é exatamente como o selo "utilizado" errou na Fase 6. O servidor devolve `tem_dados: false`
+> e `score: null`, e a tela mostra "ainda sem avaliações".
+>
+> **Mês em BRT, não UTC:** `date_trunc('month', … at time zone 'America/Sao_Paulo')`. Em UTC o dia 1º começaria
+> às 21h do dia 30.
