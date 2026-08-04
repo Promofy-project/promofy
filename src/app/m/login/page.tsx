@@ -2,46 +2,31 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useFormState } from "react-dom";
 
-import { createClient } from "@/lib/supabase/client";
+import { entrarConsumidorAction } from "@/lib/actions/auth";
+import { ESTADO_AUTH_INICIAL } from "@/lib/auth-estado";
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { BotaoEnviar } from "@/components/botao-enviar";
 import { Field } from "@/components/field";
 
+/**
+ * Login do consumidor.
+ *
+ * `<form action={...}>` com Server Action, e não `onSubmit`: sem a `action` o
+ * navegador faz submit nativo em GET antes da hidratação e a senha vai parar na
+ * query string — e nos logs de acesso. Ver `src/lib/actions/auth.ts`.
+ */
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = React.useState("");
-  const [senha, setSenha] = React.useState("");
-  const [erro, setErro] = React.useState<string | null>(null);
-  const [carregando, setCarregando] = React.useState(false);
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setCarregando(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: senha,
-    });
-    if (error) {
-      setCarregando(false);
-      setErro(
-        error.message === "Invalid login credentials"
-          ? "E-mail ou senha incorretos."
-          : "Não foi possível entrar agora. Tente novamente.",
-      );
-      return;
-    }
-    router.push("/m");
-    router.refresh();
-  }
+  const [estado, formAction] = useFormState(
+    entrarConsumidorAction,
+    ESTADO_AUTH_INICIAL,
+  );
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-5">
       <form
-        onSubmit={handleLogin}
+        action={formAction}
         className="w-full max-w-[340px] rounded-[24px] bg-surface p-7 shadow-xl"
       >
         <div className="flex flex-col items-center text-center">
@@ -60,8 +45,6 @@ export default function LoginPage() {
             placeholder="seu@email.com"
             autoComplete="email"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
           />
           <Field
             label="Senha"
@@ -70,25 +53,22 @@ export default function LoginPage() {
             placeholder="••••••••"
             autoComplete="current-password"
             required
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
           />
         </div>
 
-        {erro && (
+        {estado.erro && (
           <p className="mt-4 text-center text-sm font-semibold text-danger">
-            {erro}
+            {estado.erro}
           </p>
         )}
 
-        <Button
-          type="submit"
+        <BotaoEnviar
           variant="onYellow"
           className="mt-7 w-full"
-          disabled={carregando}
+          pendente="Entrando…"
         >
-          {carregando ? "Entrando…" : "Login"}
-        </Button>
+          Login
+        </BotaoEnviar>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">
           Não tem conta?{" "}
