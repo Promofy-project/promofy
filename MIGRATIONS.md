@@ -204,3 +204,32 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 > O registro no histórico vale para **qualquer** status, não só `ativo`: um cupom rejeitado que volta à fila sem
 > registro de correção faz o moderador reabrir no escuro (corrigido em `d5b501e`, depois de o teste do ciclo falhar).
 > Trilha canônica do ciclo: `rejeitado, editado_material, reenviado, aprovado`.
+
+## Fase 7 — Storage
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 22 | `20260804120000_fase7_storage_cupom_imagens.sql` | Bucket `cupom-imagens` (público, 2 MiB, jpeg/png/webp) + policies dono-only em `storage.objects` para **SELECT, INSERT e DELETE**. |
+
+> **Obs.:** três decisões que precisam sobreviver a esta migration.
+>
+> **(a) Não existe policy de UPDATE, e é deliberado.** Com UPDATE liberado o lojista sobrescreveria os *bytes* do
+> caminho que um cupom **ativo** referencia; `cupons.imagem` não mudaria, o trigger da migration 20 não dispararia,
+> e a imagem que o consumidor vê num cupom aprovado trocaria **sem remoderação**. Com UPDATE negado por ausência de
+> policy (RLS nega por padrão) + `upsert: false` + nome aleatório novo a cada upload, o único caminho para mudar o
+> que o consumidor vê passa por `cupons.imagem` — que é material e rebaixa `ativo → pendente`.
+>
+> **(b) A pasta é o ESTABELECIMENTO, não o cupom.** Muda o desenho da 6.5: dispensa a subquery em `cupons` no
+> predicado e permite subir a imagem **antes** do insert, evitando um `editado_material` espúrio em todo cupom novo
+> com foto.
+>
+> **(c) O `SELECT` não fica aberto.** Em bucket público a leitura vai por `/object/public` **sem RLS**; a policy de
+> SELECT governa a **listagem**. Liberá-la publicaria o índice para quem tem a `ANON_KEY` (que está no bundle).
+>
+> ⚠️ **A migration nasce guardada** por `if exists (schema storage)`: o `[storage]` local está desligado pelo gate
+> (o CLI 2.111.0 ainda puxa o `storage-api:v1.67.8` quebrado), e sem a guarda o `db:reset` abortaria. Quem garante
+> que isso não vira buraco silencioso é a suíte `test:fase7:storage`, que roda contra o projeto de QA e assere
+> bucket **e** comportamento das policies.
+>
+> **Não versionado aqui, mas parte do contrato:** o bucket também é declarado em `supabase/config.toml`, porque ele
+> **não sobrevive ao `db reset`** — o CLI o recria a partir de lá no `start`.

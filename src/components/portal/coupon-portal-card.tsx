@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { FunnelChart } from "@/components/funnel-chart";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
 const STATUS_BADGE = {
   ativo: { variant: "success" as const, label: "Ativo" },
@@ -32,6 +33,11 @@ export function CouponPortalCard({
 }) {
   const { cupom, statusPortal, metricas } = item;
   const categoria = getCategoria(cupom.categoria);
+  const imagemUrl = urlPublicaImagem(
+    cupom.imagem,
+    cupom.estabelecimentoId,
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  );
   const badge = STATUS_BADGE[statusPortal];
   const conversao = metricas.visualizacoes
     ? Math.round((metricas.resgates / metricas.visualizacoes) * 100)
@@ -47,12 +53,23 @@ export function CouponPortalCard({
   return (
     <Card className={cn("p-5", statusPortal !== "ativo" && "opacity-90")}>
       <div className="flex items-start gap-3">
-        <div
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
-          style={{ background: categoria.gradiente }}
-        >
-          <Icon name={categoria.icon} className="h-6 w-6 text-white" />
-        </div>
+        {/* Miniatura: imagem real quando houver (Fase 7/C4), senão o gradiente
+            da categoria — o mesmo fallback dos outros pontos de exibição. */}
+        {imagemUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imagemUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-xl object-cover"
+          />
+        ) : (
+          <div
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
+            style={{ background: categoria.gradiente }}
+          >
+            <Icon name={categoria.icon} className="h-6 w-6 text-white" />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className="truncate text-base font-bold leading-tight">

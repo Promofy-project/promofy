@@ -25,11 +25,14 @@ import {
 export function CuponsClient({
   initialLista,
   estabelecimentoNome,
+  estabelecimentoId,
   categorias,
   categoriaPrincipal,
 }: {
   initialLista: ItemCupomPortal[];
   estabelecimentoNome: string;
+  /** Fase 7/C4: pasta do bucket de imagens. */
+  estabelecimentoId: string | null;
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
 }) {
@@ -195,6 +198,7 @@ export function CuponsClient({
           // os useState só leem `cupomInicial` na montagem.
           key={emEdicao?.id ?? "novo"}
           estabelecimentoNome={estabelecimentoNome}
+          estabelecimentoId={estabelecimentoId}
           categorias={categorias}
           categoriaPrincipal={categoriaPrincipal}
           cupomInicial={emEdicao ?? undefined}

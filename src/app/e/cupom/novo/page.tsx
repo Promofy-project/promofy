@@ -20,6 +20,7 @@ export default async function NovoCupomPage() {
 
   let categorias: CategoriaEstab[] = [];
   let categoriaPrincipal: string | null = null;
+  let estabelecimentoId: string | null = null;
   if (uid) {
     const { data: est } = await supabase
       .from("estabelecimentos")
@@ -28,6 +29,7 @@ export default async function NovoCupomPage() {
       .maybeSingle();
     if (est) {
       categoriaPrincipal = est.categoria_id;
+      estabelecimentoId = est.id;
       categorias = await buscarCategoriasEstab(est.id, est.categoria_id);
     }
   }
@@ -45,7 +47,11 @@ export default async function NovoCupomPage() {
         <h1 className="text-xl font-extrabold">Novo cupom</h1>
       </header>
 
-      <NovoCupomForm categorias={categorias} categoriaPrincipal={categoriaPrincipal} />
+      <NovoCupomForm
+        categorias={categorias}
+        categoriaPrincipal={categoriaPrincipal}
+        estabelecimentoId={estabelecimentoId}
+      />
     </div>
   );
 }

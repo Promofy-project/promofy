@@ -26,6 +26,7 @@ import { FeedbackCarousel } from "@/components/feedback-carousel";
 import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
 import { FavoriteButton } from "@/components/favorite-button";
 import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
 // O /m inteiro já é dinâmico (o layout lê cookies); o detalhe deixa de
 // ser SSG do mock para poder cair no banco quando o id não está no mock
@@ -91,7 +92,15 @@ export default async function CupomDetalhe({
       </header>
 
       {/* Galeria */}
-      <CouponGallery gradiente={categoria.gradiente} iconName={categoria.icon} />
+      <CouponGallery
+        gradiente={categoria.gradiente}
+        iconName={categoria.icon}
+        imagemUrl={urlPublicaImagem(
+          cupom.imagem,
+          cupom.estabelecimentoId,
+          process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        )}
+      />
 
       <div className="flex flex-col gap-6 px-4 pb-28">
         {/* Título + utilizar */}

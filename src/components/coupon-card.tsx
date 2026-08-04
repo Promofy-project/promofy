@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { StarRating } from "@/components/star-rating";
 import { FavoriteButton } from "@/components/favorite-button";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
 export function CouponCard({
   cupom,
@@ -41,6 +42,11 @@ export function CouponCard({
   className?: string;
 }) {
   const categoria = getCategoria(cupom.categoria);
+  const imagemUrl = urlPublicaImagem(
+    cupom.imagem,
+    cupom.estabelecimentoId,
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  );
   const indisponivel = cupom.status === "indisponivel";
   const linkable = Boolean(href) && !indisponivel && !showcase;
 
@@ -60,17 +66,30 @@ export function CouponCard({
         />
       )}
 
-      {/* Thumbnail */}
+      {/* Thumbnail — imagem real quando houver (Fase 7/C4); senão o gradiente
+          da categoria, que era o comportamento incondicional até aqui. */}
       <div className="relative h-36 w-full overflow-hidden">
-        <div
-          className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
-          style={{ background: categoria.gradiente }}
-        />
-        <div className="bg-dots absolute inset-0 opacity-40" />
-        <Icon
-          name={categoria.icon}
-          className="absolute -bottom-3 -right-2 h-28 w-28 text-white/25"
-        />
+        {imagemUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- next/image não é
+          // usado em lugar nenhum do repo e exigiria remotePatterns.
+          <img
+            src={imagemUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <>
+            <div
+              className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
+              style={{ background: categoria.gradiente }}
+            />
+            <div className="bg-dots absolute inset-0 opacity-40" />
+            <Icon
+              name={categoria.icon}
+              className="absolute -bottom-3 -right-2 h-28 w-28 text-white/25"
+            />
+          </>
+        )}
 
         {cupom.destaque && (
           <Badge variant="yellow" className="absolute left-3 top-3 z-[2] shadow-sm">

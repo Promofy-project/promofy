@@ -16,6 +16,12 @@ import {
 } from "@/lib/cupom-campos";
 import { montarPatchCupom, type CamposEdicaoCupom } from "@/lib/cupom-patch";
 import { economiaDeJson, type EconomiaDTO } from "@/lib/economia";
+import {
+  BUCKET_IMAGENS,
+  PATH_IMAGEM_RE,
+  caminhoImagem,
+  validarBytesImagem,
+} from "@/lib/imagem-cupom";
 import type { Database } from "@/lib/supabase/database.types";
 
 // DTOs serializáveis devolvidos ao cliente. Nenhuma action lança:
@@ -187,6 +193,8 @@ export async function validarCupomAction(codigo: string): Promise<ValidarResult>
 }
 
 export interface NovoCupomInput {
+  /** Caminho devolvido por `uploadImagemCupomAction`. Ausente = sem imagem. */
+  imagem?: string;
   titulo: string;
   beneficio: string;
   categoria: string;
@@ -250,6 +258,17 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       .eq("owner_id", uid)
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
+
+    // Fase 7/C4 — o caminho da imagem vem do cliente, então é REVALIDADO aqui:
+    // ele só pode apontar para a pasta do próprio estabelecimento. É defesa em
+    // profundidade (a barreira dura é `urlPublicaImagem` na renderização, já
+    // que `imagem` está no grant por coluna do lojista), mas fechar aqui evita
+    // gravar lixo que depois só apareceria como fallback silencioso.
+    if (input.imagem !== undefined && input.imagem !== "") {
+      if (!PATH_IMAGEM_RE.test(input.imagem) || !input.imagem.startsWith(`${est.id}/`)) {
+        return { ok: false, erro: "Imagem inválida." };
+      }
+    }
 
     // Fase 4: a categoria escolhida DEVE pertencer ao conjunto do
     // estabelecimento (junção). Ausente → principal. Fora do conjunto →
@@ -322,7 +341,11 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       // O trigger `forcar_status_pendente` (migration 19) garante isto
       // mesmo se alguém chamar o PostgREST direto; aqui é explícito.
       status: "pendente",
-      imagem: "", // upload de imagem fica p/ fase futura (storage desligado)
+      // Fase 7/C4: o upload acontece ANTES do insert (a policy do bucket exige
+      // posse do ESTABELECIMENTO, não do cupom), então o caminho já chega aqui
+      // e entra no mesmo INSERT — sem PATCH depois, sem `editado_material`
+      // espúrio num cupom recém-criado.
+      imagem: input.imagem ?? "",
     };
 
     const { data: row, error } = await supabase
@@ -509,5 +532,100 @@ export async function editarCupomAction(
     return { ok: true, item };
   } catch {
     return { ok: false, erro: "Não foi possível salvar as alterações." };
+  }
+}
+
+/**
+ * Sobe a imagem do cupom e devolve o CAMINHO gravável em `cupons.imagem`
+ * (Fase 7/C4).
+ *
+ * ÚNICA action do projeto que recebe `FormData`. Todas as outras recebem
+ * objeto JS plano — e a exceção é justificada: é o único payload binário, e
+ * `FormData` é o que o React serializa nativamente para `File`. Documentado
+ * aqui para não virar precedente acidental.
+ *
+ * A ordem das checagens é deliberada:
+ *   sessão → estabelecimento → TAMANHO → bytes → tipo → upload
+ * O tamanho é checado antes de ler o conteúdo: recusar um arquivo de 50 MB não
+ * pode custar 50 MB de leitura.
+ *
+ * O `contentType` enviado ao Storage vem do tipo DETECTADO, nunca do que o
+ * cliente declarou — senão daria para armazenar `text/html` sob um domínio
+ * confiável. O `allowed_mime_types` do bucket é a segunda barreira.
+ *
+ * `upsert: false` + nome aleatório novo a cada upload: nunca se sobrescreve um
+ * objeto. É o par da ausência de policy de UPDATE na migration 22 — juntos,
+ * garantem que a imagem de um cupom ativo não muda sem passar por
+ * `cupons.imagem`, que dispara o trigger e manda o cupom para nova análise.
+ */
+export async function uploadImagemCupomAction(
+  formData: FormData,
+): Promise<{ ok: true; caminho: string } | { ok: false; erro: string }> {
+  try {
+    const arquivo = formData.get("arquivo");
+    if (!(arquivo instanceof File)) return { ok: false, erro: "Nenhum arquivo enviado." };
+
+    const supabase = createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false, erro: "Sessão expirada. Entre novamente." };
+
+    const { data: est } = await supabase
+      .from("estabelecimentos")
+      .select("id")
+      .eq("owner_id", uid)
+      .maybeSingle();
+    if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
+
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const v = validarBytesImagem(bytes);
+    if (!v.ok) {
+      const msg = {
+        vazio: "Arquivo vazio.",
+        muito_grande: "A imagem passa de 2 MB. Reduza e tente de novo.",
+        tipo_invalido: "Formato não aceito. Use JPG, PNG ou WebP.",
+      }[v.motivo];
+      return { ok: false, erro: msg };
+    }
+
+    const { randomBytes } = await import("node:crypto");
+    const caminho = caminhoImagem(est.id, randomBytes(16).toString("hex"), v.tipo.ext);
+
+    const { error } = await supabase.storage
+      .from(BUCKET_IMAGENS)
+      .upload(caminho, bytes, { contentType: v.tipo.mime, upsert: false });
+    if (error) return { ok: false, erro: "Não foi possível enviar a imagem." };
+
+    return { ok: true, caminho };
+  } catch {
+    return { ok: false, erro: "Não foi possível enviar a imagem." };
+  }
+}
+
+/**
+ * Apaga um objeto do bucket. Usado para (a) limpar o arquivo recém-subido
+ * quando o insert do cupom falha depois dele, e (b) descartar a imagem
+ * substituída. A policy de DELETE já garante que só o dono apaga; a checagem
+ * de prefixo aqui evita gastar a viagem quando o caminho nem é do chamador.
+ */
+export async function apagarImagemCupomAction(
+  caminho: string,
+): Promise<{ ok: boolean }> {
+  try {
+    if (!PATH_IMAGEM_RE.test(caminho)) return { ok: false };
+    const supabase = createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false };
+    const { data: est } = await supabase
+      .from("estabelecimentos")
+      .select("id")
+      .eq("owner_id", uid)
+      .maybeSingle();
+    if (!est || !caminho.startsWith(`${est.id}/`)) return { ok: false };
+    const { error } = await supabase.storage.from(BUCKET_IMAGENS).remove([caminho]);
+    return { ok: !error };
+  } catch {
+    return { ok: false };
   }
 }

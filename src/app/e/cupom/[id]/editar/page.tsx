@@ -58,6 +58,7 @@ export default async function EditarCupomPage({
         categorias={categorias}
         categoriaPrincipal={est.categoria_id}
         cupomInicial={cupom}
+        estabelecimentoId={est.id}
       />
     </div>
   );

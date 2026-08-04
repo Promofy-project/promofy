@@ -17,6 +17,7 @@ export default async function PortalCupons() {
     <CuponsClient
       initialLista={itens}
       estabelecimentoNome={estabelecimento?.nome ?? "Seu estabelecimento"}
+      estabelecimentoId={estabelecimento?.id ?? null}
       categorias={categorias}
       categoriaPrincipal={estabelecimento?.categoriaId ?? null}
     />
