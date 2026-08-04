@@ -84,6 +84,33 @@ npm run vercel:env
 A Fase 3 teve um deploy servindo 500 em todas as rotas do matcher (`MIDDLEWARE_INVOCATION_FAILED`) porque as
 env vars não estavam aplicadas ao build. Não é hipotético.
 
+### A `service_role` NUNCA é provisionada em plataforma de build
+
+Regra, não preferência. A Fase 7 encontrou `SUPABASE_SERVICE_ROLE_KEY` provisionada na Vercel em **Production
+e Preview**, sem que nenhum arquivo de `src/` a lesse — só `scripts/`, que rodam no Node local. Enquanto
+esteve lá, qualquer build (inclusive de uma branch qualquer, que ninguém revisou) tinha em mãos uma chave que
+**ignora toda a RLS do banco de produção**. Removida das duas.
+
+O retorno dela só se justifica como **decisão documentada, com motivo escrito aqui** — e mesmo assim nunca em
+Preview, que compartilha o banco de produção.
+
+Antes de provisionar qualquer segredo novo, o teste é: *algum caminho de **build** lê isto?* Grep no repo
+inteiro, não só em `src/` — inclui `next.config.mjs`, `instrumentation*`, e os hooks `prebuild`/`postinstall`
+do `package.json`.
+
+**Remover env var não afeta o que já está no ar.** Medido: a env entra no *build*, não no runtime publicado —
+depois da remoção, o mesmo deployment seguiu servido, com o alias intocado e todas as rotas em 200. O efeito
+só aparece no **próximo** build.
+
+### Previews estão atrás de Vercel Authentication
+
+`ssoProtection: all_except_custom_domains` — toda URL de deployment exige SSO, exceto os domínios custom
+(por isso `promofy-pro.vercel.app` abre e a preview não). Para o smoke automatizado existe o
+**Protection Bypass for Automation**: `VERCEL_AUTOMATION_BYPASS_SECRET` no `.env.local`, usado como
+`?x-vercel-protection-bypass=<segredo>&x-vercel-set-bypass-cookie=true` na primeira navegação — daí em diante
+a sessão segue por cookie. **Não desligue a proteção SSO das previews:** elas falam com o banco de produção,
+e deixá-las públicas exporia dados reais do cliente a quem descobrisse a URL.
+
 ---
 
 ## 3. Ferramentas
