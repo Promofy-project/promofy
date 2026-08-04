@@ -1,5 +1,5 @@
 # FASE 7 — Relatório de Implementação (processo, observabilidade e Storage)
-*Branch: `fase-7-processo-storage` (a partir da `main`) · Data: 03–04/08/2026 · Status: **concluída e verificada; NÃO está no ar***
+*Branch: `fase-7-processo-storage` → `main` · Data: 03–04/08/2026 · Status: **NO AR** (main `34c719f`, migrations 1–23 em produção)*
 
 > A Fase 7 nasceu de três lacunas que o deploy da 6.5 expôs — todas de **processo**, não de produto: não havia
 > memória das migrations, o smoke acontecia em produção, e o acesso à Vercel dependia de um OAuth que expirava no
@@ -9,7 +9,8 @@
 > com a causa-raiz fechada, e a **revisão de segurança achou um furo no desenho que eu mesmo tinha aprovado** —
 > incluindo uma afirmação falsa que escrevi numa mensagem de commit.
 >
-> Nada foi aplicado no ambiente do cliente. As migrations 22 e 23 existem apenas no QA descartável.
+> **Atualização:** a fase FOI ao ar. Migrations 22–23 aplicadas em produção e `main` deployada (§13). O que
+> ficou aberto é a observabilidade — instalada e **não verificada** (§14).
 
 ## 1. Escopo entregue e escopo adiado
 
@@ -19,8 +20,8 @@
 | **P2** Fluxo de preview + `CLAUDE.md` (não existia) | ✅ |
 | **P3** Vercel sem OAuth | ✅ — **pela API REST, não pela CLI** (§5) |
 | **P4** Histórico de moderação no admin | ✅ |
-| **P5** Sentry com scrubbing | ✅ |
-| **C4** Upload de imagem (estreia do Storage) | ✅ **no QA** — o bucket de produção nunca foi tocado |
+| **P5** Sentry com scrubbing | ⚠️ **instalado, NÃO verificado** — nenhum evento visto chegando (§14) |
+| **C4** Upload de imagem (estreia do Storage) | ✅ **provado no QA e em produção** (upload real no smoke, §13) |
 | Remoção da `service_role` da Vercel | ✅ (fora do escopo original; §6) |
 | Storage **local** | ⏸ segue desligado — gate reprovado com causa-raiz (§4) |
 
@@ -46,7 +47,7 @@
 | 2 | Fluxo de preview documentado e env confirmada | `npm run vercel:env` → Preview tem as duas `NEXT_PUBLIC_*` |
 | 3 | Deployments listados sem OAuth | `npm run vercel:deployments`, exit 0 — na sessão em que o conector MCP expirou de novo |
 | 4 | Histórico visível no admin | Trilha de 6 entradas renderizada, autor resolvido, hora em BRT |
-| 5 | Sentry capturando | SDK ativo na preview; scrubbing com 12 asserções |
+| 5 | Sentry capturando | ❌ **NÃO atingido.** Scrubbing provado por 12 asserções de unidade, mas zero evento no painel (§14) |
 | 6 | Upload dono-only por teste negativo **direto** | `lojista2` negado em subir/apagar/listar na pasta do `e1` |
 | 7 | Validações server-side provadas | magic bytes por tipo, WebP falso, SVG, 2 MiB+1 |
 | 8 | Imagem na folha com fallback | 3 pontos condicionais; `onError` na galeria |
@@ -191,7 +192,7 @@ O segredo original apareceu uma vez numa URL do log de trabalho e foi **revogado
 |---|---|---|
 | local | 1–23 (22 e 23 passam em branco pela guarda) | desligado |
 | **QA** (`olyjfluaioafuizbnrpl`) | 1–23 aplicadas | bucket + policies ativos |
-| **produção** (`bpeqpxvxgdyjjdcoycgp`) | **1–21 — intocada** | sem bucket |
+| **produção** (`bpeqpxvxgdyjjdcoycgp`) | **1–23 aplicadas** | bucket + policies ativos, **0 objetos** |
 
 ## 12. IMPACTO NA MIGRAÇÃO NATIVA
 
@@ -214,20 +215,97 @@ não.* `formatDateTimeBRT` ficou em `utils.ts` justamente por usar `Intl`.
 `dentroDaJanela` e em `formatDateTimeBRT`. Conferir `wc -l` de `database.types.ts` depois de `db:types`. E o novo:
 o RN precisará do equivalente ao `bodySizeLimit` — o limite de corpo do transporte é problema de cada plataforma.
 
-## 13. Deploy — o que precisa acontecer, na ordem
+## 13. Deploy — EXECUTADO
 
-**Não executado. Decisão à parte, como combinado.**
+Coreografia manual, com OK explícito por passo.
 
-1. Rollback armado: anotar o `dpl_` de produção (`npm run vercel:deployments`).
-2. **Banco antes do código:** `db push --linked` das migrations 22 e 23 em produção. A janela é segura: as duas são
-   aditivas e o código antigo não conhece o bucket.
-3. Merge `--no-ff` → push → build READY.
-4. Smoke de produção com `convidado@`, incluindo **um upload real** — o único passo que nem QA nem preview cobrem.
+| Passo | Resultado |
+|---|---|
+| **0** Gates de leitura | migrations 1–21 · bucket/objetos/policies em produção: **0, 0, 0** (zero colisão) · `to_regclass('storage.buckets')` **existe** (é cloud), logo o caminho real da migration roda · contas no baseline |
+| **1** Migrations 22–23 | `db push --linked`, dry-run antes. **23 = 23** nos dois lados, dry-run posterior vazio, NOTICEs confirmando o caminho real. Contagens e contas **idênticas** ao baseline; os 12 caminhos mortos do seed intactos |
+| **2** Merge e build | rollback armado (`dpl_VVV18XG…`, a3a4d3d) → merge `--no-ff` → `106d3bb` → build **READY em 128s** |
+| **2b** Fix do Sentry | `34c719f` direto na main (correção de convenção de 1 arquivo), build READY |
+| **3** Smoke | abaixo |
 
-## 14. Backlog
+**Achado do Passo 0 que evitou um susto no smoke:** 12 cupons têm `imagem` não-vazia em produção — os caminhos
+mortos do seed (`/img/cupons/c01.jpg` …). Nenhum casa com o formato novo, então caem no fallback do gradiente:
+**zero mudança visual** para o cliente.
+
+**Correção de uma premissa da coreografia:** esperava-se que, na janela banco-antes-código, o código antigo usasse
+o valor antigo como `src` e pudesse exibir imagem quebrada. Ele **não usa** — a folha da 6.5 tem **0 tags `<img>`**
+e o gradiente é incondicional. A janela era mais segura do que o previsto.
+
+### Smoke em produção — placar real
+
+| Item | Resultado |
+|---|---|
+| **(a)** Upload real | ✅ objeto `e1/9d10…f1.png`, extensão e `contentType` vindos dos **magic bytes**, 10.978 bytes exatos · cupom `ativo` → **`pendente`** (remoderou) · admin aprovou · `<img>` na folha `/m` · leitura pública 200 `image/png` |
+| **(b)** Negativos diretos | ✅ **10/10** — >2 MiB barrado pelo bucket · `lojista2` barrado em subir/apagar/listar no `e1` · dono não sobrescreve (sem UPDATE) · nome fora do formato barrado pelo banco · HTML com Content-Type mentido é servido como `image/*`, nunca executável |
+| **(c)** Barreira da M23 | ✅ DELETE bloqueado em imagem de cupom moderado; desreferenciada, volta a ser apagável |
+| **(d)** Fallback | ✅ cupons de caminho morto renderizam **0 `<img>`** |
+| **(d)** Sentry | ❌ **falhou — ver §14** |
+| **(e)** Regressão | ✅ **14/14** — fluxo principal (+80 pts), `fora_da_janela` no c01, ilimitado, `inclui_variavel`, P0601, `motivo_obrigatorio`, lojista2 barrado |
+| **(f)** Estado final | `consumidor@` **1410/3 — intocado** · `convidado@` 1560/10 → **1640/11** (rastro autorizado) · bucket **vazio** |
+
+**Limpeza:** a imagem de teste foi removida da vitrine (`imagem=''` + objeto apagado). Como a remoção veio por
+`service_role`, o trigger passou reto e o cupom **não** foi rebaixado — pela UI do lojista ele teria sumido do ar
+até nova aprovação, o oposto do desejado. Detalhe que quase virou reporte errado: o `DELETE` devolveu sucesso mas
+a leitura pública seguiu 200 — era **cache**; com cache-buster dá 400 e `storage.objects` tem 0 linhas.
+
+## 14. DÍVIDA TÉCNICA — observabilidade instalada, NÃO verificada
+
+**Este é o status honesto do P5.** O Sentry foi instalado, configurado e tem scrubbing provado por 12 asserções de
+unidade — mas **nenhum evento foi jamais visto chegando**, nem do cliente nem do servidor.
+
+### O que foi medido em produção
+
+| | |
+|---|---|
+| SDK carregado | ✅ `window.__SENTRY__` com carrier v10.69.0 (`stack`, `globalScope`) |
+| DSN no bundle do cliente | ✅ presente |
+| Erro não-capturado → envio ao ingest | ❌ **zero** |
+
+A primeira causa foi encontrada e corrigida: eu havia usado `src/instrumentation-client.ts`, que é convenção do
+**Next 15.3+** — este projeto é o **14.2.35**, e nada executa esse arquivo. O rename para `sentry.client.config.ts`
+(commit `34c719f`) fez o SDK **ser ligado** (o build passou a emitir a deprecation warning, que antes não existia),
+mas o envio continuou zerado.
+
+### As duas hipóteses restantes
+
+1. **Principal — `enabled: false` no bundle do cliente.** `NEXT_PUBLIC_SENTRY_DSN` é lida em
+   `src/lib/sentry-opcoes.ts`, um **módulo separado**. O Next só substitui a expressão quando ela aparece
+   **literalmente**; num módulo com `?? ""` no meio, o valor pode virar string vazia no bundle do cliente →
+   `enabled: Boolean("")` → `false`. Isso explica exatamente o sintoma: SDK inicializado, escopo montado, zero envio.
+2. **Alternativa — o transporte contorna o interceptador.** O SDK guarda referência nativa ao `fetch` no init
+   justamente para não se auto-instrumentar; nesse caso o envio pode estar ocorrendo e meu gancho não o ver.
+
+**As duas se decidem em 30 segundos olhando o painel do sentry.io.**
+
+### O fix canônico
+
+Referência **literal** a `process.env.NEXT_PUBLIC_SENTRY_DSN` dentro do próprio `sentry.client.config.ts`, em vez
+de importada de outro módulo.
+
+### O critério de aceite correto
+
+**Evento visível NO PAINEL do Sentry** — nunca "o interceptador viu a requisição", nunca "o arquivo existe", nunca
+"o DSN está no bundle". Foi exatamente essa confusão entre *instalado* e *funcionando* que produziu a dívida.
+
+### E o lado servidor está igualmente não-provado
+
+`src/instrumentation.ts` usa o `instrumentationHook`, que o Next 14 suporta — mas **nunca medimos um erro
+server-side chegando ao painel**. Não afirmo que funciona. Status: **instalado, não verificado**, dos dois lados.
+
+## 15. Backlog
 
 **Limpo nesta fase:** memória das migrations · fluxo de preview · Vercel sem OAuth · histórico de moderação na tela
 · observabilidade · `service_role` fora da plataforma de build.
+
+**Fase 8+ — PRIORIDADE MÉDIA:** **fechar a dívida do Sentry (§15)** — aplicar o fix canônico, e só dar por
+encerrado com evento visível no painel, cliente **e** servidor · **medir um build com o Sentry restrito ao runtime
+`nodejs`** e decidir com os dois números: o build de produção saltou de 52s (Fase 6.5, sem Sentry) para **128s**,
+e o SDK entra no caminho do edge/middleware, que roda em toda requisição do matcher. Não é prova de causa (houve
+outras mudanças no mesmo merge), mas o salto é grande o bastante para justificar a medição.
 
 **Fase 8:** redimensionamento de imagem no servidor (elimina o resíduo de polyglot) · rotina de faxina para objetos
 órfãos (cupom apagado ou estabelecimento desativado deixam arquivo público) · `revoke update (imagem)` + RPC
