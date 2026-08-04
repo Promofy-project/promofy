@@ -7,7 +7,10 @@ import { cn } from "@/lib/utils";
 import { EstabBottomNav } from "@/components/estab/estab-bottom-nav";
 
 // Abas com bottom nav; /e/validar, /e/cupom/novo e /e/login são telas cheias.
-const NAV_ROUTES = ["/e", "/e/cupons", "/e/perfil"];
+// Match EXATO: uma rota fora desta lista renderiza sem bottom nav. Ao
+// acrescentar uma aba, ela TEM de entrar aqui — senão a aba some justamente
+// ao ser aberta (armadilha achada na Fase 8).
+const NAV_ROUTES = ["/e", "/e/cupons", "/e/mural", "/e/perfil"];
 
 /**
  * Moldura de aparelho do app do estabelecimento — irmã do PhoneFrame do
