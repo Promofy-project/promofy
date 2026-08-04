@@ -4,10 +4,12 @@
 > Três promessas da call de 22/07, todas do lado do lojista, todas sem uma linha de código até aqui: ele **recebe**
 > comunicação, **vê** o próprio NPS, e **atende** quem chegou sem o celular.
 >
-> Duas coisas precisam ser lidas antes do resto. A fase começou com uma **Onda 0 não planejada** — a Fase 7 nunca
-> tinha sido fechada, e havia uma imagem de teste minha viva na vitrine do cliente. E o achado mais grave da Onda 2
+> Três coisas precisam ser lidas antes do resto. A fase começou com uma **Onda 0 não planejada** — a Fase 7 nunca
+> tinha sido fechada, e havia uma imagem de teste minha viva na vitrine do cliente. O achado mais grave da Onda 2
 > foi um **defeito que eu introduzi ao corrigir outro**: ao parar de devolver o código da ativação, troquei uma
-> credencial de 2⁴⁰ por um inteiro sequencial e deixei o caminho de confirmação sem credencial nenhuma.
+> credencial de 2⁴⁰ por um inteiro sequencial e deixei o caminho de confirmação sem credencial nenhuma. E o smoke
+> tropeçou num **vazamento de senha para a query string** (§11) que não é desta fase, é pré-existente, e **está em
+> produção agora**.
 >
 > Nada foi aplicado no ambiente do cliente. As migrations 24–27 existem apenas no local.
 
@@ -21,6 +23,8 @@
 | **E1** Cosmético do `/m` | ✅ |
 | **V1–V3** Validação por identidade: migrations 26 e 27, `/e/validar` | ✅ |
 | Depoimentos fictícios do `/portal/avaliacoes` | ✅ removidos (decisão do checkpoint) |
+| Smoke na preview | ✅ sem regressão — mas ver §10: o schema lá é o da Fase 7 |
+| Deploy | ⛔ **não executado, por instrução** |
 
 ## 2. Entregas (por commit)
 
@@ -155,13 +159,70 @@ Uma asserção **não roda fora do alvo local** e isso é dito em vez de virar v
 esvazia" exige envelhecer as linhas da auditoria, que vive em `private` e — por desenho — não é alcançável por
 PostgREST. Localmente é feito por `psql`; no hospedado a suíte imprime que não executou.
 
-## 10. Um tropeço de ambiente
+## 10. Smoke na preview — e o que ele *não* pode provar
+
+Preview `dpl_3z6X…` (commit `afb14be`), contas `convidado@`, `lojista@` e `admin@`. **Baseline de produção medido
+antes e depois, idêntico** — `consumidor@` 1410 pts / 3 ativações / 14 eventos, `convidado@` 1640 / 11 / 40. Nenhuma
+escrita: nenhum cupom validado, nenhum aviso publicado.
+
+**Leia isto antes do placar:** a preview aponta para o banco de **produção**, que tem as migrations **1–23**. Ou seja,
+ela roda **código da Fase 8 contra o schema da Fase 7**. Nenhuma funcionalidade desta fase pôde ser exercitada de
+verdade aqui — o caminho feliz de todas elas foi provado **apenas no local**, pelas 53 asserções da `test:fase8`.
+O que a preview prova é outra coisa, e vale por si: **não houve regressão**, e **o código novo não quebra sobre o
+schema velho**.
+
+| Item | Resultado |
+|---|---|
+| `/` e `/m` com `convidado@` | 200, **1.640 pontos** conferindo com o banco, **zero erros de console** |
+| E1 — relógio | marcou **19:19** real; o `9:41` sumiu e **não quebrou hidratação** (era o risco da fase) |
+| E1 — nome | menu lateral com **"Convidada Demo"**; o `Lucas Orladi` sumiu |
+| Onda 0 — vitrine | **0 imagens do bucket** na vitrine: a PNG de teste segue fora |
+| `NAV_ROUTES` | as 4 abas do `/e` aparecem **em** `/e/mural` — a armadilha prevista não se realizou |
+| `/e/mural`, `/e/indicadores`, `/e/validar` | **200, zero erros**, degradam para estado vazio sem tabela/RPC |
+| CPF — DV inválido | `Buscar` desabilitado e **0 chamadas ao servidor**: a barreira barata funciona antes do banco |
+| CPF — DV válido | busca sai, volta **"Não foi possível consultar agora"** — o erro do Postgres **não vazou** para a tela |
+| `/portal/avaliacoes` | **o "8,7" morreu**; sem depoimentos fictícios; NPS real degradando para "—" |
+| `/admin/avisos` | 200, tela real (destinatários "Todos / Escolher"), sem o mock |
+
+**Um efeito colateral que a degradação bonita esconde.** Sem a RPC, `/e/indicadores` exibe *"0 resgates neste mês"* e
+o mural exibe *"Nenhum recado por aqui"* — **iguaizinhos** ao estado vazio legítimo. Em produção isso não acontece
+(migrations vão antes), mas significa que uma falha futura de banco ou de permissão vai aparecer como "está tudo
+zerado" em vez de "não consegui carregar". É o mesmo erro que o `tem_dados` evita no eixo do *dado* e que continua
+aberto no eixo da *falha*. Backlog.
+
+## 11. Um achado de segurança fora do escopo, encontrado no smoke
+
+Não é da Fase 8 — é de Fase 1–3 e está **em produção hoje**. Apareceu porque cliquei no login do admin antes de a
+página hidratar, e a navegação foi parar em:
+
+```
+/admin/login?email=admin%40promofy.test&senha=promofy123
+```
+
+**Causa:** os formulários de login e de cadastro são `<form>` **sem `action` e sem `method`**, com a submissão
+inteiramente em `onSubmit` do React. Antes da hidratação — rede lenta, aparelho fraco, chunk que falhou — o
+navegador faz o *fallback* nativo: **GET para a própria URL com todos os campos na query string**. Verificado em
+`/m/login`, `/e/login`, `/portal/login` e `/admin/login` (campos `email`, `senha`) e em **`/m/cadastro`**, que leva
+junto `cpf`, `nascimento` e `celular`.
+
+**Por que importa:** a senha em query string entra no histórico do navegador, no `Referer` das requisições
+seguintes e — o pior — **nos logs de acesso da Vercel e de qualquer proxy no caminho**. Não exige atacante: vaza
+sozinho. No meu caso vazou só a credencial de teste que já está documentada no `CLAUDE.md`.
+
+**Correção canônica, e barata:** dar ao form um `action` de Server Action (`<form action={entrarAction}>`), que no
+Next 14 funciona **sem JavaScript** e nunca degrada para GET. `method="post"` sozinho já estanca o vazamento, mas
+não faz o login funcionar sem JS.
+
+**Não corrigi.** São cinco formulários, é pré-existente, e a instrução da fase era parar. Fica pronto para um
+"pode ir" — ou para uma fase própria, junto do resto do endurecimento de sessão.
+
+## 12. Um tropeço de ambiente
 
 O `verify` falhou uma vez com `error running container: exit 1` no `db:reset`, com 29 containers na máquina.
 Transitório e não de código: o stack se recuperou sozinho e a repetição passou limpa. É a contenção já registrada
 na memória do projeto (3 stacks Supabase simultâneos).
 
-## 11. IMPACTO NA MIGRAÇÃO NATIVA
+## 13. IMPACTO NA MIGRAÇÃO NATIVA
 
 Princípio permanente: regra no servidor, lógica pura em `src/lib` sem API de navegador, só-web isolado atrás de
 ponto trocável.
@@ -184,7 +245,7 @@ Action e as RPCs são reaproveitadas). *O gatilho migra; o arquivo não.*
 `dentroDaJanela` e em `formatDateTimeBRT`. Conferir `wc -l` de `database.types.ts` depois de `db:types`. E o novo:
 o badge do mural depende de recontagem por navegação — no RN, o equivalente é o foco da tela, não o `pathname`.
 
-## 12. Deploy — o que precisa acontecer, na ordem
+## 14. Deploy — o que precisa acontecer, na ordem
 
 **Não executado. Decisão à parte.**
 
@@ -196,14 +257,22 @@ o badge do mural depende de recontagem por navegação — no RN, o equivalente 
 4. Smoke de produção: publicar um aviso real, conferir o badge no `/e`, o NPS real, e o fluxo por CPF ponta a ponta
    com `convidado@` (cujo CPF **passa** no DV — verificado).
 
-## 13. Backlog
+## 15. Backlog
 
 **Limpo nesta fase:** mural de recados · indicadores/NPS no `/e` · NPS real no portal · validação por identidade ·
 cosmético "Lucas Orladi"/"9:41" · depoimentos fictícios do portal.
 
 **Próximo grande:** **taxonomia Segmento→Categoria e os filtros** — é o que resta de maior no produto.
 
-**Prioridade média:** **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
+**Prioridade alta, achado do smoke (§11):** **formulários de login/cadastro sem `action`** degradam para GET e
+mandam a senha (e, no cadastro, CPF e nascimento) para a query string — logo, para os logs da Vercel. Cinco
+formulários, correção de uma linha cada.
+
+**Prioridade média:** **cards fictícios que sobraram no `/portal`** — o dashboard ainda traz "Avaliações recentes"
+com *Mariana Alves* e *Rafael Souza* inventados, além de "482 resgates", "9.680 visualizações" e "Avaliação média
+4,8". A decisão do checkpoint mandou limpar o `/portal/avaliacoes`, que foi limpo; o mesmo defeito vive na página
+ao lado, pelo mesmo motivo (dado real ao lado de dado inventado contamina o real) · **erro renderizado como zero**
+(§10) · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
 aceite é evento no painel) · **medir o build com o Sentry restrito ao `nodejs`** (52s → 128s na Fase 7) ·
 **retenção da auditoria de CPF** (nada apaga `private.validacao_tentativas`; ~14,4k linhas/dia/estabelecimento no
 teto, e é dado pessoal pseudonimizado — LGPD pede prazo) · relatório NPS completo no portal (mockup `NPS.png`) ·
