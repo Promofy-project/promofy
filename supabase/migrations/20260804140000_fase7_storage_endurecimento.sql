@@ -45,9 +45,12 @@
 
 do $$
 begin
-  if not exists (
-    select 1 from information_schema.schemata where schema_name = 'storage'
-  ) then
+  -- Checa a TABELA, nao o schema: o `storage` existe VAZIO na imagem base do
+  -- Postgres local mesmo com [storage] desligado — as tabelas e que sao criadas
+  -- pelo container do storage-api. A primeira versao desta guarda olhava
+  -- information_schema.schemata, passava, e o `db:reset` quebrava com
+  -- 'relation "storage.buckets" does not exist'.
+  if to_regclass('storage.buckets') is null then
     raise notice 'Fase 7/M23: schema `storage` ausente — endurecimento nao aplicado (local sem storage).';
     return;
   end if;

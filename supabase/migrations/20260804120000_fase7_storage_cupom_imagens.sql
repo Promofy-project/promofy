@@ -5,9 +5,9 @@
 --
 -- O `[storage]` local está DESLIGADO: o gate da Fase 7 mediu que o CLI 2.111.0
 -- puxa o mesmo `storage-api:v1.67.8` cujo healthcheck derruba o stack, o que
--- quebraria o `db:reset` — primeiro passo do `npm run verify`. Sem storage, o
--- schema `storage` nem existe, e um `insert into storage.buckets` cru abortaria
--- TODA migration local. Daí o bloco só rodar quando o schema existe.
+-- quebraria o `db:reset` — primeiro passo do `npm run verify`. Sem o container
+-- do storage-api as TABELAS de `storage` não são criadas, e um
+-- `insert into storage.buckets` cru abortaria TODA migration local.
 --
 -- Isso NÃO cria um buraco silencioso: a suíte `test:fase7:storage` assere
 -- bucket E policies no projeto de QA. Se o schema existir e as policies não,
@@ -32,10 +32,14 @@
 -- moderação de imagem inteira.
 --
 -- Com UPDATE negado por ausência de policy (RLS nega por padrão) + nome
--- aleatório novo a cada upload + `upsert: false` na Action, o único jeito de
--- mudar o que o consumidor vê é escrever `cupons.imagem` — que dispara o
--- trigger e rebaixa `ativo → pendente`. DELETE fica, para limpar o arquivo
--- substituído.
+-- aleatório novo a cada upload, fica bloqueada a SOBRESCRITA. DELETE fica, para
+-- limpar o arquivo substituído.
+--
+-- ⚠️ CORRIGIDO PELA MIGRATION 23. A frase que estava aqui — "o único jeito de
+-- mudar o que o consumidor vê é escrever `cupons.imagem`" — era FALSA: cobre a
+-- sobrescrita, não o par DELETE + INSERT na mesma chave, que produz o mesmo
+-- efeito sem tocar em `cupons.imagem` e portanto sem remoderação. A 23 fecha
+-- isso exigindo que o DELETE não alcance imagem de cupom já moderado.
 --
 -- POR QUE O SELECT NÃO FICA ABERTO (achado herdado da 6.5)
 --
@@ -50,9 +54,12 @@
 
 do $$
 begin
-  if not exists (
-    select 1 from information_schema.schemata where schema_name = 'storage'
-  ) then
+  -- Checa a TABELA, nao o schema: o `storage` existe VAZIO na imagem base do
+  -- Postgres local mesmo com [storage] desligado — as tabelas e que sao criadas
+  -- pelo container do storage-api. A primeira versao desta guarda olhava
+  -- information_schema.schemata, passava, e o `db:reset` quebrava com
+  -- 'relation "storage.buckets" does not exist'.
+  if to_regclass('storage.buckets') is null then
     raise notice
       'Fase 7/C4: schema `storage` ausente — bucket e policies NAO aplicados. '
       'Esperado no ambiente local ([storage] desligado pelo gate). '
