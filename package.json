@@ -33,7 +33,8 @@
     "vercel:env:rm": "tsx scripts/vercel-api.ts env:rm",
     "vercel:rollback": "tsx scripts/vercel-api.ts rollback",
     "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
-    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run build"
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run build",
+    "test:fase7:storage": "tsx scripts/test-fase7-storage.ts --qa"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",
