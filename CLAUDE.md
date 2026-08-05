@@ -164,6 +164,8 @@ MCP `apply_migration` + `migration repair` é **plano B**.
 | `revoke` por coluna | É *no-op* quando existe grant de tabela. O padrão correto é `revoke update on table` + `grant update (colunas...)`. |
 | `process.exit()` em suíte | **Não executa blocos `finally`** — a limpeza não roda e a conta `qa-*` fica órfã. `encerrar()` devolve o código; quem chama decide. |
 | Docker local | Três stacks Supabase na mesma máquina. "studio unhealthy" costuma ser **contenção**, não defeito. |
+| Botão sem `type` dentro de `<form>` | O default do HTML é **`submit`**. Na Fase 8 isso fez o "Buscar" do painel de CPF **validar o cupom digitado ao lado**, em definitivo. O `<Button>` da casa hoje nasce `type="button"` e submeter é exceção declarada — mas `<button>` **cru** continua submit. E `type="button"` **não cobre o Enter**: campo de texto em form dispara submissão implícita; quem não deve submeter precisa de `onKeyDown` com `preventDefault()`. Há teste estático em `test-fase7`. |
+| Asserção que lê `private` por PostgREST | Volta `null`, e `null ?? 0 === 0` **passa sempre**. Um verde vazio é pior que um vermelho. Para `private`, use `psql` — e diga em voz alta quando a asserção **não** roda no alvo. |
 
 ---
 

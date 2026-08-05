@@ -1,5 +1,6 @@
 # FASE 8 — Relatório de Implementação (lado do estabelecimento)
-*Branch: `fase-8-lado-estabelecimento` (a partir da `main`) · Data: 04–05/08/2026 · Status: **concluída e verificada; NÃO está no ar***
+*Branch: `fase-8-lado-estabelecimento` → `main` · Data: 04–05/08/2026 · Status: **NO AR** (migrations 24–27 +
+merge `d0a0d80` + correção `c9cc4c6`) · Rollback candidate: `dpl_9abR6YKFhtw5hd729DvP1YRn8V92` (`56f2495`)*
 
 > Três promessas da call de 22/07, todas do lado do lojista, todas sem uma linha de código até aqui: ele **recebe**
 > comunicação, **vê** o próprio NPS, e **atende** quem chegou sem o celular.
@@ -8,10 +9,12 @@
 > tinha sido fechada, e havia uma imagem de teste minha viva na vitrine do cliente. O achado mais grave da Onda 2
 > foi um **defeito que eu introduzi ao corrigir outro**: ao parar de devolver o código da ativação, troquei uma
 > credencial de 2⁴⁰ por um inteiro sequencial e deixei o caminho de confirmação sem credencial nenhuma. E o smoke
-> tropeçou num **vazamento de senha para a query string** (§11) que não é desta fase, é pré-existente, e **está em
-> produção agora**.
+> tropeçou num **vazamento de senha para a query string** (§11) que não era desta fase, era pré-existente, e
+> estava em produção — hoje corrigido, com prova sem JavaScript no ar.
 >
-> Nada foi aplicado no ambiente do cliente. As migrations 24–27 existem apenas no local.
+> E uma quarta, que só existe porque a revisão foi feita **depois** do smoke verde: o defeito do §14 é **meu**, o
+> smoke **não** o pegou, e ele podia queimar o cupom de um cliente com um clique. O §15 lista as afirmações minhas
+> que a mesma revisão derrubou.
 
 ## 1. Escopo entregue
 
@@ -26,7 +29,10 @@
 | Smoke na preview | ✅ sem regressão — mas ver §10: o schema lá é o da Fase 7 |
 | **Vazamento de senha na URL** (§11) — achado no smoke, corrigido nos 5 formulários | ✅ com prova sem-JS |
 | **Dashboard `/portal`** (§12) — números e depoimentos inventados | ✅ ligado ao que é real |
-| Deploy | ⛔ **não executado, por instrução** |
+| **Senha e token no scrubbing do Sentry** (§13) | ✅ 12 asserções |
+| **Submit acidental queimando cupom** (§14) — defeito meu, achado após o smoke | ✅ instância **e** classe |
+| Deploy | ✅ **executado**, coreografado com OK humano por passo (§18) |
+| Smoke de produção | ✅ — placar honesto no §18, incluindo o que ele **não** pegou |
 
 ## 2. Entregas (por commit)
 
@@ -160,10 +166,15 @@ fora do grant por coluna) e não respinga em outro estabelecimento.
 
 | Suíte | rls | f2 | f3 | f4 | f5 | f6 | f6.5 | f7 | **f8** |
 |---|---|---|---|---|---|---|---|---|---|
-| PASS | 25 | 27 | 22 | 42 | 64 | 177 | 44 | **29** | **53** |
+| PASS | 25 | 27 | 22 | 42 | 64 | 177 | 44 | **31** | **55** |
 
-**483 PASS, 0 FAIL** + build. A `f7` subiu de 17 para 29: as 12 asserções novas cobrem o scrubbing de senha
-(§14) — moram lá porque é a suíte do Sentry, não porque sejam da Fase 7.
+**487 PASS, 0 FAIL** + build. A `f7` subiu de 17 para 31: 12 asserções do scrubbing de senha (§13) e 2 do
+invariante de submit acidental (§14) — moram lá porque é a suíte pura, não porque sejam da Fase 7.
+
+A `f8` foi de 53 para 55 trocando **uma asserção vazia por três reais**: a antiga contava linhas da auditoria por
+PostgREST no schema `public`, mas a migration 27 moveu a tabela para `private`, que não é exposto — os dois lados
+voltavam `null ?? 0` e `0 === 0` passava sempre. E o rótulo dela afirmava o **oposto** do que a migration faz.
+Detalhe no §15.
 
 Uma asserção **não roda fora do alvo local** e isso é dito em vez de virar verde falso: "destrava quando a janela
 esvazia" exige envelhecer as linhas da auditoria, que vive em `private` e — por desenho — não é alcançável por
@@ -359,7 +370,7 @@ O `verify` falhou uma vez com `error running container: exit 1` no `db:reset`, c
 Transitório e não de código: o stack se recuperou sozinho e a repetição passou limpa. É a contenção já registrada
 na memória do projeto (3 stacks Supabase simultâneos).
 
-## 15. IMPACTO NA MIGRAÇÃO NATIVA
+## 17. IMPACTO NA MIGRAÇÃO NATIVA
 
 Princípio permanente: regra no servidor, lógica pura em `src/lib` sem API de navegador, só-web isolado atrás de
 ponto trocável.
@@ -382,7 +393,7 @@ Action e as RPCs são reaproveitadas). *O gatilho migra; o arquivo não.*
 `dentroDaJanela` e em `formatDateTimeBRT`. Conferir `wc -l` de `database.types.ts` depois de `db:types`. E o novo:
 o badge do mural depende de recontagem por navegação — no RN, o equivalente é o foco da tela, não o `pathname`.
 
-## 16. Deploy — coreografado, com parada e OK humano por passo
+## 18. Deploy — coreografado, com parada e OK humano por passo
 
 **PASSO 0 — gates de leitura ✅.** `supabase_vault` **0.3.1** em produção (mesma do local) · confirmação de e-mail
 **desligada** (`mailer_autoconfirm: true`), então o `redirect` do `cadastrarAction` está correto · baseline exato ·
@@ -390,11 +401,13 @@ migration list **1–23** · nenhum objeto das 24–27 pré-existente. E o gate 
 PostgREST de produção responde **`PGRST106 — "Only the following schemas are exposed: public, graphql_public"`**,
 provando que a auditoria em `private` é inalcançável pela API no ambiente do cliente.
 
-O Passo 0 também **redesenhou o smoke do Passo 3**: `convidado@` tem 4 ativações vivas, **2 na Sabor & Cia** (do
-`lojista@`) e **2 na Studio Bella**, e `lojista2@` é dono da **PowerFit Academia**. Isso dá o teste do oráculo com
-dado que já existe — `lojista@` deve ver só as duas dele, e `lojista2@` deve receber o `sem_ativacao_aqui`
-genérico. Risco declarado e aceito: `consumidor@` **também** tem ativação viva na Sabor & Cia, então a linha a
-confirmar é identificada por **título + horário**, e o CPF dele não é digitado em momento algum.
+O Passo 0 também **redesenhou o smoke do Passo 3**. `convidado@` tinha 4 ativações com status `ativo` — 2 na
+Sabor & Cia (do `lojista@`) e 2 na Studio Bella — e `lojista2@` é dono da **PowerFit Academia**. **Correção do que
+eu escrevi então:** as quatro estavam **expiradas**; minha consulta filtrou `status` e esqueceu a validade. O teste
+saiu **mais forte** por causa disso: com uma ativação nova e viva só na Sabor & Cia, `lojista2@` buscando o mesmo
+CPF prova que o "não achei" genérico vem da **posse**, não da ausência de dado. Risco declarado e aceito:
+`consumidor@` também tem ativação na Sabor & Cia, então a linha a confirmar sai por **título + horário** e o CPF
+dele não foi digitado em momento algum.
 
 **PASSO 1 — migrations 24–27 em produção ✅ (05/08/2026).** Dry-run listou exatamente as quatro; aplicadas com dois
 `NOTICE` esperados (`pgcrypto` e `supabase_vault` já existiam → `if not exists` vira no-op). Depois: **27 = 27** e
@@ -405,14 +418,37 @@ valor nunca); índice de expressão criado; `anon` sem `EXECUTE` em nenhuma fun�
 idêntico**. Janela banco-antes-código **invisível por construção**: nenhuma das quatro toca objeto pré-existente, e
 o código então no ar não fazia uma única chamada aos objetos novos — seis rotas em 200.
 
-**PASSO 2 e 3 — pendentes de OK.** Merge `--no-ff` com rollback armado; depois o smoke de produção (forms sem-JS
-no ar, mural ponta a ponta, indicadores, a matriz do CPF acima, regressão e estado final).
+**PASSO 2 — merge ✅.** Rollback candidate anotado antes (`dpl_9abR…`, `56f2495`), merge `--no-ff` → `d0a0d80` →
+build **READY em 91,4s** (fila 1,1s). Para o acompanhamento do Sentry: a Fase 7 mediu 52s antes e **128s** depois;
+agora 91,4s com mais código no bundle.
 
-## 17. Backlog
+**PASSO 3 — smoke de produção.** O placar, e logo abaixo o que ele não pegou.
+
+| item | resultado |
+|---|---|
+| **(a)** 5 formulários **sem JavaScript** | 4 logins por POST → destino certo, **zero credencial na URL**; cadastro com e-mail existente devolve a mensagem **do servidor** e não cria nada (5 usuários / 5 profiles antes e depois) |
+| **(b)** mural ponta a ponta | admin publica direcionado a 1 estabelecimento → badge **"1"** no `/e` → abrir marca lido → **badge some**; `lojista2@` **não vê**; admin passa a mostrar "1 leitura" |
+| **(c)** indicadores | `lojista@` **NPS 100 de 4**; `lojista2@` **NPS 100 de 1** — números distintos, isolamento real |
+| **(d)** CPF | DV inválido: **0 chamadas ao servidor** · `lojista@` vê **1 item**, sem código, CPF mascarado · `lojista2@` vê **0** e a frase genérica, **com o CPF tendo ativação viva noutro estabelecimento** · confirm valida, credita **+50** e **não ecoa o código** · rate limit **bloqueia** e **destrava por espera real de ~170s** |
+| **(e)** regressão essencial | **14 PASS, 0 FAIL** — fluxo por código, janela (`fora_da_janela`), ilimitado, "mais de", matriz de imutabilidade (P0601), rejeição sem motivo, cross-tenant |
+| **(f)** estado final | aviso de teste **apagado** (cascade sem órfãos), **0 ativações vivas** pendentes, vitrine sem imagem de bucket, zero erro de console |
+
+**A régua não se moveu: `consumidor@` 1410 / 3 / 14 na abertura e no fechamento.** `convidado@` 1640 → 1870.
+
+**O que o smoke NÃO pegou, e a revisão pegou:** o defeito do §14. E três coisas que ele não podia provar, ditas no
+§15 em vez de assumidas.
+
+**Correção pós-smoke ✅.** `c9cc4c6` → build READY. Re-smoke cirúrgico no ar, com um **código válido de verdade** no
+campo (gerado e usado dentro do próprio navegador, nunca impresso): clique em "Buscar" e **Enter** no CPF fazem a
+busca **sem submeter**, o código fica **intacto**, e o submit legítimo por código continua validando. Estado final
+reconferido depois: régua intacta, nenhuma ativação viva pendente, 0 avisos, auditoria com **0 CPF em claro**.
+
+## 19. Backlog
 
 **Limpo nesta fase:** mural de recados · indicadores/NPS no `/e` · NPS real no portal · validação por identidade ·
 cosmético "Lucas Orladi"/"9:41" · depoimentos fictícios do `/portal/avaliacoes` **e do dashboard** ·
-**vazamento de senha na URL dos cinco formulários** · **senha e token no scrubbing do Sentry**.
+**vazamento de senha na URL dos cinco formulários** · **senha e token no scrubbing do Sentry** · **submit
+acidental no painel de CPF, instância e classe** (o `<Button>` da casa agora nasce `type="button"`).
 
 **Próximo grande:** **taxonomia Segmento→Categoria e os filtros** — é o que resta de maior no produto.
 
@@ -422,15 +458,39 @@ cupom **do consumidor**, onde um `FeedbackCarousel` cola depoimentos de *Mariana
 **`/admin`**. Por último a **landing**, que é peça de marketing e merece decisão própria. **A remoção do
 `/m/cupom/[id]` será combinada com o cliente**, porque muda o que ele mostra na demo.
 
+**Prioridade alta, levantados pela revisão do §14/§15 — nenhum explorável hoje, todos com caminho claro:**
+
+- **O NPS é inalcançável depois de uma validação no balcão.** A pesquisa só dispara quando o app do consumidor
+  observa o *flip* `ativo → validado` **ao vivo** (`coupon-state-provider.tsx`), e o segundo caminho ("Avaliar
+  experiência") só existe enquanto a folha do cupom está aberta. O fluxo por CPF existe exatamente para quando o
+  celular **não está presente** — então ele **nunca** coleta NPS. Medido no smoke: a RPC funciona (+30 pts pela
+  via da suíte), o que falta é **entrada na UI**. Sem isso, os indicadores do §5 sub-contam justo o fluxo novo.
+- **`private.validacao_tentativas` não tem retenção nem apagamento.** E o teto **não** é 10/min: `cpf_invalido` e
+  `bloqueado` são gravados **fora** da janela, então um lojista autenticado insere na velocidade da rede. Cada uma
+  dessas chamadas ainda força um *decrypt* do Vault **antes** da checagem de DV. É dado pessoal pseudonimizado —
+  LGPD pede prazo.
+- **`/admin/avisos` publica mas não apaga.** Não há remoção na tela; a limpeza do aviso de teste teve de ser por
+  SQL. Um recado errado publicado hoje é permanente.
+- **O `/portal` mostra "Sabor & Cia" para todo lojista** — literal em `sidebar.tsx`, pré-existente (não é regressão
+  da fase). Para o `lojista2@` é simplesmente o nome errado no próprio portal.
+
 **Prioridade média:** **erro renderizado como zero** (§10) · **série mensal de resgates** no portal — derivável de
 `cupom_eventos`, mas precisa do corte de mês em BRT no SQL para não divergir do `resgates_mes`, então pede RPC, não
-conta em JS · **ligar a confirmação de e-mail** exige antes tratar `signUp` **sem sessão**: hoje `cadastrarAction`
-redireciona para `/m/onboarding` de qualquer jeito, o que só funciona porque a confirmação está **desligada em
-produção por decisão da Fase 3** · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
-aceite é evento no painel) · **medir o build com o Sentry restrito ao `nodejs`** (52s → 128s na Fase 7) ·
-**retenção da auditoria de CPF** (nada apaga `private.validacao_tentativas`; ~14,4k linhas/dia/estabelecimento no
-teto, e é dado pessoal pseudonimizado — LGPD pede prazo) · relatório NPS completo no portal (mockup `NPS.png`) ·
-realtime do mural.
+conta em JS · **mascarar também os dois dígitos verificadores** do CPF (§15: eles são deriváveis, e expô-los
+estreita o espaço para ~10⁶) · **`/m/cadastro` é um oráculo público de existência de conta** — responde "este
+e-mail já está cadastrado" a qualquer um, enquanto a fase inteira gastou uma migration eliminando um oráculo que
+só o lojista podia consultar sobre os **próprios** clientes; ou a enumeração é aceitável e a barreira 3 é
+sobre-engenharia, ou o cadastro precisa da mesma resposta genérica — **decidir, não deixar por omissão** ·
+**ligar a confirmação de e-mail** exige antes tratar `signUp` **sem sessão** (hoje `cadastrarAction` redireciona
+de qualquer jeito, e só funciona porque está desligada em produção) · **dívida do Sentry** (cliente **e** servidor
+não-provados — FASE-7 §14; aceite é evento no painel) · **medir o build com o Sentry restrito ao `nodejs`**
+(52s → 128s na Fase 7; hoje 91,4s) · relatório NPS completo no portal (mockup `NPS.png`) · realtime do mural.
+
+**Verificações baratas que ficaram por fazer** (a revisão pediu, e são de minutos): chamada anônima às duas RPCs de
+CPF esperando `42501` · consumidor autenticado nelas esperando `sem_permissao` · configuração de log de
+*statement/parameter* do Postgres em produção, o único canal que ainda poderia guardar CPF em claro sem que se
+saiba · e uma chamada com DV inválido **direto na RPC** em produção, para gerar a linha `cpf_invalido` que prova o
+ramo servidor no ar (hoje a auditoria tem **0** dessas — é o que denuncia que o smoke não chegou lá).
 
 **Resta:** validação por identidade com **nome** além do CPF (esta fase entregou só o CPF) · destaque/banner no
 admin · exportar relatórios · comentários em texto nas avaliações · exclusão de cupom pelo lojista · QR scanner
