@@ -314,7 +314,46 @@ segue fora é objeto além do nível 8, e o comentário no arquivo diz isso.
 **12 asserções novas**, incluindo as negativas: `senhaHint`, `password_hint` e `tokenizado` **não** são redigidos
 (a lista não é varredura cega), e o que não é segredo sobrevive ao lado do que é.
 
-## 14. Um tropeço de ambiente
+## 14. O defeito que o smoke não pegou — e a mina por trás dele
+
+O smoke de produção passou em tudo. A `security-review` sobre as provas achou o que ele deixou passar, **no meu
+código da Fase 8**, e é o achado mais sério da fase depois do §11.
+
+**O defeito.** O botão "Buscar" do painel de CPF não declarava `type`. O `<Button>` da casa também não definia um,
+e o default do HTML é **`submit`**. O painel vive **dentro** do `<form>` do `/e/validar`. Logo: o lojista digita um
+código, ele não funciona, ele abre o painel de CPF e clica em "Buscar" → a busca acontece **e o formulário é
+submetido**, validando o código digitado no campo ao lado. **Permanente** — a unique de `cupons_usuario` impede
+reativar. Um cupom de cliente queimado por um clique em "Buscar".
+
+**Por que o meu smoke não pegou:** `validar()` tem `if (!codigoLimpo) return`, e eu deixei o campo de código
+**vazio** em todos os testes. Testei exatamente o caminho que esconde o bug.
+
+**Metade da correção não bastava.** `type="button"` resolve o clique e **não resolve o Enter**: qualquer campo de
+texto dentro de um `<form>` dispara a submissão implícita. Como o operador digita o CPF e tecla Enter — o gesto
+mais natural do balcão —, esse era o caminho mais provável dos dois. Fechado com `onKeyDown` que busca e chama
+`preventDefault()`.
+
+**A mina, não só a instância.** Varredura no repositório inteiro: **84** `<Button>`/`<button>` sem `type`
+explícito, e **exatamente um** dentro de um `<form>` — este. Os quatro submits legítimos do projeto (incluindo o
+`BotaoEnviar`, que faz os cinco formulários de autenticação funcionarem sem JS) **já declaravam** `type="submit"`.
+Isso tornou seguro inverter o default: **o `<Button>` da casa agora nasce `type="button"`**, e submeter virou
+exceção declarada. Um `<button>` cru continua sendo submit por default do navegador — hoje todos os do projeto
+declaram `type`, e há **teste estático** guardando as duas coisas.
+
+## 15. Correções às minhas próprias afirmações
+
+A mesma revisão derrubou cinco coisas que eu havia escrito ou dito com mais confiança do que a evidência
+sustentava. Ficam registradas porque afirmação inflada é pior que lacuna conhecida.
+
+| Eu afirmei | O que é verdade |
+|---|---|
+| "a matriz do DV vale em produção" | Só a metade **cliente**. A **ausência** de linha `cpf_invalido` na auditoria é prova positiva de que o ramo servidor **nunca foi alcançado** no smoke. A revalidação existe na Action e na RPC — provada por leitura e pela suíte, não no ar. |
+| "o rate limit resiste a sessão nova" | Provado por **código** (a janela chaveia `por_usuario`, não sessão) e pela suíte local. Em produção provei bloqueio e destravamento, **não** o salto de sessão. |
+| "zero CPF em claro" | Verdadeiro **da tabela de auditoria**. `profiles.cpf` guarda em claro, por desenho — é contra ele que a busca compara. |
+| "~14,4k linhas/dia/estabelecimento" no backlog | **Errado.** `cpf_invalido` e `bloqueado` são gravados **sem contar na janela** (para não permitir auto-bloqueio), então o teto de crescimento é a taxa de requisição, não 10/min. |
+| a máscara `987.***.***-00` protege 8 de 11 dígitos | Ela revela os **dois dígitos verificadores**, que são **deriváveis** dos nove primeiros. O espaço cai para ~10⁶, não ~10⁸. |
+
+## 16. Um tropeço de ambiente
 
 O `verify` falhou uma vez com `error running container: exit 1` no `db:reset`, com 29 containers na máquina.
 Transitório e não de código: o stack se recuperou sozinho e a repetição passou limpa. É a contenção já registrada

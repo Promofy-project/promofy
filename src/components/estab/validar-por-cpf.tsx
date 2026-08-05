@@ -102,13 +102,28 @@ export function ValidarPorCpf({
         <input
           value={cpf}
           onChange={(e) => setCpf(formatarCpf(e.target.value))}
+          // Enter aqui BUSCA — e, sobretudo, não deixa a submissão implícita
+          // do formulário externo acontecer. `type="button"` no botão resolve o
+          // clique, mas não o Enter: qualquer campo de texto dentro de um
+          // <form> dispara o submit padrão, que no /e/validar valida o código
+          // digitado no campo ao lado, de forma permanente.
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            if (podeBuscar) void buscar();
+          }}
           inputMode="numeric"
           autoComplete="off"
           placeholder="000.000.000-00"
           aria-label="CPF do cliente"
           className="h-12 flex-1 rounded-xl border border-transparent bg-surface px-3 text-center font-mono text-base tracking-wider text-foreground focus-visible:border-primary focus-visible:outline-none"
         />
-        <Button onClick={buscar} disabled={!podeBuscar} className="h-12 px-4">
+        {/* type="button" NÃO é decoração: este painel vive DENTRO do <form> do
+            /e/validar. Sem ele, clicar em "Buscar" submetia o formulário e
+            validava o código digitado no campo ao lado — de forma permanente.
+            O default do <Button> da casa hoje já é "button"; aqui fica
+            explícito porque o risco é local e específico. */}
+        <Button type="button" onClick={buscar} disabled={!podeBuscar} className="h-12 px-4">
           {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
         </Button>
       </div>

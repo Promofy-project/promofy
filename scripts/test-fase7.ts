@@ -17,6 +17,9 @@ const hosted = process.argv.includes("--hosted");
 const envFile = hosted ? ".env.hosted.local" : ".env.local";
 config({ path: envFile });
 
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 import { limparTexto, limparEvento, chaveSecreta } from "../src/lib/sentry-scrub";
 import { rotuloAcao, historicoDeJson } from "../src/lib/moderacao";
 import { encerrar } from "./_qa-conta";
@@ -250,5 +253,78 @@ check(
     .map((e) => e.acao)
     .join(",") === "rejeitado,editado_material,reenviado,aprovado",
 );
+
+// ---------------------------------------------------------------
+// INVARIANTE DE CÓDIGO — submit acidental (mina desarmada na Fase 8)
+//
+// O `<Button>` da casa não definia `type`, e o default do HTML é `submit`.
+// Resultado: todo botão sem `type` dentro de um `<form>` submetia o
+// formulário em silêncio. Custou um cupom de cliente queimado por um clique
+// em "Buscar" no painel de CPF (validar-por-cpf.tsx).
+//
+// Duas asserções estáticas, porque a mina rearma sozinha: basta alguém
+// escrever o próximo botão sem `type`.
+// ---------------------------------------------------------------
+console.log("\nInvariante — submit acidental");
+
+{
+  const tsx: string[] = [];
+  (function varrer(dir: string) {
+    for (const nome of readdirSync(dir)) {
+      const p = join(dir, nome);
+      if (statSync(p).isDirectory()) varrer(p);
+      else if (nome.endsWith(".tsx")) tsx.push(p);
+    }
+  })("src");
+
+  // Comentários fora antes de varrer: este arquivo e o checkbox.tsx DOCUMENTAM
+  // `<form>` e `<button>` em prosa, e sem isto a própria explicação da mina
+  // seria reportada como mina.
+  const semComentarios = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  // Lê a tag de abertura respeitando chaves de JSX.
+  const tagEm = (s: string, inicio: number) => {
+    let d = 0, t = "";
+    for (let i = inicio; i < s.length; i++) {
+      const c = s[i];
+      if (c === "{") d++;
+      else if (c === "}") d--;
+      else if (c === ">" && d === 0) break;
+      t += c;
+    }
+    return t;
+  };
+
+  // (1) O Button da casa DEFAULTA para "button".
+  const fonteBotao = readFileSync("src/components/ui/button.tsx", "utf8");
+  check(
+    "Button da casa defaulta type='button' (submit vira exceção declarada)",
+    /type:\s*type\s*\?\?\s*["']button["']/.test(fonteBotao),
+  );
+
+  // (2) Nenhum <button> CRU sem type dentro de um <form> — o default do
+  // navegador continua sendo submit para esses, o Button não os cobre.
+  const crusSemType: string[] = [];
+  for (const f of tsx) {
+    const s = semComentarios(readFileSync(f, "utf8"));
+    const abre = s.indexOf("<form");
+    if (abre === -1) continue;
+    const fecha = s.lastIndexOf("</form>");
+    const dentro = s.slice(abre, fecha === -1 ? s.length : fecha);
+    const re = /<button(\s)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(dentro))) {
+      if (!/\btype\s*=/.test(tagEm(dentro, m.index + m[0].length))) {
+        crusSemType.push(`${f}:${s.slice(0, abre + m.index).split("\n").length}`);
+      }
+    }
+  }
+  check(
+    "nenhum <button> cru sem type dentro de <form>",
+    crusSemType.length === 0,
+    crusSemType.join(", "),
+  );
+}
 
 process.exit(encerrar(passed, failed));

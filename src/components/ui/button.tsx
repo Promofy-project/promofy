@@ -45,13 +45,38 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
+/**
+ * `type` PADRÃO É `"button"`, e isso é uma decisão de segurança.
+ *
+ * O default do HTML é `submit`. Como este componente não definia `type`, todo
+ * `<Button>` sem `type` que caísse dentro de um `<form>` virava um submit
+ * acidental — em silêncio, sem erro de tipo, sem aviso.
+ *
+ * Custou caro na Fase 8: o botão "Buscar" do painel de validação por CPF
+ * (`src/components/estab/validar-por-cpf.tsx`) vive dentro do `<form>` do
+ * `/e/validar`. Clicar nele disparava a busca **e** submetia o formulário, o
+ * que validava o código digitado no campo ao lado — de forma **permanente**,
+ * porque a unique de `cupons_usuario` impede reativar. Um cupom de cliente
+ * queimado por um clique em "Buscar".
+ *
+ * A inversão é segura porque submeter é a exceção e já era declarado: os
+ * quatro submits do projeto dizem `type="submit"` explicitamente, incluindo o
+ * `BotaoEnviar` — que é o que faz os cinco formulários de autenticação
+ * funcionarem SEM JavaScript. Quem precisa submeter continua pedindo.
+ *
+ * LIMITE: isto cobre `<Button>`. Um `<button>` cru dentro de um form continua
+ * sendo submit por default do navegador — hoje todos os do projeto declaram
+ * `type`, e a suíte guarda isso.
+ */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, type, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        // `asChild` delega para outro elemento (ex.: <a>), que não aceita type.
+        {...(asChild ? {} : { type: type ?? "button" })}
         {...props}
       />
     );

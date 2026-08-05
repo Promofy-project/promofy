@@ -229,11 +229,47 @@ async function main(): Promise<number> {
     const dvRuim = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: "123.456.789-00" })).data as any;
     check("CPF sem DV é barrado ANTES da consulta ('cpf_invalido')",
       dvRuim?.motivo === "cpf_invalido", JSON.stringify(dvRuim));
-    const antesRuim = (await svc.from("validacao_tentativas").select("id", { count: "exact", head: true })).count ?? 0;
-    await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: "000.000.000-00" });
-    const depoisRuim = (await svc.from("validacao_tentativas").select("id", { count: "exact", head: true })).count ?? 0;
-    check("CPF inválido NÃO entra na auditoria (não polui a janela de rate limit)",
-      depoisRuim === antesRuim, `${antesRuim} → ${depoisRuim}`);
+    // ATENÇÃO — esta asserção já foi um VERDE FALSO, e a história vale mais
+    // que o teste. Ela contava linhas por `svc.from("validacao_tentativas")`,
+    // ou seja, pelo PostgREST no schema `public`. A migration 27 mudou a
+    // tabela para `private`, que NÃO é exposto — então os dois lados voltavam
+    // `null ?? 0`, e `0 === 0` passava sempre, medindo nada. Pior: o rótulo
+    // dizia "CPF inválido NÃO entra na auditoria", o OPOSTO da correção (6)
+    // da própria migration 27, que passou a auditá-lo de propósito para que a
+    // tabela mostrasse a MAGNITUDE de um ataque.
+    //
+    // A verdade que se quer provar é dupla: o DV-inválido É auditado, e NÃO
+    // conta na janela do rate limit (senão o atacante se auto-bloqueia e vira
+    // DoS de graça). Ler `private` exige psql — só no alvo local.
+    if (alvo.nome === "local") {
+      // execFileSync com array de argumentos: sem shell no meio, então nada de
+      // aspas para escapar (o Windows agradece) e nada de interpolação virar
+      // comando. Os filtros abaixo são literais deste arquivo, mas a forma
+      // segura custa o mesmo.
+      const { execFileSync } = await import("node:child_process");
+      const contar = (filtro: string) =>
+        Number(
+          execFileSync("docker", [
+            "exec", "supabase_db_promofy",
+            "psql", "-U", "postgres", "-t", "-A",
+            "-c", `select count(*) from private.validacao_tentativas where ${filtro}`,
+          ]).toString().trim(),
+        );
+      const antesTotal = contar("true");
+      const antesJanela = contar("resultado in ('encontrado','sem_ativacao')");
+      await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: "000.000.000-00" });
+      const depoisTotal = contar("true");
+      const depoisJanela = contar("resultado in ('encontrado','sem_ativacao')");
+
+      check("CPF inválido É auditado (a tabela mostra a magnitude do ataque)",
+        depoisTotal === antesTotal + 1, `${antesTotal} → ${depoisTotal}`);
+      check("…mas NÃO conta na janela do rate limit (não deixa o atacante se auto-bloquear)",
+        depoisJanela === antesJanela, `${antesJanela} → ${depoisJanela}`);
+      check("…e a linha gravada é do tipo 'cpf_invalido'",
+        contar("resultado = 'cpf_invalido'") > 0);
+    } else {
+      console.log("  ----  auditoria do CPF inválido — NÃO EXECUTADO fora do alvo local (private exige psql)");
+    }
 
     // ============================================================
     console.log("\n[V2] CPF — ZERO ORÁCULO: os três 'não achei' são idênticos");
