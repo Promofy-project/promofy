@@ -124,6 +124,104 @@ export type Database = {
           },
         ]
       }
+      avisos: {
+        Row: {
+          corpo: string
+          criado_por: string | null
+          id: string
+          para_todos: boolean
+          publicado_em: string
+          titulo: string
+        }
+        Insert: {
+          corpo: string
+          criado_por?: string | null
+          id?: string
+          para_todos?: boolean
+          publicado_em?: string
+          titulo: string
+        }
+        Update: {
+          corpo?: string
+          criado_por?: string | null
+          id?: string
+          para_todos?: boolean
+          publicado_em?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "avisos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      avisos_destinatarios: {
+        Row: {
+          aviso_id: string
+          estabelecimento_id: string
+        }
+        Insert: {
+          aviso_id: string
+          estabelecimento_id: string
+        }
+        Update: {
+          aviso_id?: string
+          estabelecimento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "avisos_destinatarios_aviso_id_fkey"
+            columns: ["aviso_id"]
+            isOneToOne: false
+            referencedRelation: "avisos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avisos_destinatarios_estabelecimento_id_fkey"
+            columns: ["estabelecimento_id"]
+            isOneToOne: false
+            referencedRelation: "estabelecimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      avisos_lidos: {
+        Row: {
+          aviso_id: string
+          estabelecimento_id: string
+          lido_em: string
+        }
+        Insert: {
+          aviso_id: string
+          estabelecimento_id: string
+          lido_em?: string
+        }
+        Update: {
+          aviso_id?: string
+          estabelecimento_id?: string
+          lido_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "avisos_lidos_aviso_id_fkey"
+            columns: ["aviso_id"]
+            isOneToOne: false
+            referencedRelation: "avisos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "avisos_lidos_estabelecimento_id_fkey"
+            columns: ["estabelecimento_id"]
+            isOneToOne: false
+            referencedRelation: "estabelecimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias: {
         Row: {
           gradiente: string
@@ -644,6 +742,9 @@ export type Database = {
     Functions: {
       aprovar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
+      avisos_nao_lidos: { Args: never; Returns: number }
+      buscar_ativacoes_por_cpf: { Args: { p_cpf: string }; Returns: Json }
+      cpf_dv_valido: { Args: { p_cpf: string }; Returns: boolean }
       definir_status_estabelecimento: {
         Args: { p_est_id: string; p_status: string }
         Returns: Json
@@ -663,6 +764,8 @@ export type Database = {
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
       hora_ou_null: { Args: { p_hora: string }; Returns: string }
+      indicadores_estabelecimento: { Args: never; Returns: Json }
+      marcar_aviso_lido: { Args: { p_aviso_id: string }; Returns: Json }
       marcar_novidades_vistas: { Args: never; Returns: Json }
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
       meu_estado_consumidor: { Args: never; Returns: Json }
@@ -682,6 +785,10 @@ export type Database = {
       }
       saldo_pontos: { Args: never; Returns: number }
       validar_cupom: { Args: { p_codigo: string }; Returns: Json }
+      validar_cupom_por_ativacao: {
+        Args: { p_cpf: string; p_row_id: number }
+        Returns: Json
+      }
     }
     Enums: {
       acao_pontos: "resgate" | "nps" | "indicacao" | "visita" | "bonus"

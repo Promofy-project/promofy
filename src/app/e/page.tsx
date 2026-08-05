@@ -73,6 +73,14 @@ export default async function EstabHomePage() {
           label="Novo cupom"
           description="Criar uma oferta rápida"
         />
+        {/* Fase 8/M2 — atalho, não aba: a bottom nav já tem quatro itens, e
+            indicadores é consulta ocasional, não navegação do balcão. */}
+        <TotemActionCard
+          href="/e/indicadores"
+          icon={<TrendingUp className="h-6 w-6" />}
+          label="Indicadores"
+          description="NPS e resgates do mês"
+        />
       </div>
     </div>
   );

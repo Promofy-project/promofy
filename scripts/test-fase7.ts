@@ -17,7 +17,7 @@ const hosted = process.argv.includes("--hosted");
 const envFile = hosted ? ".env.hosted.local" : ".env.local";
 config({ path: envFile });
 
-import { limparTexto, limparEvento } from "../src/lib/sentry-scrub";
+import { limparTexto, limparEvento, chaveSecreta } from "../src/lib/sentry-scrub";
 import { rotuloAcao, historicoDeJson } from "../src/lib/moderacao";
 import { encerrar } from "./_qa-conta";
 
@@ -121,6 +121,103 @@ check(
   "texto sem PII passa inalterado",
   limparTexto("Cupom nao encontrado no seu estabelecimento.") ===
     "Cupom nao encontrado no seu estabelecimento.",
+);
+
+// ---------------------------------------------------------------
+// P5 (Fase 8) — SENHA e token de sessão
+//
+// Senha não tem formato: `promofy123` é uma palavra como outra qualquer. Por
+// isso o mecanismo é outro — redação por NOME DE CHAVE e por par chave=valor.
+// O gatilho foi a Fase 8 mandar a senha atravessar as Server Actions.
+// ---------------------------------------------------------------
+console.log("\nP5 (Fase 8) — senha e token não saem da máquina");
+
+check(
+  "senha em query string vira [redigido] (o formato em que ela de fato vazava)",
+  limparTexto("GET /admin/login?email=admin@promofy.test&senha=promofy123") ===
+    "GET /admin/login?email=[email]&senha=[redigido]",
+  limparTexto("GET /admin/login?email=admin@promofy.test&senha=promofy123"),
+);
+
+check(
+  "corpo urlencoded que COMEÇA na senha também é pego (sem ? nem & antes)",
+  limparTexto("senha=promofy123&nome=Teste") === "senha=[redigido]&nome=Teste",
+  limparTexto("senha=promofy123&nome=Teste"),
+);
+
+check(
+  "password=/access_token= também",
+  limparTexto("?password=x1&access_token=eyJhbGciOi.abc") ===
+    "?password=[redigido]&access_token=[redigido]",
+  limparTexto("?password=x1&access_token=eyJhbGciOi.abc"),
+);
+
+check(
+  "o que NÃO é segredo sobrevive ao lado (não é varredura cega)",
+  limparTexto("?cidade=Sao+Paulo&senha=x") === "?cidade=Sao+Paulo&senha=[redigido]",
+  limparTexto("?cidade=Sao+Paulo&senha=x"),
+);
+
+// Redação por chave: o payload de um formulário chega como objeto.
+const comSenha = limparEvento({
+  extra: {
+    formData: { email: "convidado@promofy.test", senha: "promofy123", nome: "Ana" },
+    sessao: { access_token: "eyJhbGciOiJIUzI1NiJ9.x", expires_in: 3600 },
+  },
+}) as {
+  extra: {
+    formData: { email: string; senha: string; nome: string };
+    sessao: { access_token: string; expires_in: number };
+  };
+};
+check(
+  "chave `senha` é redigida sem olhar o conteúdo",
+  comSenha.extra.formData.senha === "[redigido]",
+  comSenha.extra.formData.senha,
+);
+check(
+  "chave `access_token` também — credencial ao portador, como o código do cupom",
+  comSenha.extra.sessao.access_token === "[redigido]",
+  comSenha.extra.sessao.access_token,
+);
+check(
+  "campos vizinhos seguem tratados pelas regras de sempre",
+  comSenha.extra.formData.email === "[email]" && comSenha.extra.formData.nome === "Ana",
+  `${comSenha.extra.formData.email} / ${comSenha.extra.formData.nome}`,
+);
+check(
+  "valor não-secreto e não-string permanece intacto",
+  comSenha.extra.sessao.expires_in === 3600,
+  String(comSenha.extra.sessao.expires_in),
+);
+
+// A chave secreta é redigida INTEIRA, sem descer: o valor pode ser objeto.
+const senhaObjeto = limparEvento({ senha: { valor: "promofy123", conf: "promofy123" } }) as {
+  senha: unknown;
+};
+check(
+  "chave secreta cujo valor é OBJETO some inteira (não vira objeto meio-limpo)",
+  senhaObjeto.senha === "[redigido]",
+  JSON.stringify(senhaObjeto.senha),
+);
+
+check("chaveSecreta reconhece as variantes de nome", [
+  "senha", "Senha", "password", "PASSWORD", "pwd", "passwd",
+  "new-password", "current_password", "access_token", "refresh_token", "authorization",
+].every(chaveSecreta));
+
+check(
+  "chaveSecreta NÃO pega campo legítimo de nome parecido",
+  !["senhaHint", "password_hint", "tokenizado", "autor"].some(chaveSecreta),
+);
+
+// O teto de profundidade parava de limpar STRING também — corrigido junto.
+const fundo = limparEvento({ a: { b: { c: { d: { e: { f: { g: { h: { i: "cpf 12345678909" } } } } } } } } }) as
+  Record<string, any>;
+check(
+  "no teto de profundidade a string ainda é filtrada (não volta CPF cru)",
+  fundo.a.b.c.d.e.f.g.h.i === "cpf [cpf]",
+  fundo.a.b.c.d.e.f.g.h.i,
 );
 
 // ---------------------------------------------------------------

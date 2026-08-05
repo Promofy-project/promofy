@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useMobileFlow } from "@/components/mobile-flow-provider";
+import { useCouponState } from "@/components/coupon-state-provider";
 
 interface MenuItem {
   label: string;
@@ -39,6 +40,19 @@ const items: MenuItem[] = [
 
 export function SideMenu() {
   const { menuOpen, closeMenu } = useMobileFlow();
+  // Fase 8/E1 — o cabeçalho exibia "Lucas Orladi" e "Lorem ipsum exemplo",
+  // resquício de mock que estava em tela real desde a Fase 3. O nome da
+  // sessão já vinha do servidor (`meu_estado_consumidor` → layout → provider);
+  // só ninguém o consumia aqui.
+  const { usuario } = useCouponState();
+
+  const nomeExibido = usuario?.nome ?? "Visitante";
+  const iniciais = nomeExibido
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "?";
 
   return (
     <div
@@ -67,12 +81,12 @@ export function SideMenu() {
         {/* header */}
         <div className="flex items-center gap-3 bg-primary px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-white">
           <Avatar className="h-12 w-12 ring-2 ring-white/40">
-            <AvatarFallback className="bg-white/20 text-white">LO</AvatarFallback>
+            <AvatarFallback className="bg-white/20 text-white">{iniciais}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate text-base font-bold">Lucas Orladi</p>
+            <p className="truncate text-base font-bold">{nomeExibido}</p>
             <p className="truncate text-[11px] uppercase tracking-wide text-white/70">
-              Lorem ipsum exemplo
+              {usuario?.cpfMascarado ?? "Entre para ver seus cupons"}
             </p>
           </div>
         </div>

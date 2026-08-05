@@ -16,6 +16,7 @@ import {
 } from "@/lib/cupom-campos";
 import { montarPatchCupom, type CamposEdicaoCupom } from "@/lib/cupom-patch";
 import { economiaDeJson, type EconomiaDTO } from "@/lib/economia";
+import { cpfValido } from "@/lib/cpf";
 import {
   BUCKET_IMAGENS,
   PATH_IMAGEM_RE,
@@ -627,5 +628,72 @@ export async function apagarImagemCupomAction(
     return { ok: !error };
   } catch {
     return { ok: false };
+  }
+}
+
+/** Item devolvido pela busca por CPF (Fase 8/V1). Sem código, CPF mascarado. */
+export interface AtivacaoPorCpfDTO {
+  row_id: number;
+  cupom: string;
+  nome: string;
+  cpf_mascarado: string;
+  ativado_em: string;
+}
+
+/**
+ * Busca ativações ativas por CPF (Fase 8/V1).
+ *
+ * A validação de DV acontece DUAS vezes de propósito: aqui, para o lojista
+ * receber a mensagem na hora sem uma ida ao servidor; e dentro da RPC, que é a
+ * barreira de verdade — esta Action não é fronteira para quem fala PostgREST.
+ *
+ * Os motivos de recusa chegam do banco e a UI os traduz. `sem_ativacao_aqui` é
+ * DELIBERADAMENTE o mesmo para CPF inexistente, CPF de outro estabelecimento e
+ * CPF sem ativação: distinguir os três transformaria a tela num oráculo que
+ * revela quem é cliente de quem.
+ */
+export async function buscarAtivacoesPorCpfAction(
+  cpf: string,
+): Promise<
+  | { ok: true; itens: AtivacaoPorCpfDTO[] }
+  | { ok: false; motivo: string }
+> {
+  try {
+    if (!cpfValido(cpf)) return { ok: false, motivo: "cpf_invalido" };
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpf });
+    if (error) return { ok: false, motivo: "erro" };
+    return data as unknown as
+      | { ok: true; itens: AtivacaoPorCpfDTO[] }
+      | { ok: false; motivo: string };
+  } catch {
+    return { ok: false, motivo: "erro" };
+  }
+}
+
+/**
+ * Confirma a validação (Fase 8/V1) — EXIGE o CPF junto do row_id.
+ *
+ * O row_id sozinho não serve de credencial: `cupons_usuario.id` é bigserial,
+ * pequeno e denso. Sem o CPF, percorrer ids queimaria cupons dos próprios
+ * clientes do lojista, de forma permanente (a unique impede reativar). Achado
+ * da revisão de segurança desta fase — e defeito que eu introduzi justamente
+ * ao deixar de devolver o código.
+ */
+export async function validarPorAtivacaoAction(
+  rowId: number,
+  cpf: string,
+): Promise<ValidarResult> {
+  try {
+    if (!cpfValido(cpf)) return { ok: false, motivo: "cpf_invalido" };
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("validar_cupom_por_ativacao", {
+      p_row_id: rowId,
+      p_cpf: cpf,
+    });
+    if (error) return { ok: false, motivo: "erro" };
+    return data as unknown as ValidarResult;
+  } catch {
+    return { ok: false, motivo: "erro" };
   }
 }

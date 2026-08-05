@@ -1,83 +1,55 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useFormState } from "react-dom";
 
-import { createClient } from "@/lib/supabase/client";
+import { entrarPortalAction, entrarAdminAction } from "@/lib/actions/auth";
+import { ESTADO_AUTH_INICIAL, type EstadoAuth } from "@/lib/auth-estado";
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { BotaoEnviar } from "@/components/botao-enviar";
 import { Field } from "@/components/field";
 
-const CONFIG = {
+type AcaoAuth = (
+  anterior: EstadoAuth,
+  formData: FormData,
+) => Promise<EstadoAuth>;
+
+const CONFIG: Record<
+  "portal" | "admin",
+  { titulo: string; subtitulo: string; acao: AcaoAuth }
+> = {
   portal: {
     titulo: "Portal do estabelecimento",
     subtitulo: "Acesse com a conta do seu estabelecimento.",
-    papel: "lojista",
-    destino: "/portal",
+    acao: entrarPortalAction,
   },
   admin: {
     titulo: "Painel administrativo",
     subtitulo: "Acesso restrito à equipe Promofy.",
-    papel: "admin",
-    destino: "/admin",
+    acao: entrarAdminAction,
   },
-} as const;
+};
 
 /**
- * Tela de login do portal/admin (Fase 1). Após autenticar, confere o
- * papel em profiles — conta de outro papel é deslogada com aviso.
- * O redirect final é reforçado pelo middleware (fronteira de UX);
- * a fronteira de segurança real é o RLS.
+ * Tela de login do portal/admin (Fase 1). A conferência de papel e o destino
+ * mudaram-se para a Server Action — conta de outro papel é deslogada com aviso.
+ * O redirect final é reforçado pelo middleware (fronteira de UX); a fronteira
+ * de segurança real é o RLS.
+ *
+ * A ação é escolhida por `variant` em tempo de render, e NÃO vem do formulário:
+ * um campo escondido com o papel seria adulterável — não daria escalada (o
+ * servidor confere o papel real em `profiles`), mas convida à confusão.
+ *
+ * `<form action={...}>` e não `onSubmit`: ver `src/lib/actions/auth.ts`.
  */
 export function LoginPainel({ variant }: { variant: keyof typeof CONFIG }) {
-  const { titulo, subtitulo, papel, destino } = CONFIG[variant];
-  const router = useRouter();
-  const [email, setEmail] = React.useState("");
-  const [senha, setSenha] = React.useState("");
-  const [erro, setErro] = React.useState<string | null>(null);
-  const [carregando, setCarregando] = React.useState(false);
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setCarregando(true);
-    const supabase = createClient();
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: senha,
-    });
-    if (error || !data.user) {
-      setCarregando(false);
-      setErro(
-        error?.message === "Invalid login credentials"
-          ? "E-mail ou senha incorretos."
-          : "Não foi possível entrar agora. Tente novamente.",
-      );
-      return;
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .maybeSingle();
-
-    if (profile?.role !== papel) {
-      await supabase.auth.signOut();
-      setCarregando(false);
-      setErro("Esta conta não tem acesso a esta área.");
-      return;
-    }
-
-    router.push(destino);
-    router.refresh();
-  }
+  const { titulo, subtitulo, acao } = CONFIG[variant];
+  const [estado, formAction] = useFormState(acao, ESTADO_AUTH_INICIAL);
 
   return (
     <div className="grid min-h-screen place-items-center bg-background p-5">
       <form
-        onSubmit={handleLogin}
+        action={formAction}
         className="w-full max-w-[380px] rounded-card bg-surface p-8 shadow-card"
       >
         <div className="flex flex-col items-center text-center">
@@ -94,8 +66,6 @@ export function LoginPainel({ variant }: { variant: keyof typeof CONFIG }) {
             placeholder="voce@empresa.com"
             autoComplete="email"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
           />
           <Field
             label="Senha"
@@ -104,20 +74,18 @@ export function LoginPainel({ variant }: { variant: keyof typeof CONFIG }) {
             placeholder="••••••••"
             autoComplete="current-password"
             required
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
           />
         </div>
 
-        {erro && (
+        {estado.erro && (
           <p className="mt-4 text-center text-sm font-semibold text-danger">
-            {erro}
+            {estado.erro}
           </p>
         )}
 
-        <Button type="submit" className="mt-7 w-full" disabled={carregando}>
-          {carregando ? "Entrando…" : "Entrar"}
-        </Button>
+        <BotaoEnviar className="mt-7 w-full" pendente="Entrando…">
+          Entrar
+        </BotaoEnviar>
       </form>
     </div>
   );

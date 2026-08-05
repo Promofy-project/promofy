@@ -2,67 +2,40 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useFormState } from "react-dom";
 import { CheckCircle2 } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
+import { cadastrarAction } from "@/lib/actions/auth";
+import { ESTADO_AUTH_INICIAL } from "@/lib/auth-estado";
+import { BotaoEnviar } from "@/components/botao-enviar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/field";
 
+/**
+ * Cadastro do consumidor.
+ *
+ * `<form action={...}>` e não `onSubmit`: sem a `action`, o submit antes da
+ * hidratação virava GET e levava para a query string — logo, para os logs de
+ * acesso — não só a senha, mas o CPF, o celular e a data de nascimento.
+ * Ver `src/lib/actions/auth.ts`.
+ *
+ * O aceite dos termos deixou de ser apenas o `disabled` do botão (decoração,
+ * removível pelo DevTools): agora é um checkbox NATIVO com `required` — que o
+ * navegador barra mesmo sem JavaScript — e uma checagem no servidor, que é a
+ * que de fato vale.
+ */
 export default function CadastroPage() {
-  const router = useRouter();
-  const [cpf, setCpf] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [nome, setNome] = React.useState("");
-  const [celular, setCelular] = React.useState("");
-  const [nascimento, setNascimento] = React.useState("");
-  const [senha, setSenha] = React.useState("");
+  const [estado, formAction] = useFormState(
+    cadastrarAction,
+    ESTADO_AUTH_INICIAL,
+  );
   const [promo, setPromo] = React.useState("");
   const [aceito, setAceito] = React.useState(false);
-  const [erro, setErro] = React.useState<string | null>(null);
-  const [carregando, setCarregando] = React.useState(false);
-
-  async function handleCadastro(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setCarregando(true);
-    const supabase = createClient();
-    // Dados de perfil vão em options.data (user_metadata) — o trigger
-    // handle_new_user copia p/ profiles. Papel NUNCA vai por aqui.
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password: senha,
-      options: {
-        data: {
-          nome: nome.trim(),
-          cpf: cpf.trim(),
-          telefone: celular.trim(),
-          nascimento, // yyyy-mm-dd do input type=date (validado no trigger)
-        },
-      },
-    });
-    if (error) {
-      setCarregando(false);
-      setErro(
-        error.message.includes("already registered")
-          ? "Este e-mail já está cadastrado. Faça login."
-          : error.message.toLowerCase().includes("password")
-            ? "A senha precisa ter pelo menos 6 caracteres."
-            : "Não foi possível concluir o cadastro. Tente novamente.",
-      );
-      return;
-    }
-    // Confirmação de e-mail desligada no ambiente local: a sessão já
-    // existe aqui e o fluxo segue direto para o onboarding.
-    router.push("/m/onboarding");
-    router.refresh();
-  }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-start p-5">
       <form
-        onSubmit={handleCadastro}
+        action={formAction}
         className="my-2 w-full max-w-[360px] rounded-[24px] bg-surface p-7 shadow-xl"
       >
         <h1 className="text-2xl font-extrabold">Cadastre-se</h1>
@@ -78,8 +51,6 @@ export default function CadastroPage() {
             name="cpf"
             inputMode="numeric"
             placeholder="000.000.000-00"
-            value={cpf}
-            onChange={(e) => setCpf(e.target.value)}
           />
           <Field
             label="E-mail"
@@ -88,8 +59,6 @@ export default function CadastroPage() {
             placeholder="seu@email.com"
             autoComplete="email"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
           />
           <Field
             label="Nome Completo"
@@ -97,8 +66,6 @@ export default function CadastroPage() {
             placeholder="Seu nome completo"
             autoComplete="name"
             required
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
           />
           <Field
             label="Celular"
@@ -106,16 +73,8 @@ export default function CadastroPage() {
             type="tel"
             placeholder="(00) 00000-0000"
             autoComplete="tel"
-            value={celular}
-            onChange={(e) => setCelular(e.target.value)}
           />
-          <Field
-            label="Data de nascimento"
-            name="nascimento"
-            type="date"
-            value={nascimento}
-            onChange={(e) => setNascimento(e.target.value)}
-          />
+          <Field label="Data de nascimento" name="nascimento" type="date" />
           <Field
             label="Senha"
             name="senha"
@@ -124,8 +83,6 @@ export default function CadastroPage() {
             autoComplete="new-password"
             required
             minLength={6}
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
           />
           <Field
             label="Código Promocional"
@@ -144,6 +101,8 @@ export default function CadastroPage() {
 
         <label className="mt-5 flex items-start gap-3 text-sm text-muted-foreground">
           <Checkbox
+            name="aceito"
+            required
             checked={aceito}
             onCheckedChange={setAceito}
             className="mt-0.5"
@@ -153,20 +112,19 @@ export default function CadastroPage() {
           </span>
         </label>
 
-        {erro && (
+        {estado.erro && (
           <p className="mt-4 text-center text-sm font-semibold text-danger">
-            {erro}
+            {estado.erro}
           </p>
         )}
 
-        <Button
-          type="submit"
+        <BotaoEnviar
           variant="onYellow"
           className="mt-6 w-full"
-          disabled={!aceito || carregando}
+          pendente="Cadastrando…"
         >
-          {carregando ? "Cadastrando…" : "Cadastrar"}
-        </Button>
+          Cadastrar
+        </BotaoEnviar>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Já tem conta?{" "}

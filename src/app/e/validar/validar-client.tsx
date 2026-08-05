@@ -13,6 +13,7 @@ import {
   type ResultadoValidar,
 } from "@/components/estab/resultado-validacao";
 import { QrScanner } from "@/components/estab/qr-scanner";
+import { ValidarPorCpf } from "@/components/estab/validar-por-cpf";
 
 export function ValidarClient() {
   const [codigo, setCodigo] = React.useState("");
@@ -83,6 +84,11 @@ export function ValidarClient() {
         </p>
 
         <QrScanner className="mt-4" />
+
+        {/* Fase 8/V3 — terceira opção, DISCRETA por pedido do cliente: o
+            código segue sendo o caminho principal. Entra aqui, na única
+            faixa livre, e o `mt-auto` abaixo mantém o botão ancorado. */}
+        <ValidarPorCpf onResultado={setResultado} />
 
         {/* ação ancorada embaixo (alcance do polegar) */}
         <div className="mt-auto pt-6">

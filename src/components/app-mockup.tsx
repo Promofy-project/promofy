@@ -3,6 +3,7 @@ import { Menu, Signal, Wifi, BatteryFull } from "lucide-react";
 import { cupons, getCategoria } from "@/lib/mock-data";
 import { formatBRLValue } from "@/lib/utils";
 import { Logo } from "@/components/logo";
+import { RelogioStatusBar } from "@/components/relogio-status-bar";
 
 /** Mockup estático da home do app (mini "device") para a landing. */
 export function AppMockup() {
@@ -17,7 +18,7 @@ export function AppMockup() {
       <div className="relative overflow-hidden rounded-[2.4rem] border-[10px] border-[#14141f] bg-background shadow-2xl">
         {/* status bar */}
         <div className="flex items-center justify-between px-5 pt-2.5 text-[9px] font-semibold text-foreground">
-          <span>9:41</span>
+          <RelogioStatusBar />
           <div className="flex items-center gap-1">
             <Signal className="h-2.5 w-2.5" />
             <Wifi className="h-2.5 w-2.5" />

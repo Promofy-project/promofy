@@ -47,6 +47,7 @@ const navConfig: Record<
       { href: "/portal/cupons", label: "Cupons", icon: Ticket },
       { href: "/portal/estabelecimento", label: "Estabelecimento", icon: Store },
       { href: "/portal/avaliacoes", label: "Avaliações", icon: Star },
+      { href: "/portal/mural", label: "Mural", icon: Megaphone },
       // Ocultado temporariamente: estabelecimento é gratuito por ora. A página /portal/planos permanece intacta.
       // { href: "/portal/planos", label: "Planos", icon: CreditCard },
       { href: "/portal/configuracoes", label: "Configurações", icon: Settings },
