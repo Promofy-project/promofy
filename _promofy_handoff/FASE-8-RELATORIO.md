@@ -155,7 +155,10 @@ fora do grant por coluna) e não respinga em outro estabelecimento.
 
 | Suíte | rls | f2 | f3 | f4 | f5 | f6 | f6.5 | f7 | **f8** |
 |---|---|---|---|---|---|---|---|---|---|
-| PASS | 25 | 27 | 22 | 42 | 64 | 177 | 44 | 17 | **53** |
+| PASS | 25 | 27 | 22 | 42 | 64 | 177 | 44 | **29** | **53** |
+
+**483 PASS, 0 FAIL** + build. A `f7` subiu de 17 para 29: as 12 asserções novas cobrem o scrubbing de senha
+(§14) — moram lá porque é a suíte do Sentry, não porque sejam da Fase 7.
 
 Uma asserção **não roda fora do alvo local** e isso é dito em vez de virar verde falso: "destrava quando a janela
 esvazia" exige envelhecer as linhas da auditoria, que vive em `private` e — por desenho — não é alcançável por
@@ -280,13 +283,39 @@ zero por cento; é "ainda não dá para dizer".
 **O mesmo dado fictício continua em três telas que não estavam no pedido** — ver backlog. Uma delas é a página de
 cupom do consumidor, e é a que mais incomoda.
 
-## 13. Um tropeço de ambiente
+## 13. Senha no scrubbing do Sentry
+
+Fecha a consequência do §11. Com os formulários submetendo por Server Action, a senha passou a **atravessar o
+servidor Next** — antes ia direto do navegador ao GoTrue. Um erro com o `FormData` anexado passaria a poder
+levá-la ao Sentry, e o `sentry-scrub.ts` não tinha padrão nenhum para senha.
+
+**Precisou de outro mecanismo.** CPF, e-mail e código de cupom têm **formato** — dá para achá-los no meio de um
+texto. Senha não tem: `promofy123` é uma palavra como outra qualquer. Então a barreira é por **nome de chave**
+(`{ senha: … }` → `[redigido]`, sem olhar o conteúdo) mais o caso de **par `chave=valor`** em string.
+
+O segundo caso não é hipotético e é o mais urgente dos dois: **até este deploy, produção ainda serve os
+formulários que degradam para `GET /admin/login?email=…&senha=…`** — e essa URL chega ao Sentry por breadcrumb de
+navegação ou por `request.url`. O scrubbing cobre o vazamento que a correção ainda não alcançou.
+
+**Token de sessão entrou junto**, por decisão minha e pelo mesmo argumento que já justificava o código de cupom no
+arquivo: um `access_token` do Supabase é credencial ao portador, vale mais que um cupom, e objetos de sessão são
+serializados dentro de erros com frequência. Se você preferir o escopo estrito de "só senha", é tirar dois nomes
+da lista.
+
+**De quebra, um buraco que o teto de profundidade abria:** acima do nível 8 a varredura devolvia o valor **cru** —
+inclusive string, ou seja, um CPF a nove níveis saía inteiro. Agora string no teto ainda passa pelo filtro. O que
+segue fora é objeto além do nível 8, e o comentário no arquivo diz isso.
+
+**12 asserções novas**, incluindo as negativas: `senhaHint`, `password_hint` e `tokenizado` **não** são redigidos
+(a lista não é varredura cega), e o que não é segredo sobrevive ao lado do que é.
+
+## 14. Um tropeço de ambiente
 
 O `verify` falhou uma vez com `error running container: exit 1` no `db:reset`, com 29 containers na máquina.
 Transitório e não de código: o stack se recuperou sozinho e a repetição passou limpa. É a contenção já registrada
 na memória do projeto (3 stacks Supabase simultâneos).
 
-## 13. IMPACTO NA MIGRAÇÃO NATIVA
+## 15. IMPACTO NA MIGRAÇÃO NATIVA
 
 Princípio permanente: regra no servidor, lógica pura em `src/lib` sem API de navegador, só-web isolado atrás de
 ponto trocável.
@@ -309,7 +338,7 @@ Action e as RPCs são reaproveitadas). *O gatilho migra; o arquivo não.*
 `dentroDaJanela` e em `formatDateTimeBRT`. Conferir `wc -l` de `database.types.ts` depois de `db:types`. E o novo:
 o badge do mural depende de recontagem por navegação — no RN, o equivalente é o foco da tela, não o `pathname`.
 
-## 14. Deploy — o que precisa acontecer, na ordem
+## 16. Deploy — o que precisa acontecer, na ordem
 
 **Não executado. Decisão à parte.**
 
@@ -321,23 +350,25 @@ o badge do mural depende de recontagem por navegação — no RN, o equivalente 
 4. Smoke de produção: publicar um aviso real, conferir o badge no `/e`, o NPS real, e o fluxo por CPF ponta a ponta
    com `convidado@` (cujo CPF **passa** no DV — verificado).
 
-## 15. Backlog
+## 17. Backlog
 
 **Limpo nesta fase:** mural de recados · indicadores/NPS no `/e` · NPS real no portal · validação por identidade ·
-cosmético "Lucas Orladi"/"9:41" · depoimentos fictícios do portal.
+cosmético "Lucas Orladi"/"9:41" · depoimentos fictícios do `/portal/avaliacoes` **e do dashboard** ·
+**vazamento de senha na URL dos cinco formulários** · **senha e token no scrubbing do Sentry**.
 
 **Próximo grande:** **taxonomia Segmento→Categoria e os filtros** — é o que resta de maior no produto.
 
-**Prioridade alta, e sobrou do §12:** **o mesmo dado fictício ainda vive em três telas** que não estavam no pedido.
-A pior é **`/m/cupom/[id]`**, a página de cupom **do consumidor**: um `FeedbackCarousel` cola depoimentos de
-*Mariana Alves* e *Rafael Souza* a um cupom **real**, como se fossem avaliações daquele cupom. As outras duas são o
-funil mock do **`/admin`** e os depoimentos da **landing** (esta última é peça de marketing — decisão diferente).
-Não toquei nelas porque a instrução nomeava o `/portal` e porque tirar a seção do cupom muda o que o Lucas mostra
-na demo. É uma decisão de uma linha.
+**Fase 9 — as três telas com dado fictício restante.** Prioridade dentro do item: **`/m/cupom/[id]`**, a página de
+cupom **do consumidor**, onde um `FeedbackCarousel` cola depoimentos de *Mariana Alves* e *Rafael Souza* a um cupom
+**real**, como se fossem avaliações daquele cupom — é o único dos três que o consumidor vê. Depois, o funil mock do
+**`/admin`**. Por último a **landing**, que é peça de marketing e merece decisão própria. **A remoção do
+`/m/cupom/[id]` será combinada com o cliente**, porque muda o que ele mostra na demo.
 
 **Prioridade média:** **erro renderizado como zero** (§10) · **série mensal de resgates** no portal — derivável de
 `cupom_eventos`, mas precisa do corte de mês em BRT no SQL para não divergir do `resgates_mes`, então pede RPC, não
-conta em JS · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
+conta em JS · **ligar a confirmação de e-mail** exige antes tratar `signUp` **sem sessão**: hoje `cadastrarAction`
+redireciona para `/m/onboarding` de qualquer jeito, o que só funciona porque a confirmação está **desligada em
+produção por decisão da Fase 3** · **dívida do Sentry** (cliente **e** servidor não-provados — ver FASE-7 §14; critério de
 aceite é evento no painel) · **medir o build com o Sentry restrito ao `nodejs`** (52s → 128s na Fase 7) ·
 **retenção da auditoria de CPF** (nada apaga `private.validacao_tentativas`; ~14,4k linhas/dia/estabelecimento no
 teto, e é dado pessoal pseudonimizado — LGPD pede prazo) · relatório NPS completo no portal (mockup `NPS.png`) ·
@@ -350,13 +381,6 @@ amarelos fora dos tokens · auto-cadastro de empresa.
 
 **Pendente de decisão do cliente:** periodicidade de uso ("1 por dia") — se a resposta for essa, o switch de
 ilimitado da Fase 6 **não atende**.
-
-**Novos, levantados pela revisão de segurança do §11 (nenhum explorável hoje):** `src/lib/sentry-scrub.ts` limpa
-CPF, e-mail e código de cupom, mas **não tem padrão para senha** — hoje é inalcançável (`sendDefaultPii: false` e
-`tracesSampleRate: 0`, e o SDK não captura `FormData` de Server Action), só que a senha agora **atravessa o
-servidor Next**, o que antes não acontecia · `cadastrarAction` redireciona para `/m/onboarding` mesmo quando o
-`signUp` **não** devolve sessão, que é o que acontece com confirmação de e-mail ligada — comportamento herdado do
-código antigo, mas convém conferir a configuração de produção antes do deploy.
 
 **Novo (achado colateral, Fase 1):** `gerar_codigo_cupom` sorteia com `random()`, PRNG **não criptográfico** —
 a entropia real do código é menor que os 2⁴⁰ nominais. Não é urgente (o código também é protegido por posse e pelo
