@@ -10,6 +10,7 @@ import { CouponCard } from "@/components/coupon-card";
 import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
+import { NpsPendenteCard } from "@/components/nps-pendente-card";
 
 // Dados agora vêm do Supabase: nada de prerender estático no build
 // (o banco não precisa estar de pé para `next build` passar).
@@ -39,6 +40,12 @@ export default async function MobileHome({
 
       <div className="px-4">
         <PointsSummary />
+      </div>
+
+      {/* Fase 9/Z1: a nota que o balcão deixou em aberto. Só aparece quando
+          existe uma — some sozinho depois de respondida ou dispensada. */}
+      <div className="px-4 empty:hidden">
+        <NpsPendenteCard />
       </div>
 
       <div className="px-4">

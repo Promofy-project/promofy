@@ -47,6 +47,23 @@ export interface EstadoInicial {
   estados: EstadoCupomDTO[];
   /** Uso por cupom (Fase 5) — insumo do selo "utilizado". */
   usos: UsoCupomDTO[];
+  /**
+   * Fase 9/Z1: validadas que ainda devem nota, mais recente primeiro.
+   *
+   * NÃO dá para derivar isto de `estados`: `estadosDeInicial` colapsa para uma
+   * linha por cupom preferindo a `ativo`, então uma validada-sem-nota some
+   * quando existe uma ativa do mesmo cupom. E a nota precisa do `row_id`, que
+   * o mapa colapsado perde.
+   */
+  npsPendentes: NpsPendenteDTO[];
+}
+
+/** Uma pesquisa de NPS que o balcão deixou em aberto (Fase 9/Z1). */
+export interface NpsPendenteDTO {
+  row_id: number;
+  cupom_id: string;
+  titulo: string;
+  validado_em: string | null;
 }
 
 /** Resultado de uma ativação para a UI reagir. */
@@ -100,6 +117,10 @@ interface CouponStateValue {
   abrirNps: (id: string) => void;
   /** Registra a nota de NPS (idempotente no servidor). */
   responderNps: (id: string, nota: number) => Promise<ResultadoNps>;
+  /** Fase 9/Z1: responde pelo `row_id`, sem depender do mapa de estados. */
+  responderNpsPendente: (rowId: number, nota: number) => Promise<ResultadoNps>;
+  /** Fase 9/Z1: tira a oferta da frente — só nesta sessão, nada é gravado. */
+  dispensarNpsPendente: () => void;
   fecharNps: () => void;
 
   /** Id do cupom com a folha aberta (derivado de `sheetCupom`). */
@@ -107,6 +128,8 @@ interface CouponStateValue {
   /** Cupom da folha aberta — dados de exibição, vindos do servidor. */
   sheetCupom: Cupom | null;
   npsId: string | null;
+  /** Fase 9/Z1: a próxima pesquisa em aberto, ou null. Uma por vez. */
+  npsPendente: NpsPendenteDTO | null;
 
   /** Animação "+N pontos" (Fase 5) — sempre com valor vindo do servidor. */
   pontosPop: PontosPopState | null;
@@ -169,6 +192,21 @@ export function CouponStateProvider({
   const [sheetCupom, setSheetCupom] = React.useState<Cupom | null>(null);
   const sheetId = sheetCupom?.id ?? null;
   const [npsId, setNpsId] = React.useState<string | null>(null);
+
+  /**
+   * Fase 9/Z1 — a fila do que o balcão validou e ficou sem nota.
+   *
+   * Uma por vez, mais recente primeiro (a RPC já entrega ordenado). Dispensar
+   * remove só da fila DESTA sessão: nada é gravado, nem no banco nem em
+   * storage. Recarregar o app oferece de novo — que é o comportamento pedido
+   * ("não perseguir o usuário", mas também não desistir de uma nota que o
+   * estabelecimento precisa).
+   */
+  const [filaNps, setFilaNps] = React.useState<NpsPendenteDTO[]>(
+    () => initial.npsPendentes ?? [],
+  );
+  const npsPendente = filaNps[0] ?? null;
+
   const [pontosPop, setPontosPop] = React.useState<PontosPopState | null>(null);
   const seqPop = React.useRef(0);
 
@@ -249,8 +287,33 @@ export function CouponStateProvider({
         setEstados((prev) =>
           prev[id] ? { ...prev, [id]: { ...prev[id], nps: nota } } : prev,
         );
+        // A mesma ativação pode estar na fila de pendentes (validada no
+        // balcão e reavaliada aqui) — sai dela para não ser oferecida de novo.
+        setFilaNps((prev) => prev.filter((p) => p.row_id !== estado.rowId));
         return { ok: true, pontos: r.pontos ?? 0 };
       },
+
+      /**
+       * Fase 9/Z1: responde pelo `row_id`, sem passar pelo mapa de estados.
+       * É o caminho da fila de pendentes — o cupom pode nem estar no mapa
+       * (colapsado, expirado, ou simplesmente fora da home).
+       */
+      responderNpsPendente: async (rowId, nota) => {
+        const r = await responderNpsAction(rowId, nota);
+        if (!r?.ok) return { ok: false, motivo: r?.motivo ?? "erro" };
+        setSaldo(r.saldo);
+        setFilaNps((prev) => prev.filter((p) => p.row_id !== rowId));
+        // Se por acaso esta linha for a que está no mapa, reflete a nota.
+        setEstados((prev) => {
+          const id = Object.keys(prev).find((k) => prev[k].rowId === rowId);
+          return id ? { ...prev, [id]: { ...prev[id], nps: nota } } : prev;
+        });
+        return { ok: true, pontos: r.pontos ?? 0 };
+      },
+
+      /** Tira da fila só nesta sessão — nada é gravado. */
+      dispensarNpsPendente: () =>
+        setFilaNps((prev) => prev.slice(1)),
 
       fecharNps: () => {
         setNpsId(null);
@@ -260,6 +323,7 @@ export function CouponStateProvider({
       sheetId,
       sheetCupom,
       npsId,
+      npsPendente,
 
       pontosPop,
       celebrarPontos,
@@ -273,6 +337,7 @@ export function CouponStateProvider({
       sheetCupom,
       sheetId,
       npsId,
+      npsPendente,
       pontosPop,
       celebrarPontos,
       encerrarPontosPop,
@@ -309,6 +374,9 @@ export function useCouponState(): CouponStateValue {
       consultarCupom: async () => {},
       abrirNps: () => {},
       responderNps: async () => ({ ok: false, motivo: "sem_sessao" }),
+      responderNpsPendente: async () => ({ ok: false, motivo: "sem_sessao" }),
+      dispensarNpsPendente: () => {},
+      npsPendente: null,
       fecharNps: () => {},
       sheetId: null,
       sheetCupom: null,

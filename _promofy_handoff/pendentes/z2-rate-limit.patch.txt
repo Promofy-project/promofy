@@ -1,0 +1,87 @@
+diff --git a/src/lib/actions/auth.ts b/src/lib/actions/auth.ts
+index 6e73cd8..3a9ebc7 100644
+--- a/src/lib/actions/auth.ts
++++ b/src/lib/actions/auth.ts
+@@ -1,9 +1,10 @@
+ "use server";
+ 
++import { headers } from "next/headers";
+ import { redirect } from "next/navigation";
+ 
+ import { createClient } from "@/lib/supabase/server";
+-import type { EstadoAuth } from "@/lib/auth-estado";
++import { MENSAGEM_CADASTRO_GENERICA, type EstadoAuth } from "@/lib/auth-estado";
+ 
+ /**
+  * Autenticação no SERVIDOR (Fase 8, correção do achado do smoke).
+@@ -118,6 +119,23 @@ export async function entrarAdminAction(
+  *
+  * Papel NUNCA vai em `options.data` — o trigger `handle_new_user` copia os
+  * campos para `profiles` e o papel é decidido lá.
++ *
++ * FASE 9/Z2 — O ORÁCULO DE EXISTÊNCIA DE CONTA.
++ *
++ * Esta tela respondia "Este e-mail já está cadastrado" a qualquer visitante.
++ * É um oráculo aberto, e destoava do resto: a Fase 8 gastou uma migration
++ * inteira para que a busca por CPF desse a MESMA resposta aos três "não
++ * achei", justamente para não revelar quem é cliente de quem — enquanto um
++ * formulário público dizia "esta pessoa usa o Promofy" para quem perguntasse.
++ *
++ * Duas mudanças: a mensagem deixa de distinguir "já existe" de outras falhas,
++ * e uma janela por IP encarece a enumeração em escala.
++ *
++ * O QUE ISSO **NÃO** RESOLVE, e é importante não fingir que resolve: com
++ * `mailer_autoconfirm` ligado (decisão da Fase 3), o cadastro que dá certo
++ * cria sessão e REDIRECIONA; o que falha, não. Essa diferença é observável e
++ * nenhuma mensagem neutra a apaga. Fechar de verdade exige ligar a confirmação
++ * de e-mail — decisão de produto, no backlog.
+  */
+ export async function cadastrarAction(
+   _anterior: EstadoAuth,
+@@ -136,6 +154,21 @@ export async function cadastrarAction(
+   if (senha.length < 6) return { erro: "A senha precisa ter pelo menos 6 caracteres." };
+ 
+   const supabase = createClient();
++
++  // Janela por IP ANTES do signUp: contar depois deixaria o GoTrue ser
++  // martelado de graça. O IP vem do `x-forwarded-for` da Vercel; sem ele
++  // (dev local) a RPC agrupa tudo sob um marcador, o que é o comportamento
++  // conservador certo — nunca ficar sem teto.
++  const ip = (headers().get("x-forwarded-for") ?? "").split(",")[0]?.trim() ?? "";
++  const { data: limite } = await supabase.rpc("registrar_tentativa_cadastro", {
++    p_ip: ip,
++    p_email: email,
++  });
++  const l = limite as unknown as { ok?: boolean } | null;
++  if (l?.ok === false) {
++    return { erro: "Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo." };
++  }
++
+   const { error } = await supabase.auth.signUp({
+     email,
+     password: senha,
+@@ -147,16 +180,18 @@ export async function cadastrarAction(
+ 
+   if (error) {
+     const m = error.message.toLowerCase();
+-    if (m.includes("already registered")) {
+-      return { erro: "Este e-mail já está cadastrado. Faça login." };
+-    }
++    // "senha curta" continua específico: é erro do próprio formulário, não
++    // diz nada sobre terceiros, e esconder isso só atrapalharia quem cadastra.
+     if (m.includes("password")) {
+       return { erro: "A senha precisa ter pelo menos 6 caracteres." };
+     }
+-    return { erro: "Não foi possível concluir o cadastro. Tente novamente." };
++    // TUDO O MAIS — inclusive "already registered" — cai na mesma frase. Ela
++    // aponta o login sem afirmar que ESTE e-mail existe.
++    return { erro: MENSAGEM_CADASTRO_GENERICA };
+   }
+ 
+-  // Confirmação de e-mail desligada no ambiente local: a sessão já existe
+-  // aqui e o fluxo segue direto para o onboarding.
++  // Confirmação de e-mail desligada em produção por decisão da Fase 3
++  // (`mailer_autoconfirm: true`, conferido no Passo 0 do deploy da Fase 8):
++  // a sessão já existe aqui e o fluxo segue direto para o onboarding.
+   redirect("/m/onboarding");
+ }

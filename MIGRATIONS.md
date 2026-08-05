@@ -12,10 +12,13 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 → `supabase db push --linked --dry-run` → `supabase db push --linked`. O desvio MCP `apply_migration` +
 `migration repair` é **plano B**, só quando o CLI não alcança o remoto.
 
-**Estado:** **27 aplicadas, local e hospedado alinhados** (`27 = 27`, e o `db push --dry-run` seguinte responde
-*"Remote database is up to date"*). As **24–27** foram ao ar em 05/08/2026, **antes** do código da Fase 8 — a
-janela banco-antes-código foi verificada e é invisível: nenhuma delas toca objeto pré-existente, e o código então
-publicado não chamava nenhum objeto novo.
+**Estado:** produção tem **1–27** (`27 = 27` desde 05/08/2026). A **28** (Fase 9) existe **apenas no local** — não
+foi ao ar. Não há 29: ver a nota ao final. As 24–27 foram ao ar **antes** do código da Fase 8, e a janela banco-antes-código foi verificada e
+é invisível: nenhuma delas toca objeto pré-existente, e o código então publicado não chamava nenhum objeto novo.
+
+> **Nota sobre o projeto de QA** (`olyjfluaioafuizbnrpl`, descartável): está em **1–23**, atrás da produção. Não é
+> `link`ado de propósito — `db push --linked` aponta para produção, e trocar isso deixaria um footgun armado. A via
+> é `db push --db-url` com a senha do banco de QA.
 
 ---
 
@@ -342,3 +345,26 @@ publicado não chamava nenhum objeto novo.
 > da busca; **bloqueado e DV-inválido não eram auditados**, então a tabela não mostrava a magnitude de um ataque;
 > **`profiles.cpf` sem índice**; e **`limit 1` sem `order by`** escolhia estabelecimento arbitrário para dono de
 > mais de um.
+
+## Fase 9 — Fechamento da Fase 8 + taxonomia
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 28 | `20260806120000_fase9_nps_pendente.sql` | `meu_estado_consumidor()` ganha `nps_pendentes[]` — validadas sem nota, mais recente primeiro — e um índice parcial em `cupons_usuario`. |
+
+> **Obs.:** fecha o achado do smoke da Fase 8. A pesquisa de NPS só disparava quando o app do consumidor observava
+> o flip `ativo → validado` **ao vivo**; a validação por CPF existe justamente para quando o celular **não** está
+> presente, então nesse caminho a nota nunca era pedida e os indicadores sub-contavam o fluxo novo.
+>
+> **Por que chave nova e não derivar de `estados`:** a RPC já devolvia as validadas com `nps` null ali, mas o
+> cliente **colapsa `estados` para uma linha por cupom**, preferindo a `ativo` — a validada-sem-nota some quando
+> existe uma ativa do mesmo cupom. E `responder_nps` precisa do `row_id`, que o mapa colapsado perde.
+>
+> Aditiva: as demais chaves saem idênticas, e o código antigo ignora a nova. O índice é **parcial** — a linha entra
+> nele enquanto deve nota e sai sozinha quando a nota chega.
+
+> **A 29 não existe (ainda).** O rate limit do cadastro foi desenhado, escrito, revisado — e **retirado da entrega**
+> pela própria revisão. Ele chaveava a janela por um **parâmetro do cliente** (`p_ip`) numa RPC concedida a `anon`:
+> quem rotacionasse o IP nunca era contado, e quem fixasse o IP de uma vítima negava cadastro a todos atrás daquele
+> CGNAT. A Fase 8 acertou porque chaveava por `auth.uid()`, derivado no servidor — aqui a chave foi para o cliente
+> **e** a autenticação caiu. O arquivo está em `_promofy_handoff/pendentes/`, aguardando decisão de desenho.
