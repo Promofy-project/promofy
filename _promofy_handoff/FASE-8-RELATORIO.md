@@ -124,7 +124,12 @@ credencial, exatamente como na busca.
 
 ## 8. Revisão adversarial (4 lentes) + revisão de segurança dedicada
 
-**Correção** — `mascarar_cpf` não é concedida a `authenticated` (só funciona dentro de definer, que é onde é usada).
+**Correção** — ~~`mascarar_cpf` não é concedida a `authenticated`~~. **Isto estava errado**, e o Passo 1 do deploy
+desmentiu: ela **tem** `EXECUTE` para `authenticated`, em produção **e** no local (sem drift — nenhuma migration
+jamais concedeu ou revogou nada nela; é o default do Supabase para função em `public`). Não é brecha: a função é
+`immutable` e puramente textual, recebe um CPF e devolve **menos** do que recebeu, sem ler tabela nenhuma — quem
+a chama já tem o documento. Fica o registro de que a afirmação original era falsa, porque uma barreira imaginária
+é pior que barreira nenhuma.
 **Regressão** — `NAV_ROUTES`, badge no layout, `cpfQa` sem DV: as três achadas antes de virarem bug.
 **Produto** — "discreta" era requisito do cliente: a opção por CPF é um link fino, não compete com o código.
 **Migração nativa** — §11.
@@ -338,17 +343,31 @@ Action e as RPCs são reaproveitadas). *O gatilho migra; o arquivo não.*
 `dentroDaJanela` e em `formatDateTimeBRT`. Conferir `wc -l` de `database.types.ts` depois de `db:types`. E o novo:
 o badge do mural depende de recontagem por navegação — no RN, o equivalente é o foco da tela, não o `pathname`.
 
-## 16. Deploy — o que precisa acontecer, na ordem
+## 16. Deploy — coreografado, com parada e OK humano por passo
 
-**Não executado. Decisão à parte.**
+**PASSO 0 — gates de leitura ✅.** `supabase_vault` **0.3.1** em produção (mesma do local) · confirmação de e-mail
+**desligada** (`mailer_autoconfirm: true`), então o `redirect` do `cadastrarAction` está correto · baseline exato ·
+migration list **1–23** · nenhum objeto das 24–27 pré-existente. E o gate que só existia no local saiu de lá: o
+PostgREST de produção responde **`PGRST106 — "Only the following schemas are exposed: public, graphql_public"`**,
+provando que a auditoria em `private` é inalcançável pela API no ambiente do cliente.
 
-1. Rollback armado: anotar o `dpl_` de produção.
-2. **Banco antes do código:** `db push --linked` das migrations **24 a 27**. Todas aditivas; o código antigo não
-   conhece nenhuma tabela nova. **Atenção:** a 27 usa o **Vault** — confirmar `supabase_vault` no projeto de
-   produção antes (local tem 0.3.1).
-3. Merge `--no-ff` → push → build READY.
-4. Smoke de produção: publicar um aviso real, conferir o badge no `/e`, o NPS real, e o fluxo por CPF ponta a ponta
-   com `convidado@` (cujo CPF **passa** no DV — verificado).
+O Passo 0 também **redesenhou o smoke do Passo 3**: `convidado@` tem 4 ativações vivas, **2 na Sabor & Cia** (do
+`lojista@`) e **2 na Studio Bella**, e `lojista2@` é dono da **PowerFit Academia**. Isso dá o teste do oráculo com
+dado que já existe — `lojista@` deve ver só as duas dele, e `lojista2@` deve receber o `sem_ativacao_aqui`
+genérico. Risco declarado e aceito: `consumidor@` **também** tem ativação viva na Sabor & Cia, então a linha a
+confirmar é identificada por **título + horário**, e o CPF dele não é digitado em momento algum.
+
+**PASSO 1 — migrations 24–27 em produção ✅ (05/08/2026).** Dry-run listou exatamente as quatro; aplicadas com dois
+`NOTICE` esperados (`pgcrypto` e `supabase_vault` já existiam → `if not exists` vira no-op). Depois: **27 = 27** e
+*"Remote database is up to date"*. Tabelas do mural vazias com RLS ativa; `avisos_lidos` só com **SELECT** para
+`authenticated`, então `lido_em` segue não-forjável; `validacao_tentativas` **em `private`**, sem privilégio para
+`anon`/`authenticated`; `private.segredos` **dropada** e o pepper **migrado** para o Vault (só o nome apareceu, o
+valor nunca); índice de expressão criado; `anon` sem `EXECUTE` em nenhuma função nova. Baseline **byte a byte
+idêntico**. Janela banco-antes-código **invisível por construção**: nenhuma das quatro toca objeto pré-existente, e
+o código então no ar não fazia uma única chamada aos objetos novos — seis rotas em 200.
+
+**PASSO 2 e 3 — pendentes de OK.** Merge `--no-ff` com rollback armado; depois o smoke de produção (forms sem-JS
+no ar, mural ponta a ponta, indicadores, a matriz do CPF acima, regressão e estado final).
 
 ## 17. Backlog
 

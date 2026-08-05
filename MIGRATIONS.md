@@ -12,8 +12,10 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 → `supabase db push --linked --dry-run` → `supabase db push --linked`. O desvio MCP `apply_migration` +
 `migration repair` é **plano B**, só quando o CLI não alcança o remoto.
 
-**Estado:** **27 no repositório**. Produção tem **1–23** (Fase 7); as **24–27** (Fase 8) estão aplicadas apenas
-no **local** — a Fase 8 ainda não foi ao ar.
+**Estado:** **27 aplicadas, local e hospedado alinhados** (`27 = 27`, e o `db push --dry-run` seguinte responde
+*"Remote database is up to date"*). As **24–27** foram ao ar em 05/08/2026, **antes** do código da Fase 8 — a
+janela banco-antes-código foi verificada e é invisível: nenhuma delas toca objeto pré-existente, e o código então
+publicado não chamava nenhum objeto novo.
 
 ---
 
