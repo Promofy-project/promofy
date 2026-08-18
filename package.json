@@ -33,10 +33,11 @@
     "vercel:env:rm": "tsx scripts/vercel-api.ts env:rm",
     "vercel:rollback": "tsx scripts/vercel-api.ts rollback",
     "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
-    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run build",
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run test:qa && npm run build",
     "test:fase7:storage": "tsx scripts/test-fase7-storage.ts --qa",
     "test:fase8": "tsx scripts/test-fase8.ts",
     "test:fase8:hosted": "tsx scripts/test-fase8.ts --hosted",
+    "test:qa": "tsx scripts/test-qa-relatorios.ts",
     "test:fase9": "tsx scripts/test-fase9.ts",
     "test:fase9:hosted": "tsx scripts/test-fase9.ts --hosted"
   },
