@@ -445,15 +445,17 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
   const itens: ItemCupomPortal[] = cupons.map((row) => ({
     cupom: linhaParaCupom(row, estabelecimento.nome),
     statusPortal:
-      row.status === "esgotado"
-        ? "esgotado"
-        : row.status === "expirado"
-          ? "expirado"
-          : row.status === "pendente"
-            ? "pendente"
-            : row.status === "rejeitado"
-              ? "rejeitado"
-              : "ativo",
+      row.status === "excluido"
+        ? "excluido"
+        : row.status === "esgotado"
+          ? "esgotado"
+          : row.status === "expirado"
+            ? "expirado"
+            : row.status === "pendente"
+              ? "pendente"
+              : row.status === "rejeitado"
+                ? "rejeitado"
+                : "ativo",
     metricas:
       metricasPorCupom.get(row.id) ?? {
         visualizacoes: 0,

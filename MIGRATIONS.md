@@ -12,8 +12,9 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 → `supabase db push --linked --dry-run` → `supabase db push --linked`. O desvio MCP `apply_migration` +
 `migration repair` é **plano B**, só quando o CLI não alcança o remoto.
 
-**Estado:** produção tem **1–27** (`27 = 27` desde 05/08/2026). A **28, 29 e 30** (Fase 9) existem **apenas no
-local** — não foram ao ar. Sobre o número 29 ter sido reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código da Fase 8, e a janela banco-antes-código foi verificada e
+**Estado:** produção tem **1–30** (`30 = 30` desde 18/08/2026 — as 28/29/30 foram ao ar com o merge
+`670a116`). As **31 e 32** (Fase 9/Onda C) existem **apenas no local**. Sobre o número 29 ter sido
+reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código da Fase 8, e a janela banco-antes-código foi verificada e
 é invisível: nenhuma delas toca objeto pré-existente, e o código então publicado não chamava nenhum objeto novo.
 
 > **Nota sobre o projeto de QA** (`olyjfluaioafuizbnrpl`, descartável): está em **1–23**, atrás da produção. Não é
@@ -426,6 +427,48 @@ local** — não foram ao ar. Sobre o número 29 ter sido reaproveitado, ver a n
 > **Janela banco-antes-código:** entre a 30 e o deploy, o clique é contado **duas vezes** (aqui e no cliente, que
 > ainda envia). É aditivo e se corrige sozinho no deploy. Subir o código antes deixaria a janela **sem clique
 > nenhum** — perder dado é pior que duplicar.
+
+## Fase 9 — Onda C (relatórios v1/v2: moderação, janela no /e, filtro e exclusão)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 31 | `20260818120000_fase9c_status_excluido.sql` | Acrescenta `'excluido'` a `status_cupom`. **Arquivo próprio** — valor de enum não pode ser usado na mesma transação em que nasce (padrão das 5 e 8). |
+
+> **Obs.:** status, e não coluna `excluido_em`, por três razões. (a) A policy pública já filtra por
+> `status in ('ativo','indisponivel')` (migration 3) — um status novo fica fora do catálogo **sem tocar em
+> policy nenhuma**, enquanto um booleano exigiria reescrever a policy e tudo que a espelha. (b) `rejeitado`
+> (migration 8) estabeleceu exatamente este precedente: status que existe para **não** aparecer. (c)
+> `moderacao_historico` já registra transições de status; a exclusão entra na mesma trilha, sem inventar
+> auditoria paralela.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 32 | `20260818130000_fase9c_excluir_cupom.sql` | Derruba a policy de `DELETE` do lojista, **revoga o grant**, e cria `excluir_cupom(text)`. |
+
+> **Obs. — o `DELETE` era um destruidor de histórico armado.** `cupons_usuario.cupom_id` e
+> `cupom_eventos.cupom_id` têm **`on delete cascade`** desde a migration 1 (linhas 100 e 110). A policy
+> `"cupons: lojista apaga os proprios"` (migration 3) permitia
+> `DELETE /rest/v1/cupons?id=eq.<meu-cupom>` **direto pelo PostgREST**, sem Server Action — e isso levaria
+> junto todas as ativações, validações, **notas de NPS** e eventos de métrica daquele cupom. O relatório v2
+> pediu exclusão (§1.6) e preservação de histórico (§4.2) na mesma página; só o soft delete atende aos dois.
+>
+> **Policy e grant caem juntos**, porque são barreiras independentes e derrubar uma só é meia barreira — a
+> lição da 9 vale aqui na forma `revoke delete on table` (revoke por coluna seria no-op).
+>
+> **`status` não está no grant de update do lojista** (migration 9), então ele não consegue escrever
+> `'excluido'` direto: a RPC `security definer` é o único caminho, e é onde a regra mora. A posse é checada
+> **dentro** da função, antes de qualquer escrita — definer ignora RLS, mesma doutrina das 26/27.
+>
+> **Recusa com ativação viva** (`tem_ativacao_viva`). Um código já ativado e dentro do prazo é promessa feita
+> a alguém possivelmente já no balcão; sumir do catálogo é uma coisa, sumir de quem segurou a vaga é outra.
+> `validar_cupom` lê por **código**, não por status, então quem ativou antes continua conseguindo consumir.
+>
+> **Idempotente:** excluir de novo devolve `ok` com `ja_excluido`, em vez de erro — o card some no primeiro
+> toque, e punir o segundo só assustaria quem já conseguiu o que queria.
+>
+> ⚠️ **A suíte foi verificada por mutação.** Recriando a policy de DELETE no banco local, `test:fase9c` ficou
+> **vermelha em 10 asserções** — a começar por "DELETE físico NÃO apaga o cupom", com o resto caindo em
+> cascata exatamente como cairia em produção. Um verde que nunca fica vermelho não provaria nada aqui.
 
 > **A antiga "29" não existe, e o número foi reaproveitado.** O rate limit do cadastro foi desenhado, escrito, revisado — e **retirado da entrega**
 > pela própria revisão. Ele chaveava a janela por um **parâmetro do cliente** (`p_ip`) numa RPC concedida a `anon`:

@@ -1,0 +1,28 @@
+-- ============================================================
+-- Promofy — Fase 9/Onda C · Migration 31: status 'excluido'
+--
+-- ARQUIVO PRÓPRIO, e não junto da 32, porque um valor criado por
+-- `ALTER TYPE ... ADD VALUE` NÃO pode ser USADO na mesma transação em que
+-- nasce. Mesmo padrão das migrations 5 e 8.
+--
+-- POR QUE UM STATUS, E NÃO UMA COLUNA `excluido_em`:
+--
+--   (a) A policy pública já filtra por status — `status in
+--       ('ativo','indisponivel')` (migration 3). Um status novo fica fora do
+--       catálogo do consumidor SEM tocar em policy nenhuma. Uma coluna
+--       booleana exigiria reescrever a policy e todo lugar que a espelha.
+--   (b) `rejeitado` (migration 8) estabeleceu exatamente este precedente:
+--       status que existe justamente para NÃO aparecer.
+--   (c) `moderacao_historico` já registra transições de status; a exclusão
+--       entra na mesma trilha, sem inventar auditoria paralela.
+--
+-- POR QUE NÃO APAGAR DE VERDADE — e isto não é preferência:
+-- `cupons_usuario.cupom_id` e `cupom_eventos.cupom_id` têm
+-- `on delete cascade` (migration 1, linhas 100 e 110). Um `DELETE` num
+-- cupom levaria junto TODAS as ativações, validações, notas de NPS e
+-- eventos de métrica daquele cupom — silenciosamente, e sem volta. O
+-- relatório v2 pediu exclusão (§1.6) e preservação de histórico (§4.2) na
+-- mesma página; só o soft delete atende aos dois.
+-- ============================================================
+
+alter type public.status_cupom add value if not exists 'excluido';

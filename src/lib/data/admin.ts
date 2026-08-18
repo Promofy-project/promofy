@@ -34,6 +34,16 @@ export interface AdminCupom {
   economia: number;
   status: string;
   categoriaId: string;
+  /**
+   * Caminho da imagem no bucket `cupom-imagens` (vazio = sem imagem).
+   *
+   * Fase 9/C1: o dado sempre veio na query (`select("*")`), mas não era
+   * tipado nem propagado — então o moderador aprovava sem ver a imagem que
+   * o consumidor veria (relatório v2 §2.1). A URL pública é montada na
+   * tela com `urlPublicaImagem`, que precisa também do estabelecimento.
+   */
+  imagem: string;
+  estabelecimentoId: string;
   estabelecimentoNome: string;
   estabelecimentoStatus: string;
   validadeInicio: string | null;
@@ -91,6 +101,8 @@ export async function buscarCuponsAdmin(): Promise<AdminCupom[]> {
     economia: Number(row.economia),
     status: row.status,
     categoriaId: row.categoria_id,
+    imagem: row.imagem ?? "",
+    estabelecimentoId: row.estabelecimento_id,
     estabelecimentoNome: row.estabelecimentos?.nome ?? "—",
     estabelecimentoStatus: row.estabelecimentos?.status ?? "—",
     validadeInicio: row.validade_inicio,

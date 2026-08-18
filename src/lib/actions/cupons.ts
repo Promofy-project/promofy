@@ -374,15 +374,20 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
 /**
  * Entrada de EDIÇÃO — PARCIAL, e isso é o ponto (Fase 6.5).
  *
- * NÃO é `NovoCupomInput`. O formulário do `/e` é um subconjunto declarado:
- * ele não tem estado para dias/horário/agendamento/prazo e manda LITERAIS
- * no submit (`dias: []`, `horaInicio: "00:00"`, `prazoAtivacao: 5`…), e a
- * `criarCupomAction` ainda acrescenta `imagem: ""` (e, até o EXTRA desta
- * fase, também `regras: [beneficio]`).
- * Se a edição aceitasse o input completo, corrigir um typo no título pelo
- * totem APAGARIA a janela, o agendamento, o prazo, as regras curadas e a
- * imagem — e, como horarios/regras/imagem são materiais, ainda rebaixaria o
- * cupom para 'pendente', tirando-o da vitrine.
+ * NÃO é `NovoCupomInput`. Nasceu (Fase 6.5) porque o formulário do `/e` era
+ * um subconjunto declarado: sem estado para dias/horário/agendamento/prazo,
+ * mandava LITERAIS no submit (`dias: []`, `horaInicio: "00:00"`,
+ * `prazoAtivacao: 5`…), e a `criarCupomAction` ainda acrescenta
+ * `imagem: ""`. Se a edição aceitasse o input completo, corrigir um typo no
+ * título pelo totem APAGARIA a janela, o agendamento, o prazo, as regras
+ * curadas e a imagem — e, como horarios/regras/imagem são materiais, ainda
+ * rebaixaria o cupom para 'pendente', tirando-o da vitrine.
+ *
+ * ATUALIZAÇÃO Fase 9/C2: o `/e` PASSOU a ter esses campos, hidratados do
+ * banco (`CupomParaEdicao`), e agora os envia. O contrato parcial continua
+ * valendo e continua sendo a barreira — só mudou quem o exerce: as chaves
+ * chegam preenchidas com o valor real em vez de omitidas. Quem enviar um
+ * subconjunto (outro cliente, o app nativo amanhã) segue protegido.
  *
  * Regra desta action: **só grava as chaves que vieram**. `undefined` nunca
  * vira default, nunca vira "" e nunca vira [].
@@ -695,5 +700,56 @@ export async function validarPorAtivacaoAction(
     return data as unknown as ValidarResult;
   } catch {
     return { ok: false, motivo: "erro" };
+  }
+}
+
+type ExcluirResult = { ok: true; jaExcluido: boolean } | { ok: false; erro: string };
+
+/**
+ * Exclusão LÓGICA do cupom pelo lojista (Fase 9/C4, relatório v2 §1.6).
+ *
+ * Não existe caminho físico: a migration 32 derrubou a policy de DELETE e
+ * revogou o grant, justamente porque as FKs de `cupons_usuario` e
+ * `cupom_eventos` são `on delete cascade` — apagar a linha levaria junto
+ * ativações, validações, notas de NPS e métricas, contrariando o §4.2 do
+ * mesmo relatório.
+ *
+ * A action só traduz motivos; quem decide é a RPC `excluir_cupom`.
+ */
+export async function excluirCupomAction(cupomId: string): Promise<ExcluirResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("excluir_cupom", {
+      p_cupom_id: cupomId,
+    });
+    if (error) return { ok: false, erro: "Não foi possível excluir o cupom." };
+    const r = data as unknown as
+      | { ok?: boolean; motivo?: string; ja_excluido?: boolean; ativacoes?: number }
+      | null;
+    if (r?.ok) return { ok: true, jaExcluido: r.ja_excluido === true };
+
+    // `tem_ativacao_viva` é o único motivo que o lojista pode RESOLVER
+    // esperando, então diz quantas são e o que acontece depois.
+    if (r?.motivo === "tem_ativacao_viva") {
+      const n = r.ativacoes ?? 0;
+      return {
+        ok: false,
+        erro:
+          n === 1
+            ? "Um cliente ativou este cupom e ainda pode usá-lo no balcão. " +
+              "Você poderá excluir quando essa ativação for validada ou expirar."
+            : `${n} clientes ativaram este cupom e ainda podem usá-lo no balcão. ` +
+              "Você poderá excluir quando essas ativações forem validadas ou expirarem.",
+      };
+    }
+
+    const MSG: Record<string, string> = {
+      sem_sessao: "Sessão expirada. Entre novamente.",
+      nao_autorizado: "Este cupom não é do seu estabelecimento.",
+      nao_encontrado: "Cupom não encontrado.",
+    };
+    return { ok: false, erro: MSG[r?.motivo ?? ""] ?? "Não foi possível excluir o cupom." };
+  } catch {
+    return { ok: false, erro: "Não foi possível excluir o cupom." };
   }
 }
