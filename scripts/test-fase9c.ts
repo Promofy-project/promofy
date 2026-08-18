@@ -22,6 +22,14 @@ const alvo = resolverAlvo("test-fase9c");
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
+import {
+  ABA_TODOS,
+  abaEfetiva,
+  contarPorAba,
+  ehArquivado,
+  filtrarPorAba,
+  listaOperacional,
+} from "../src/lib/portal-listagem";
 
 const SENHA = "promofy123";
 const CUPOM_EXCL = "f9c-excluir";
@@ -55,7 +63,88 @@ function fonteSemComentarios(caminho: string): string {
     .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, "");
 }
 
+/**
+ * C5 — o cupom excluído sai da visão operacional do portal.
+ *
+ * Módulo puro, sem banco: a regra é de LEITURA da lista, e a Onda C4 já
+ * cobre o lado do banco (o item continua lá, com histórico). O que a C5
+ * precisa provar é que "Todos" deixou de significar "a lista inteira" sem
+ * que o registro tenha sumido da fonte — as duas coisas juntas, porque
+ * cada uma sozinha seria um bug diferente.
+ */
+function testarListagemC5() {
+  console.log("\n[C5] Cupom excluído fora da visão operacional (achado manual pós-Onda C)");
+
+  const ativo = { statusPortal: "ativo", id: "a" };
+  const rejeitado = { statusPortal: "rejeitado", id: "r" };
+  const excluido = { statusPortal: "excluido", id: "x" };
+  const lista = [ativo, rejeitado, excluido];
+
+  // --- "Todos" ---
+  const todos = filtrarPorAba(lista, ABA_TODOS);
+  check("C5: 'Todos' traz o ativo", todos.some((i) => i.id === "a"));
+  check("C5: 'Todos' traz o rejeitado", todos.some((i) => i.id === "r"));
+  check("C5: 'Todos' NÃO traz o excluído", !todos.some((i) => i.id === "x"),
+    JSON.stringify(todos.map((i) => i.id)));
+
+  // --- contadores ---
+  const c = contarPorAba(lista);
+  check("C5: contador de 'Todos' = 2 (1 ativo + 1 rejeitado)", c[ABA_TODOS] === 2, String(c[ABA_TODOS]));
+  check("C5: contador de 'Excluídos' = 1", c.excluido === 1, String(c.excluido));
+  check("C5: contador de 'Rejeitados' segue contando a lista inteira", c.rejeitado === 1, String(c.rejeitado));
+
+  // --- exclusão em memória: o que a tela faz depois do sucesso da RPC ---
+  const antes = contarPorAba([ativo, rejeitado]);
+  check("C5: antes da exclusão, 'Todos' = 2", antes[ABA_TODOS] === 2, String(antes[ABA_TODOS]));
+  check("C5: antes da exclusão, 'Excluídos' = 0 (aba ainda não existe)",
+    (antes.excluido ?? 0) === 0, String(antes.excluido));
+
+  // A tela NÃO remove o item da fonte — remarca o status, como a C4 já fazia.
+  const depoisDaExclusao = [ativo, rejeitado].map((i) =>
+    i.id === "r" ? { ...i, statusPortal: "excluido" } : i,
+  );
+  const depois = contarPorAba(depoisDaExclusao);
+  check("C5: depois de excluir o rejeitado, 'Todos' = 1", depois[ABA_TODOS] === 1, String(depois[ABA_TODOS]));
+  check("C5: …e 'Excluídos' = 1 — a aba passa a existir", depois.excluido === 1, String(depois.excluido));
+  check("C5: o item sai de 'Todos'",
+    !filtrarPorAba(depoisDaExclusao, ABA_TODOS).some((i) => i.id === "r"));
+  check("C5: …e aparece em 'Excluídos' — a fonte NÃO perdeu o registro",
+    filtrarPorAba(depoisDaExclusao, "excluido").some((i) => i.id === "r"));
+  check("C5: o item sai também do filtro anterior ('Rejeitados')",
+    filtrarPorAba(depoisDaExclusao, "rejeitado").length === 0);
+
+  // --- a aba que some debaixo do dedo ---
+  const abasDepois = [ABA_TODOS, "ativo", "excluido"];
+  check("C5: filtro apontando para aba que sumiu cai em 'Todos'",
+    abaEfetiva(abasDepois, "rejeitado") === ABA_TODOS);
+  check("C5: filtro válido é respeitado", abaEfetiva(abasDepois, "excluido") === "excluido");
+
+  // --- invariantes ---
+  check("C5: 'excluido' é o status arquivado", ehArquivado("excluido"));
+  check("C5: nenhum status operacional é arquivado",
+    !["ativo", "pendente", "rejeitado", "esgotado", "expirado"].some(ehArquivado));
+  check("C5: a lista operacional não muda a lista de origem",
+    listaOperacional(lista).length === 2 && lista.length === 3);
+  check("C5: sem excluídos, 'Todos' continua sendo a lista inteira",
+    filtrarPorAba([ativo, rejeitado], ABA_TODOS).length === 2);
+
+  // --- NÃO-REGRESSÃO do consumidor (a C5 é só do portal) ---
+  const fonteData = fonteSemComentarios("src/lib/data/cupons.ts");
+  const filtrosConsumidor = (fonteData.match(/\.in\("status", \["ativo", "indisponivel"\]\)/g) ?? []).length;
+  check("C5: as queries do consumidor seguem filtrando ativo/indisponivel (4×)",
+    filtrosConsumidor === 4, `encontradas ${filtrosConsumidor}`);
+  check("C5: a listagem do portal NÃO ganhou filtro de status no servidor — a fonte segue completa",
+    !/from\("cupons"\)[\s\S]{0,400}?neq\("status", "excluido"\)/.test(fonteData));
+
+  // --- card excluído continua read-only (entregue na C4, preservado aqui) ---
+  const fonteCard = fonteSemComentarios("src/components/portal/coupon-portal-card.tsx");
+  check("C5: card excluído segue sem Editar/Reenviar/Excluir",
+    /statusPortal !== "excluido"/.test(fonteCard));
+}
+
 async function main(): Promise<number> {
+  testarListagemC5();
+
   const dono = await logar("lojista@promofy.test"); // e1 Sabor & Cia
   let qa: ContaQa | null = null;
 
