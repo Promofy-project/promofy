@@ -130,13 +130,21 @@ export interface MetricasCupom {
   resgates: number;
 }
 
-/** Status de um cupom na visão do lojista. */
+/**
+ * Status de um cupom na visão do lojista.
+ *
+ * `excluido` (Fase 9/C4) só existe aqui: a policy pública filtra por
+ * `status in ('ativo','indisponivel')`, então ele nunca chega às telas do
+ * consumidor. Para o lojista precisa existir — é como ele encontra o que
+ * arquivou.
+ */
 export type StatusCupomPortal =
   | "ativo"
   | "expirado"
   | "esgotado"
   | "pendente"
-  | "rejeitado";
+  | "rejeitado"
+  | "excluido";
 
 export interface SerieMensal {
   mes: string;

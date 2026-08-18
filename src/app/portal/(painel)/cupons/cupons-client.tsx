@@ -14,8 +14,28 @@ import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
 import {
   carregarCupomParaEdicaoAction,
+  excluirCupomAction,
   reenviarCupomAction,
 } from "@/lib/actions/cupons";
+import { cn } from "@/lib/utils";
+
+/**
+ * Os filtros de status do portal (Fase 9/C3).
+ *
+ * A ordem é a do CICLO DE VIDA do cupom, não alfabética: é assim que o
+ * lojista pensa nele — nasce pendente, é aprovado, e um dia acaba ou é
+ * retirado. Os ids são exatamente os de `StatusCupomPortal`, mais
+ * `excluido` (Fase 9/C4), que não está naquele tipo porque nunca chega às
+ * telas do consumidor.
+ */
+const FILTROS_STATUS = [
+  { id: "ativo", label: "Ativos" },
+  { id: "pendente", label: "Em análise" },
+  { id: "rejeitado", label: "Rejeitados" },
+  { id: "esgotado", label: "Esgotados" },
+  { id: "expirado", label: "Expirados" },
+  { id: "excluido", label: "Excluídos" },
+] as const;
 
 /**
  * Corpo client da página de cupons do portal. A lista inicial vem do
@@ -56,6 +76,9 @@ export function CuponsClient({
   const [emEdicao, setEmEdicao] = React.useState<CupomParaEdicao | null>(null);
   const [carregando, setCarregando] = React.useState<string | null>(null);
   const [reenviando, setReenviando] = React.useState<string | null>(null);
+  /** Fase 9/C3: "todos" ou um `statusPortal`. */
+  const [filtroStatus, setFiltroStatus] = React.useState<string>("todos");
+  const [excluindo, setExcluindo] = React.useState<string | null>(null);
 
   /**
    * Abrir a edição BUSCA o cupom no servidor em vez de reaproveitar o item
@@ -97,6 +120,38 @@ export function CuponsClient({
     );
   };
 
+  /**
+   * Exclusão lógica (Fase 9/C4). A confirmação é `window.confirm` — só-web,
+   * e é o ponto de troca para o app nativo (mesmo padrão declarado em
+   * `password-input.tsx` e `campo-imagem.tsx`). O texto diz o que a ação
+   * preserva, porque "excluir" costuma soar mais destrutivo do que é: o
+   * histórico de quem usou o cupom continua inteiro.
+   */
+  const excluir = async (item: ItemCupomPortal) => {
+    setErro(null);
+    const ok = window.confirm(
+      `Excluir “${item.cupom.titulo}”?\n\n` +
+        "O cupom sai do app e da sua lista de ativos. " +
+        "Os resgates, as avaliações e os números que ele já gerou continuam " +
+        "no seu histórico.",
+    );
+    if (!ok) return;
+
+    setExcluindo(item.cupom.id);
+    const r = await excluirCupomAction(item.cupom.id);
+    setExcluindo(null);
+    if (!r.ok) {
+      setErro(r.erro);
+      return;
+    }
+    setLista((prev) =>
+      prev.map((i) =>
+        i.cupom.id === item.cupom.id ? { ...i, statusPortal: "excluido" } : i,
+      ),
+    );
+    setSucesso(`Cupom “${item.cupom.titulo}” excluído. O histórico foi preservado.`);
+  };
+
   React.useEffect(() => {
     if (!sucesso) return;
     const t = window.setTimeout(() => setSucesso(null), 5000);
@@ -107,6 +162,46 @@ export function CuponsClient({
   const totalVis = lista.reduce((s, i) => s + i.metricas.visualizacoes, 0);
   const totalResgates = lista.reduce((s, i) => s + i.metricas.resgates, 0);
   const conversao = totalVis ? Math.round((totalResgates / totalVis) * 100) : 0;
+
+  /**
+   * FILTRO POR STATUS — Fase 9/C3 (relatório v2 §1.8).
+   *
+   * Só os status que o banco realmente produz: o enum `status_cupom` tem
+   * ativo, indisponivel, expirado, esgotado, pendente, rejeitado e (Fase 9/C4)
+   * excluido — e `statusPortal` colapsa `indisponivel` em "ativo". Nada de
+   * inventar rótulo que o dado não sustenta.
+   *
+   * Client-side sobre a lista já carregada, de propósito: a listagem do
+   * lojista é pequena (dezenas), e ir ao servidor a cada toque acrescentaria
+   * latência e um estado de carregamento para resolver um `filter`.
+   *
+   * Os contadores vêm da lista INTEIRA, não da filtrada — um filtro que
+   * zera o próprio contador não diz ao lojista o que ele deixaria de ver.
+   */
+  const contagem = React.useMemo(() => {
+    const c: Record<string, number> = { todos: lista.length };
+    for (const i of lista) c[i.statusPortal] = (c[i.statusPortal] ?? 0) + 1;
+    return c;
+  }, [lista]);
+
+  // Só entram as abas que TÊM cupom — um portal novo não precisa ver seis
+  // filtros vazios. "Todos" fica sempre.
+  const abas = React.useMemo(
+    () =>
+      [
+        { id: "todos", label: "Todos" },
+        ...FILTROS_STATUS.filter((f) => (contagem[f.id] ?? 0) > 0),
+      ] as { id: string; label: string }[],
+    [contagem],
+  );
+
+  const listaFiltrada = React.useMemo(
+    () =>
+      filtroStatus === "todos"
+        ? lista
+        : lista.filter((i) => i.statusPortal === filtroStatus),
+    [lista, filtroStatus],
+  );
 
   return (
     <>
@@ -190,18 +285,64 @@ export function CuponsClient({
             />
           </div>
 
+          {/* Filtro por status (Fase 9/C3) — `aria-pressed` além da cor,
+              para o estado selecionado não depender só de contraste. */}
+          {abas.length > 1 && (
+            <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar por status">
+              {abas.map((aba) => {
+                const ativa = filtroStatus === aba.id;
+                return (
+                  <button
+                    key={aba.id}
+                    type="button"
+                    aria-pressed={ativa}
+                    onClick={() => setFiltroStatus(aba.id)}
+                    className={cn(
+                      "rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors",
+                      ativa
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-surface text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {aba.label}
+                    <span className={cn("ml-1.5 tabular-nums", ativa ? "opacity-80" : "opacity-60")}>
+                      {contagem[aba.id] ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Lista */}
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {lista.map((item) => (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {listaFiltrada.map((item) => (
               <CouponPortalCard
                 key={item.cupom.id}
                 item={item}
                 onEditar={carregando ? undefined : abrirEdicao}
                 onReenviar={reenviar}
+                onExcluir={excluir}
+                excluindo={excluindo === item.cupom.id}
                 reenviando={reenviando === item.cupom.id}
               />
             ))}
           </div>
+
+          {/* Um filtro que não devolve nada precisa dizer isso e oferecer a
+              saída — senão parece que os cupons sumiram. */}
+          {listaFiltrada.length === 0 && (
+            <p className="mt-6 rounded-card border border-dashed border-border bg-card/60 px-4 py-8 text-center text-sm text-muted-foreground">
+              Nenhum cupom com este status.{" "}
+              <button
+                type="button"
+                onClick={() => setFiltroStatus("todos")}
+                className="font-bold text-primary hover:underline"
+              >
+                Ver todos
+              </button>
+            </p>
+          )}
         </>
       ) : (
         <NovoCupomForm

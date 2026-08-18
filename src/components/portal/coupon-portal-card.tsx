@@ -1,4 +1,4 @@
-import { AlertTriangle, Pencil, RotateCcw } from "lucide-react";
+import { AlertTriangle, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatNumber } from "@/lib/utils";
@@ -16,6 +16,10 @@ const STATUS_BADGE = {
   expirado: { variant: "danger" as const, label: "Expirado" },
   pendente: { variant: "yellow-soft" as const, label: "Em análise" },
   rejeitado: { variant: "danger" as const, label: "Rejeitado" },
+  // Fase 9/C4: neutro de propósito. Excluído não é erro nem alerta — é uma
+  // decisão do próprio lojista, e pintá-lo de vermelho ao lado de
+  // "Rejeitado" (que é recusa da moderação) confundiria as duas coisas.
+  excluido: { variant: "outline" as const, label: "Excluído" },
 };
 
 export function CouponPortalCard({
@@ -23,6 +27,8 @@ export function CouponPortalCard({
   onEditar,
   onReenviar,
   reenviando,
+  onExcluir,
+  excluindo,
 }: {
   item: ItemCupomPortal;
   /** Fase 6.5/C2: ausente = card só de leitura (landing, seed). */
@@ -30,6 +36,9 @@ export function CouponPortalCard({
   /** Fase 6.5/C5: reenviar cupom rejeitado para moderação. */
   onReenviar?: (item: ItemCupomPortal) => void;
   reenviando?: boolean;
+  /** Fase 9/C4: exclusão lógica. Ausente = o card não oferece a ação. */
+  onExcluir?: (item: ItemCupomPortal) => void;
+  excluindo?: boolean;
 }) {
   const { cupom, statusPortal, metricas } = item;
   const categoria = getCategoria(cupom.categoria);
@@ -127,7 +136,7 @@ export function CouponPortalCard({
         </p>
       )}
 
-      {(onEditar || onReenviar) && (
+      {(onEditar || onReenviar || onExcluir) && statusPortal !== "excluido" && (
         <div className="mt-4 flex flex-wrap gap-2">
           {onEditar && (
             <Button size="sm" variant="outline" onClick={() => onEditar(item)}>
@@ -138,6 +147,21 @@ export function CouponPortalCard({
             <Button size="sm" onClick={() => onReenviar(item)} disabled={reenviando}>
               <RotateCcw className="h-4 w-4" />
               {reenviando ? "Enviando…" : "Reenviar para análise"}
+            </Button>
+          )}
+          {/* Excluir por último e discreto: é a ação irreversível do card
+              (Fase 9/C4). Some quando o cupom JÁ está excluído — repetir a
+              oferta sobre algo já feito só confunde. */}
+          {onExcluir && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onExcluir(item)}
+              disabled={excluindo}
+              className="ml-auto text-danger hover:bg-danger-soft hover:text-danger"
+            >
+              <Trash2 className="h-4 w-4" />
+              {excluindo ? "Excluindo…" : "Excluir"}
             </Button>
           )}
         </div>

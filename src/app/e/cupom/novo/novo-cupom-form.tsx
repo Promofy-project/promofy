@@ -10,6 +10,7 @@ import {
   PRAZO_ATIVACAO_MIN_HORAS,
   TAXAS,
 } from "@/lib/cupom-campos";
+import { DIAS_SEMANA } from "@/lib/dias";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -115,6 +116,36 @@ export function NovoCupomForm({
   const [limiteTotal, setLimiteTotal] = React.useState(
     cupomInicial?.limiteTotal != null ? String(cupomInicial.limiteTotal) : "100",
   );
+
+  /**
+   * JANELA DE CONSUMO — Fase 9/C2.
+   *
+   * Estes seis campos NÃO existiam neste formulário. A consequência estava
+   * no relatório v2 §1.1: todo cupom criado pelo /e nascia "todos os dias,
+   * 00:00–23:59", porque o submit mandava esses literais. Um cupom de
+   * jantar entrava valendo no café da manhã, e a validação no balcão herdava
+   * a regra errada.
+   *
+   * Na EDIÇÃO os valores vêm de `cupomInicial`, que já os trazia (o DTO
+   * `CupomParaEdicao` é fiel à linha desde a Fase 6.5) — antes eram só
+   * exibidos num bloco "Preservado nesta edição", sem poder mudar. Hidratar
+   * é o que permite reenviá-los sem apagar nada: mandar o valor que já está
+   * no banco é no-op para o trigger da migration 20.
+   */
+  const [dataInicio, setDataInicio] = React.useState(
+    cupomInicial?.validadeInicio ?? "",
+  );
+  const [ocultarAteInicio, setOcultarAteInicio] = React.useState(
+    cupomInicial?.ocultarAteInicio ?? false,
+  );
+  const [prazoAtivacao, setPrazoAtivacao] = React.useState(
+    cupomInicial ? String(cupomInicial.prazoAtivacaoHoras) : String(PRAZO_ATIVACAO_MIN_HORAS),
+  );
+  // Cupom sem janela estruturada abre com os campos vazios — e a validação
+  // abaixo só cobra hora quando há dia marcado (mesma regra do portal).
+  const [dias, setDias] = React.useState<string[]>(cupomInicial?.dias ?? []);
+  const [horaInicio, setHoraInicio] = React.useState(cupomInicial?.horaInicio ?? "");
+  const [horaFim, setHoraFim] = React.useState(cupomInicial?.horaFim ?? "");
   const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(
     cupomInicial ? cupomInicial.limiteUsuario === null : false,
   );
@@ -127,6 +158,18 @@ export function NovoCupomForm({
   const [erro, setErro] = React.useState<string | null>(null);
   const [salvando, setSalvando] = React.useState(false);
 
+  // Fase 9/C2 — as MESMAS regras do formulário do portal, palavra por
+  // palavra. Duas telas escrevem a mesma janela; validar diferente faria o
+  // /e aceitar o que o portal recusa, e a divergência só apareceria no
+  // balcão. Quem recusa de verdade continua sendo a Server Action, e o
+  // CHECK da coluna cobre o PostgREST direto — aqui é aviso.
+  const horaValida = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h.trim());
+  const horarioIncompleto =
+    dias.length > 0 && !(horaValida(horaInicio) && horaValida(horaFim));
+  const prazoInvalido =
+    prazoAtivacao.trim().length > 0 &&
+    Number(prazoAtivacao) < PRAZO_ATIVACAO_MIN_HORAS;
+
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -134,6 +177,7 @@ export function NovoCupomForm({
       setErro("Seu estabelecimento ainda não tem categoria definida.");
       return;
     }
+    if (horarioIncompleto || prazoInvalido) return; // avisos já visíveis
     setSalvando(true);
 
     // Campos que ESTE form realmente controla. Tudo o mais (janela,
@@ -156,22 +200,24 @@ export function NovoCupomForm({
       ...(imagem !== undefined ? { imagem } : {}),
     };
 
+    // Fase 9/C2: a janela agora é CONTROLADA por este formulário, nos dois
+    // caminhos. Antes, `criar` mandava os literais `dias: []` /
+    // "00:00"–"23:59" e todo cupom do /e nascia sem restrição (v2 §1.1); e
+    // `editar` os omitia, de modo que o lojista via a janela mas não podia
+    // mudá-la. Os valores saem do estado, que na edição veio do banco —
+    // reenviar o que já estava lá não altera nada.
+    const janela = {
+      ocultarAteInicio,
+      prazoAtivacao: Number(prazoAtivacao) || PRAZO_ATIVACAO_MIN_HORAS,
+      dias,
+      horaInicio,
+      horaFim,
+      ...(dataInicio ? { dataInicio } : {}),
+    };
+
     const r = cupomInicial
-      ? // EDIÇÃO RÁPIDA: nenhum literal. Mandar `dias: []` ou
-        // `prazoAtivacao: 5` aqui apagaria a janela e o prazo que o
-        // lojista configurou pelo portal — o bug que o contrato parcial
-        // existe para impedir.
-        await editarCupomAction({ id: cupomInicial.id, ...controlados })
-      : await criarCupomAction({
-          ...controlados,
-          ocultarAteInicio: false,
-          // regra de negócio; a action recusa abaixo disso e o CHECK da
-          // coluna cobre o PostgREST direto
-          prazoAtivacao: PRAZO_ATIVACAO_MIN_HORAS,
-          dias: [],
-          horaInicio: "00:00",
-          horaFim: "23:59",
-        });
+      ? await editarCupomAction({ id: cupomInicial.id, ...controlados, ...janela })
+      : await criarCupomAction({ ...controlados, ...janela });
     setSalvando(false);
     if (r.ok) {
       router.push("/e/cupons");
@@ -333,43 +379,76 @@ export function NovoCupomForm({
         </span>
       </div>
 
-      {/* Fase 6.5/C2 — o que este form NÃO controla fica visível como
-          leitura. Sem isto o lojista não saberia que o cupom tem janela e
-          poderia achar que a edição a apagou. */}
-      {editando && (
-        <div className="rounded-xl border border-border bg-muted/50 p-3.5 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground">Preservado nesta edição</p>
-          <dl className="mt-2 space-y-1">
-            <div className="flex justify-between gap-3">
-              <dt>Dias e horário</dt>
-              <dd className="text-right font-medium text-foreground">
-                {cupomInicial!.dias.length > 0 || cupomInicial!.horaInicio
-                  ? `${cupomInicial!.dias.length ? cupomInicial!.dias.join(", ") : "Todos os dias"}${
-                      cupomInicial!.horaInicio && cupomInicial!.horaFim
-                        ? `, ${cupomInicial!.horaInicio} às ${cupomInicial!.horaFim}`
-                        : ""
-                    }`
-                  : "Sem restrição"}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt>Prazo de ativação</dt>
-              <dd className="font-medium text-foreground">
-                {cupomInicial!.prazoAtivacaoHoras}h
-              </dd>
-            </div>
-            {cupomInicial!.validadeInicio && (
-              <div className="flex justify-between gap-3">
-                <dt>Início da campanha</dt>
-                <dd className="font-medium text-foreground">
-                  {cupomInicial!.validadeInicio}
-                </dd>
-              </div>
-            )}
-          </dl>
-          <p className="mt-2">Ajuste esses campos pelo portal.</p>
-        </div>
+      {/* JANELA DE CONSUMO — Fase 9/C2.
+          Substitui o bloco "Preservado nesta edição" da Fase 6.5, que
+          MOSTRAVA estes valores e mandava o lojista ao portal para mudá-los.
+          Agora são editáveis aqui, e na criação deixam de nascer 24×7. */}
+      <Chips
+        titulo="Dias de consumo"
+        opcoes={DIAS_SEMANA.map((d) => ({ id: d, label: d }))}
+        selecionados={dias}
+        onToggle={(id) => toggleEm(setDias, id)}
+        ajuda="Nenhum marcado = vale todos os dias."
+      />
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Abre às"
+          type="time"
+          value={horaInicio}
+          onChange={(e) => setHoraInicio(e.target.value)}
+        />
+        <Field
+          label="Fecha às"
+          type="time"
+          value={horaFim}
+          onChange={(e) => setHoraFim(e.target.value)}
+        />
+      </div>
+      {horarioIncompleto && (
+        <p className="-mt-1 text-xs font-semibold text-danger">
+          Com dias marcados, informe os dois horários (ou desmarque os dias).
+        </p>
       )}
+
+      <Field
+        label="Prazo de ativação (horas)"
+        type="number"
+        inputMode="numeric"
+        min={String(PRAZO_ATIVACAO_MIN_HORAS)}
+        step="1"
+        value={prazoAtivacao}
+        onChange={(e) => setPrazoAtivacao(e.target.value)}
+      />
+      {prazoInvalido && (
+        <p className="-mt-1 text-xs font-semibold text-danger">
+          O mínimo é {PRAZO_ATIVACAO_MIN_HORAS}h — é o tempo que o cliente tem
+          para chegar ao balcão depois de ativar.
+        </p>
+      )}
+
+      <Field
+        label="Início da campanha (opcional)"
+        type="date"
+        value={dataInicio}
+        onChange={(e) => setDataInicio(e.target.value)}
+      />
+
+      <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground">
+            Ocultar até o início
+          </span>
+          <span className="text-xs text-muted-foreground">
+            O cupom só aparece no app a partir da data de início.
+          </span>
+        </span>
+        <Switch
+          checked={ocultarAteInicio}
+          onCheckedChange={setOcultarAteInicio}
+          disabled={!dataInicio}
+        />
+      </label>
 
       {erro && <p className="text-sm font-semibold text-danger">{erro}</p>}
 

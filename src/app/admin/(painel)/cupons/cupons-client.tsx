@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Eye } from "lucide-react";
+import { Check, X, Eye, ImageOff } from "lucide-react";
 
 import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaId } from "@/lib/types";
 import { getCategoria } from "@/lib/mock-data";
 import { regrasParaExibir } from "@/lib/cupom-campos";
 import { rotuloAcao } from "@/lib/moderacao";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { cn, formatBRL, formatShortDate, formatDateTimeBRT } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -312,6 +313,44 @@ function Linha({
   );
 }
 
+/**
+ * A imagem do cupom na tela de análise (Fase 9/C1).
+ *
+ * Estado vazio é EXPLÍCITO, não ausência: "sem imagem" é informação para
+ * quem modera — um cupom sem foto é legítimo, e o moderador precisa saber
+ * que não está diante de uma imagem que falhou ao carregar. Por isso a
+ * moldura aparece nos dois casos.
+ */
+function ImagemModeracao({ cupom }: { cupom: AdminCupom }) {
+  const url = urlPublicaImagem(
+    cupom.imagem,
+    cupom.estabelecimentoId,
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  );
+
+  return (
+    <div className="mt-4">
+      <p className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+        Imagem do cupom
+      </p>
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- next/image não
+        // é usado em lugar nenhum do repo e exigiria remotePatterns.
+        <img
+          src={url}
+          alt={`Imagem do cupom ${cupom.titulo}`}
+          className="max-h-56 w-full rounded-lg border border-border bg-muted object-contain"
+        />
+      ) : (
+        <div className="flex h-24 items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 text-sm text-muted-foreground">
+          <ImageOff className="h-4 w-4" aria-hidden />
+          Este cupom foi enviado sem imagem
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DetalheModal({
   cupom,
   processando,
@@ -360,6 +399,18 @@ function DetalheModal({
           </div>
           <Badge variant={s.variant}>{s.label}</Badge>
         </div>
+
+        {/* Fase 9/C1: a imagem que o consumidor vai ver, ANTES da decisão.
+            Até aqui o moderador aprovava no escuro — o dado vinha na query
+            mas nunca era exibido (relatório v2 §2.1). Fica no topo, logo
+            abaixo do cabeçalho, porque é o item que se confere primeiro.
+
+            `object-contain` sobre fundo neutro, e não `object-cover`: cortar
+            a imagem para preencher esconderia justamente o que o moderador
+            precisa julgar — texto promocional na borda, marca d'água, foto
+            fora de proporção. É a mesma queixa do relatório v2 §1.2 sobre o
+            card, e aqui ela seria um defeito de moderação, não de estética. */}
+        <ImagemModeracao cupom={cupom} />
 
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <Linha label="Benefício" valor={cupom.beneficio || "—"} full />

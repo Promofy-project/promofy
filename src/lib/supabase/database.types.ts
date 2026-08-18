@@ -754,17 +754,23 @@ export type Database = {
         Args: { p_est_id: string }
         Returns: Json
       }
+      dia_na_lista: { Args: { p_data: string; p_dias: Json }; Returns: boolean }
       economia_consumidor: { Args: never; Returns: Json }
       economia_total_consumidor: { Args: never; Returns: number }
       estado_cupom_json: {
         Args: { p_row: Database["public"]["Tables"]["cupons_usuario"]["Row"] }
         Returns: Json
       }
+      excluir_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       favoritar_estabelecimento: { Args: { p_est_id: string }; Returns: Json }
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
       hora_ou_null: { Args: { p_hora: string }; Returns: string }
       indicadores_estabelecimento: { Args: never; Returns: Json }
+      janela_alcance: {
+        Args: { p_horarios: Json; p_prazo_horas: number }
+        Returns: Json
+      }
       marcar_aviso_lido: { Args: { p_aviso_id: string }; Returns: Json }
       marcar_novidades_vistas: { Args: never; Returns: Json }
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
@@ -774,10 +780,6 @@ export type Database = {
       registrar_evento_cupom: {
         Args: { p_cupom_id: string; p_tipo: string }
         Returns: undefined
-      }
-      registrar_tentativa_cadastro: {
-        Args: { p_email: string; p_ip: string }
-        Returns: Json
       }
       rejeitar_cupom: {
         Args: { p_cupom_id: string; p_motivo: string }
@@ -805,6 +807,7 @@ export type Database = {
         | "esgotado"
         | "pendente"
         | "rejeitado"
+        | "excluido"
       status_cupom_usuario: "ativo" | "validado" | "expirado"
       status_estabelecimento: "ativo" | "pendente" | "suspenso"
       tipo_evento_cupom: "visualizacao" | "clique" | "ativacao" | "validacao"
@@ -948,6 +951,7 @@ export const Constants = {
         "esgotado",
         "pendente",
         "rejeitado",
+        "excluido",
       ],
       status_cupom_usuario: ["ativo", "validado", "expirado"],
       status_estabelecimento: ["ativo", "pendente", "suspenso"],
