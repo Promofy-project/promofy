@@ -28,6 +28,7 @@ export function CuponsClient({
   estabelecimentoId,
   categorias,
   categoriaPrincipal,
+  abrirEmNovo = false,
 }: {
   initialLista: ItemCupomPortal[];
   estabelecimentoNome: string;
@@ -35,9 +36,19 @@ export function CuponsClient({
   estabelecimentoId: string | null;
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
+  /**
+   * Abre já no formulário de criação. Vem de `?novo=1`, lido no server
+   * component — é o destino do botão "Novo cupom" do dashboard (`/portal`),
+   * que antes era um <Button> sem href nem onClick, inerte (QA v2 §1.4).
+   * O dashboard não tem a view local que esta tela tem, então o caminho é
+   * navegar para cá já pedindo o formulário.
+   */
+  abrirEmNovo?: boolean;
 }) {
   const [lista, setLista] = React.useState<ItemCupomPortal[]>(initialLista);
-  const [view, setView] = React.useState<"lista" | "novo" | "editar">("lista");
+  const [view, setView] = React.useState<"lista" | "novo" | "editar">(
+    abrirEmNovo ? "novo" : "lista",
+  );
   const [validarOpen, setValidarOpen] = React.useState(false);
   const [sucesso, setSucesso] = React.useState<string | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);

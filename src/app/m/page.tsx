@@ -63,14 +63,22 @@ export default async function MobileHome({
           </p>
         )}
         <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
-          {grid.map((c, i) => (
+          {/* O rótulo do CTA NÃO varia por cupom. Até a Fase 9 esta linha era
+              `ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}` — o
+              texto mudava pela POSIÇÃO no grid, sem relação com o estado do
+              cupom, e como o botão do card é decorativo (o clique é o stretched
+              link) os dois rótulos levavam ao mesmo detalhe. O cliente leu isso
+              como critério de negócio e pediu explicação nos dois relatórios de
+              QA (v1 §2.1, v2 §3.2). Os estados reais — utilizado, ativo, fora da
+              janela, indisponível — vivem em `cupom-acao-usar.tsx`, na tela de
+              detalhe, que é onde o botão de fato age. */}
+          {grid.map((c) => (
             <CouponCard
               key={c.id}
               cupom={c}
               href={`/m/cupom/${c.id}`}
               economiaTone="blue"
               compact
-              ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}
               overlay={<CupomSeloUtilizado cupomId={c.id} />}
             />
           ))}

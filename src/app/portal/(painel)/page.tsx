@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Plus, CalendarOff, MessageSquareOff } from "lucide-react";
 
 import { buscarCuponsPortal } from "@/lib/data/cupons";
@@ -75,8 +76,13 @@ export default async function PortalDashboard() {
             : "Acompanhe o desempenho do seu estabelecimento."
         }
       >
-        <Button>
-          <Plus className="h-4 w-4" /> Novo cupom
+        {/* Era um <Button> sem href nem onClick — inerte desde sempre (achado
+            do relatório de QA v2 §1.4). O fluxo de criação vive na view local
+            de /portal/cupons, então o destino é a listagem já no formulário. */}
+        <Button asChild>
+          <Link href="/portal/cupons?novo=1">
+            <Plus className="h-4 w-4" /> Novo cupom
+          </Link>
         </Button>
       </PageHeader>
 

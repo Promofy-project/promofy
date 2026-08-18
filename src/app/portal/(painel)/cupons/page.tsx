@@ -8,7 +8,11 @@ import { CuponsClient } from "./cupons-client";
  * client. Fase 4: também as N categorias do estabelecimento (junção),
  * para o seletor do novo cupom. `cookies()` já torna a rota dinâmica.
  */
-export default async function PortalCupons() {
+export default async function PortalCupons({
+  searchParams,
+}: {
+  searchParams?: { novo?: string };
+}) {
   const { estabelecimento, itens } = await buscarCuponsPortal();
   const categorias = estabelecimento
     ? await buscarCategoriasEstab(estabelecimento.id, estabelecimento.categoriaId)
@@ -20,6 +24,7 @@ export default async function PortalCupons() {
       estabelecimentoId={estabelecimento?.id ?? null}
       categorias={categorias}
       categoriaPrincipal={estabelecimento?.categoriaId ?? null}
+      abrirEmNovo={searchParams?.novo === "1"}
     />
   );
 }

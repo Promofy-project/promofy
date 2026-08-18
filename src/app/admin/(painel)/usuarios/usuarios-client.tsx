@@ -105,13 +105,19 @@ export function UsuariosAdminClient({ usuarios }: { usuarios: AdminUsuario[] }) 
                     label="Economia total"
                     valor={formatBRL(u.economiaTotal)}
                   />
+                  {/* Lista vertical, não `join(", ")`: com vários cupons a
+                      linha corrida vira um parágrafo ilegível, e títulos de
+                      cupom têm vírgula dentro. Pedido do QA v2 §2.3 — vale
+                      igual para estabelecimentos, que tinha o mesmo defeito. */}
                   <Info
                     icon={Ticket}
                     label={`Cupons usados (${u.cuponsUsados.length})`}
                     valor={
-                      u.cuponsUsados.length
-                        ? u.cuponsUsados.join(", ")
-                        : "Nenhum ainda"
+                      u.cuponsUsados.length ? (
+                        <ListaVertical itens={u.cuponsUsados} />
+                      ) : (
+                        "Nenhum ainda"
+                      )
                     }
                     full
                   />
@@ -119,9 +125,11 @@ export function UsuariosAdminClient({ usuarios }: { usuarios: AdminUsuario[] }) 
                     icon={Store}
                     label="Estabelecimentos frequentados"
                     valor={
-                      u.estabelecimentos.length
-                        ? u.estabelecimentos.join(", ")
-                        : "Nenhum ainda"
+                      u.estabelecimentos.length ? (
+                        <ListaVertical itens={u.estabelecimentos} />
+                      ) : (
+                        "Nenhum ainda"
+                      )
                     }
                     full
                   />
@@ -135,6 +143,20 @@ export function UsuariosAdminClient({ usuarios }: { usuarios: AdminUsuario[] }) 
   );
 }
 
+/**
+ * Uma linha por item. A `key` leva o índice porque a lista é de TÍTULOS —
+ * dois cupons diferentes podem ter o mesmo título, e `key={item}` duplicaria.
+ */
+function ListaVertical({ itens }: { itens: string[] }) {
+  return (
+    <ul className="space-y-0.5">
+      {itens.map((item, i) => (
+        <li key={`${item}-${i}`}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
 function Info({
   icon: Icon,
   label,
@@ -143,7 +165,13 @@ function Info({
 }: {
   icon: LucideIcon;
   label: string;
-  valor: string;
+  /**
+   * ReactNode, não string: listas (cupons usados, estabelecimentos) entram
+   * como <ul>. Por isso o wrapper abaixo é <div> e não <p> — <ul> dentro de
+   * <p> é HTML inválido, e o navegador fecha o <p> sozinho, divergindo do
+   * SSR e quebrando a hidratação.
+   */
+  valor: React.ReactNode;
   full?: boolean;
 }) {
   return (
@@ -152,7 +180,7 @@ function Info({
         <Icon className="h-3.5 w-3.5" />
         {label}
       </p>
-      <p className="mt-1 font-medium">{valor}</p>
+      <div className="mt-1 font-medium">{valor}</div>
     </div>
   );
 }
