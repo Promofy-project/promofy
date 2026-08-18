@@ -18,6 +18,7 @@ import {
   reenviarCupomAction,
 } from "@/lib/actions/cupons";
 import { cn } from "@/lib/utils";
+import { abaEfetiva, contarPorAba, filtrarPorAba } from "@/lib/portal-listagem";
 
 /**
  * Os filtros de status do portal (Fase 9/C3).
@@ -149,7 +150,12 @@ export function CuponsClient({
         i.cupom.id === item.cupom.id ? { ...i, statusPortal: "excluido" } : i,
       ),
     );
-    setSucesso(`Cupom “${item.cupom.titulo}” excluído. O histórico foi preservado.`);
+    // Diz PARA ONDE o cupom foi: a partir da C5 ele sai da visão operacional,
+    // e um aviso que só fala em "histórico preservado" deixaria o lojista
+    // procurando onde ele foi parar.
+    setSucesso(
+      `Cupom “${item.cupom.titulo}” excluído. O histórico foi preservado — ele continua em “Excluídos”.`,
+    );
   };
 
   React.useEffect(() => {
@@ -175,14 +181,16 @@ export function CuponsClient({
    * lojista é pequena (dezenas), e ir ao servidor a cada toque acrescentaria
    * latência e um estado de carregamento para resolver um `filter`.
    *
-   * Os contadores vêm da lista INTEIRA, não da filtrada — um filtro que
-   * zera o próprio contador não diz ao lojista o que ele deixaria de ver.
+   * Os contadores NÃO vêm da lista filtrada — um filtro que zera o próprio
+   * contador não diz ao lojista o que ele deixaria de ver.
+   *
+   * FASE 9/C5: quem decide o conteúdo de cada aba é `src/lib/portal-listagem`,
+   * módulo puro. `lista` continua sendo TODOS os registros do estabelecimento
+   * — é ela que alimenta "Excluídos", e tirar o item daqui no ato da exclusão
+   * o apagaria da única tela onde o histórico ainda se consulta. O que mudou
+   * foi o significado de "Todos": os cupons operacionais.
    */
-  const contagem = React.useMemo(() => {
-    const c: Record<string, number> = { todos: lista.length };
-    for (const i of lista) c[i.statusPortal] = (c[i.statusPortal] ?? 0) + 1;
-    return c;
-  }, [lista]);
+  const contagem = React.useMemo(() => contarPorAba(lista), [lista]);
 
   // Só entram as abas que TÊM cupom — um portal novo não precisa ver seis
   // filtros vazios. "Todos" fica sempre.
@@ -195,12 +203,15 @@ export function CuponsClient({
     [contagem],
   );
 
+  /** A aba escolhida pode sumir debaixo do dedo do lojista — ver o módulo. */
+  const filtroEfetivo = abaEfetiva(
+    abas.map((a) => a.id),
+    filtroStatus,
+  );
+
   const listaFiltrada = React.useMemo(
-    () =>
-      filtroStatus === "todos"
-        ? lista
-        : lista.filter((i) => i.statusPortal === filtroStatus),
-    [lista, filtroStatus],
+    () => filtrarPorAba(lista, filtroEfetivo),
+    [lista, filtroEfetivo],
   );
 
   return (
@@ -290,7 +301,7 @@ export function CuponsClient({
           {abas.length > 1 && (
             <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar por status">
               {abas.map((aba) => {
-                const ativa = filtroStatus === aba.id;
+                const ativa = filtroEfetivo === aba.id;
                 return (
                   <button
                     key={aba.id}
