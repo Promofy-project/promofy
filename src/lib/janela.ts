@@ -105,3 +105,60 @@ export function dentroDaJanela(
   // janela que cruza a meia-noite (ex.: 22:00–02:00)
   return agoraMin >= inicio || agoraMin <= fim;
 }
+
+/**
+ * A janela está aberta AGORA, ou abre antes de o prazo de ativação acabar?
+ *
+ * ESPELHO de `public.janela_alcance(jsonb, int)` (migration 29) — só a
+ * metade `alcancavel`. O `teto` (que limita `expira_em`) fica de fora de
+ * propósito: quem grava a linha é o servidor, e replicar o cálculo aqui
+ * criaria uma segunda fonte de verdade para um número que a UI não usa.
+ *
+ * POR QUE ESTA FUNÇÃO EXISTE (relatório de QA v2 §3.1): `dentroDaJanela`
+ * responde "posso consumir agora?", que é a pergunta da EXIBIÇÃO. A
+ * ativação faz outra: "o prazo que nasce agora alcança a janela?". Um
+ * cupom "18:00–22:00" às 17:48 com prazo de 5h vale até 22:48 e cobre a
+ * janela inteira — recusar só obrigava o consumidor a voltar ao app, e
+ * quem esquecia perdia o cupom.
+ *
+ * Deslocar a data por múltiplos de 24h é seguro no Brasil, que não tem
+ * horário de verão desde 2019 — se voltar a ter, esta conta e a do SQL
+ * precisam ser revistas juntas.
+ */
+export function janelaAlcancavel(
+  janela: JanelaConsumo | null | undefined,
+  prazoHoras: number = 5,
+  agora: Date = new Date(),
+): boolean {
+  if (!janela || typeof janela !== "object") return true;
+
+  const inicio = emMinutos(janela.inicio);
+  const fim = emMinutos(janela.fim);
+  // Sem horário utilizável, o que resta é a restrição de DIA, e essa é
+  // sobre hoje. Delega, para não existirem duas leituras da mesma regra.
+  if (inicio === null || fim === null) return dentroDaJanela(janela, agora);
+
+  const dias = janela.dias;
+  const temDias = Array.isArray(dias) && dias.length > 0;
+  const agoraMin = minutoAgoraBrt(agora);
+  const limite = agoraMin + Math.max(0, prazoHoras) * 60;
+
+  // -1 ontem (janela que cruza a meia-noite e ainda está aberta),
+  //  0 hoje (o caso do relatório), +1 amanhã (prazo longo na virada).
+  for (let i = -1; i <= 1; i++) {
+    if (temDias) {
+      const dia = diaSemanaBrt(new Date(agora.getTime() + i * 86_400_000));
+      const casa = dias!.some((d) => d === dia || (dia === "Sáb" && d === "Sab"));
+      if (!casa) continue;
+    }
+
+    const base = i * 1440;
+    const iniAbs = base + inicio;
+    const fimAbs = base + fim + (fim <= inicio ? 1440 : 0);
+
+    if (agoraMin >= iniAbs && agoraMin <= fimAbs) return true;   // aberta agora
+    if (iniAbs > agoraMin && iniAbs <= limite) return true;      // abre a tempo
+  }
+
+  return false;
+}

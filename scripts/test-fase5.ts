@@ -250,8 +250,18 @@ async function main(): Promise<number> {
     }
     await limparCiclo(uid);
 
-    // fora por DIA: qualquer dia que não seja o de hoje no banco
-    const outroDia = DIAS_SEMANA.filter((d) => d !== hojeDb);
+    // fora por DIA: um dia que não seja hoje NEM AMANHÃ no banco.
+    //
+    // Excluir amanhã passou a ser obrigatório na Fase 9/QA (migration 30):
+    // a admissão deixou de perguntar "estou dentro da janela agora?" e
+    // passou a perguntar "o prazo de ativação alcança a janela?". Um cupom
+    // de amanhã com janela 00:00–23:59 É alcançável quando a suíte roda
+    // depois das 19:00 — e não é, quando roda de manhã. Manter `amanhã`
+    // aqui deixaria o teste dependente da HORA em que ele roda, que é o
+    // tipo de flakiness que esta casa não aceita.
+    const idxHoje = DIAS_SEMANA.indexOf(hojeDb);
+    const amanhaDb = DIAS_SEMANA[(idxHoje + 1) % DIAS_SEMANA.length];
+    const outroDia = DIAS_SEMANA.filter((d) => d !== hojeDb && d !== amanhaDb);
     await svc.from("cupons").insert({
       ...base,
       id: FORA_DIA,

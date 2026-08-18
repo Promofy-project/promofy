@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { EstadoAuth } from "@/lib/auth-estado";
+import { MENSAGEM_CADASTRO_GENERICA, type EstadoAuth } from "@/lib/auth-estado";
 
 /**
  * Autenticação no SERVIDOR (Fase 8, correção do achado do smoke).
@@ -118,6 +118,27 @@ export async function entrarAdminAction(
  *
  * Papel NUNCA vai em `options.data` — o trigger `handle_new_user` copia os
  * campos para `profiles` e o papel é decidido lá.
+ *
+ * FASE 9/Z2 — O ORÁCULO DE EXISTÊNCIA DE CONTA.
+ *
+ * Esta tela respondia "Este e-mail já está cadastrado" a qualquer visitante.
+ * É um oráculo aberto, e destoava do resto: a Fase 8 gastou uma migration
+ * inteira para que a busca por CPF desse a MESMA resposta aos três "não
+ * achei", justamente para não revelar quem é cliente de quem — enquanto um
+ * formulário público dizia "esta pessoa usa o Promofy" para quem perguntasse.
+ *
+ * Esta entrega traz UMA das duas mudanças previstas: a mensagem deixa de
+ * distinguir "já existe" de outras falhas. A janela por IP ficou de fora —
+ * ver _promofy_handoff/pendentes/: o desenho chaveava a janela por um
+ * PARÂMETRO do cliente numa RPC concedida a `anon`, então quem rotacionasse o
+ * IP nunca era contado e quem fixasse o IP de uma vítima negava cadastro a
+ * todos atrás daquele CGNAT. Decisão pendente.
+ *
+ * O QUE ISSO **NÃO** RESOLVE, e é importante não fingir que resolve: com
+ * `mailer_autoconfirm` ligado (decisão da Fase 3), o cadastro que dá certo
+ * cria sessão e REDIRECIONA; o que falha, não. Essa diferença é observável e
+ * nenhuma mensagem neutra a apaga. Fechar de verdade exige ligar a confirmação
+ * de e-mail — decisão de produto, no backlog.
  */
 export async function cadastrarAction(
   _anterior: EstadoAuth,
@@ -136,6 +157,7 @@ export async function cadastrarAction(
   if (senha.length < 6) return { erro: "A senha precisa ter pelo menos 6 caracteres." };
 
   const supabase = createClient();
+
   const { error } = await supabase.auth.signUp({
     email,
     password: senha,
@@ -147,16 +169,18 @@ export async function cadastrarAction(
 
   if (error) {
     const m = error.message.toLowerCase();
-    if (m.includes("already registered")) {
-      return { erro: "Este e-mail já está cadastrado. Faça login." };
-    }
+    // "senha curta" continua específico: é erro do próprio formulário, não
+    // diz nada sobre terceiros, e esconder isso só atrapalharia quem cadastra.
     if (m.includes("password")) {
       return { erro: "A senha precisa ter pelo menos 6 caracteres." };
     }
-    return { erro: "Não foi possível concluir o cadastro. Tente novamente." };
+    // TUDO O MAIS — inclusive "already registered" — cai na mesma frase. Ela
+    // aponta o login sem afirmar que ESTE e-mail existe.
+    return { erro: MENSAGEM_CADASTRO_GENERICA };
   }
 
-  // Confirmação de e-mail desligada no ambiente local: a sessão já existe
-  // aqui e o fluxo segue direto para o onboarding.
+  // Confirmação de e-mail desligada em produção por decisão da Fase 3
+  // (`mailer_autoconfirm: true`, conferido no Passo 0 do deploy da Fase 8):
+  // a sessão já existe aqui e o fluxo segue direto para o onboarding.
   redirect("/m/onboarding");
 }

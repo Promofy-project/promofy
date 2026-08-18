@@ -10,6 +10,7 @@ import { CouponCard } from "@/components/coupon-card";
 import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
+import { NpsPendenteCard } from "@/components/nps-pendente-card";
 
 // Dados agora vêm do Supabase: nada de prerender estático no build
 // (o banco não precisa estar de pé para `next build` passar).
@@ -41,6 +42,12 @@ export default async function MobileHome({
         <PointsSummary />
       </div>
 
+      {/* Fase 9/Z1: a nota que o balcão deixou em aberto. Só aparece quando
+          existe uma — some sozinho depois de respondida ou dispensada. */}
+      <div className="px-4 empty:hidden">
+        <NpsPendenteCard />
+      </div>
+
       <div className="px-4">
         <HomeCategoryChips categorias={categorias} ativa={cat} />
       </div>
@@ -56,14 +63,22 @@ export default async function MobileHome({
           </p>
         )}
         <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
-          {grid.map((c, i) => (
+          {/* O rótulo do CTA NÃO varia por cupom. Até a Fase 9 esta linha era
+              `ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}` — o
+              texto mudava pela POSIÇÃO no grid, sem relação com o estado do
+              cupom, e como o botão do card é decorativo (o clique é o stretched
+              link) os dois rótulos levavam ao mesmo detalhe. O cliente leu isso
+              como critério de negócio e pediu explicação nos dois relatórios de
+              QA (v1 §2.1, v2 §3.2). Os estados reais — utilizado, ativo, fora da
+              janela, indisponível — vivem em `cupom-acao-usar.tsx`, na tela de
+              detalhe, que é onde o botão de fato age. */}
+          {grid.map((c) => (
             <CouponCard
               key={c.id}
               cupom={c}
               href={`/m/cupom/${c.id}`}
               economiaTone="blue"
               compact
-              ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}
               overlay={<CupomSeloUtilizado cupomId={c.id} />}
             />
           ))}

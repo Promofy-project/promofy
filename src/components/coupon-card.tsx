@@ -144,6 +144,18 @@ export function CouponCard({
           </>
         )}
 
+        {/* Benefício/descrição no template (QA v1 §3.3): o lojista escrevia o
+            texto no formulário e não o via na pré-visualização — `beneficio`
+            chegava a `previewCupom` e o card simplesmente nunca renderizava.
+            Só no card GRANDE: o `compact` é o do grid da home, onde duas linhas
+            a mais desalinham a altura dos cards vizinhos. O preview do form usa
+            o grande, que é o que o pedido descreve. */}
+        {!compact && cupom.beneficio && (
+          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+            {cupom.beneficio}
+          </p>
+        )}
+
         {economiaTone === "blue" ? (
           <p
             className={cn(

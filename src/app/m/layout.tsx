@@ -3,6 +3,7 @@ import { MobileFlowProvider } from "@/components/mobile-flow-provider";
 import {
   CouponStateProvider,
   type EstadoInicial,
+  type NpsPendenteDTO,
 } from "@/components/coupon-state-provider";
 import {
   FavoritesProvider,
@@ -21,6 +22,7 @@ const INICIAL_ANONIMO: EstadoInicial = {
   config: {},
   estados: [],
   usos: [],
+  npsPendentes: [],
 };
 
 /**
@@ -71,6 +73,7 @@ export default async function MobileLayout({
           config: Record<string, number>;
           estados: EstadoCupomDTO[];
           usos: UsoCupomDTO[];
+          nps_pendentes: NpsPendenteDTO[];
         };
         inicial = {
           logado: true,
@@ -82,6 +85,8 @@ export default async function MobileLayout({
           config: p.config ?? {},
           estados: p.estados ?? [],
           usos: p.usos ?? [],
+          // Fase 9/Z1 — a chave que faltava para o balcão render nota.
+          npsPendentes: p.nps_pendentes ?? [],
         };
       }
     }

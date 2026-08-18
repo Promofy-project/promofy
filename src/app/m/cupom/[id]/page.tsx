@@ -10,7 +10,7 @@ import {
 
 import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
-import { dentroDaJanela } from "@/lib/janela";
+import { janelaAlcancavel } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
 import { diaSemanaBrt } from "@/lib/dias";
 import {
@@ -52,7 +52,14 @@ export default async function CupomDetalhe({
   // dias/início/fim estruturados. Confiar nele mostraria o botão
   // habilitado num cupom que a RPC vai recusar — o "botão inerte" que
   // esta fase existe para matar. Calculado no servidor (fuso BRT).
-  const foraDaJanela = doBanco ? !dentroDaJanela(doBanco.janela) : false;
+  //
+  // Fase 9/QA: a pergunta é ALCANCE, não "agora". `dentroDaJanela` diria
+  // "fora" às 17:48 num cupom que abre às 18:00, mas o prazo de 5h cobre a
+  // janela inteira e `ativar_cupom` aceita (migration 30). Esmaecer aqui
+  // seria justamente o botão inerte que a Fase 5 matou — só que ao contrário.
+  const foraDaJanela = doBanco
+    ? !janelaAlcancavel(doBanco.janela, doBanco.prazoAtivacaoHoras ?? 5)
+    : false;
 
   // Fase 6/H1: a tabela "Regras de Uso" descreve ESTE MESMO objeto `janela`.
   // Antes era uma constante literal ("Hoje, Quinta", "09:00 - 16:00") que

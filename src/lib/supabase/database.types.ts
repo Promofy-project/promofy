@@ -775,6 +775,10 @@ export type Database = {
         Args: { p_cupom_id: string; p_tipo: string }
         Returns: undefined
       }
+      registrar_tentativa_cadastro: {
+        Args: { p_email: string; p_ip: string }
+        Returns: Json
+      }
       rejeitar_cupom: {
         Args: { p_cupom_id: string; p_motivo: string }
         Returns: Json

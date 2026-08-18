@@ -58,6 +58,17 @@ export interface Cupom {
    * mock tem `horarios` como texto solto e não sabe dias/início/fim.
    */
   janela?: JanelaConsumo;
+  /**
+   * Prazo de ativação em horas (Fase 6; null no banco = o default de 5).
+   *
+   * Era deliberadamente OMITIDO daqui como "dado de operação, não de
+   * vitrine". A Fase 9/QA mudou a justificativa: com `janela_alcance`
+   * (migration 29) a admissão passou a depender do prazo, e sem ele a UI
+   * teria de chutar 5h — num cupom de 8h ela esmaeceria o botão que o
+   * servidor aceitaria, que é o "botão inerte" que a Fase 5 existiu para
+   * matar. Só vem do BANCO; o mock não tem.
+   */
+  prazoAtivacaoHoras?: number;
   destaque?: boolean; // "Oferta exclusiva"
 }
 
