@@ -93,6 +93,9 @@ export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupo
     horarios: horariosDeJson(row.horarios),
     dias: diasDeJson(row.horarios),
     janela: janelaDeJson(row.horarios),
+    // null no banco = "use o default"; quem aplica o 5 é `janelaAlcancavel`
+    // e o `coalesce` de `ativar_cupom`, não este mapper.
+    prazoAtivacaoHoras: row.prazo_ativacao_horas ?? undefined,
     destaque: row.destaque,
   };
 }

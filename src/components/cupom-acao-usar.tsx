@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCouponState } from "@/components/coupon-state-provider";
-import { registrarEventoAction } from "@/lib/actions/cupons";
 
 /** Mesma frase no espelho (botão esmaecido) e na recusa do servidor. */
 const FORA_DA_JANELA = "Cupom fora do intervalo de consumo.";
@@ -84,8 +83,12 @@ export function CupomAcaoUsar({
     }
     setErro(null);
     setAtivando(true);
-    // clique é métrica de app — fire-and-forget, não bloqueia o fluxo
-    void registrarEventoAction(cupom.id, "clique");
+    // O CLIQUE NÃO É MAIS REGISTRADO AQUI. Era
+    // `void registrarEventoAction(cupom.id, "clique")` — fire-and-forget, sem
+    // await nem retry, enquanto a ativação era gravada no servidor. Clique
+    // perdido na rede virava ativação sem clique, e o funil do portal
+    // mostrava mais ativações que cliques (relatório de QA v2 §3.3). Agora
+    // `ativar_cupom` grava os dois na MESMA transação (migration 30).
     // o CUPOM inteiro (e não o id) vai para o provider: é o que a folha
     // renderiza. Aqui ele já veio do banco, via server component (Fase 6/H3).
     const r = await ativarCupom(cupom);

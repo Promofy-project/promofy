@@ -12,8 +12,8 @@ O que este banco tem, e por quê. Uma entrada por migration, em ordem de aplica�
 → `supabase db push --linked --dry-run` → `supabase db push --linked`. O desvio MCP `apply_migration` +
 `migration repair` é **plano B**, só quando o CLI não alcança o remoto.
 
-**Estado:** produção tem **1–27** (`27 = 27` desde 05/08/2026). A **28** (Fase 9) existe **apenas no local** — não
-foi ao ar. Não há 29: ver a nota ao final. As 24–27 foram ao ar **antes** do código da Fase 8, e a janela banco-antes-código foi verificada e
+**Estado:** produção tem **1–27** (`27 = 27` desde 05/08/2026). A **28, 29 e 30** (Fase 9) existem **apenas no
+local** — não foram ao ar. Sobre o número 29 ter sido reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código da Fase 8, e a janela banco-antes-código foi verificada e
 é invisível: nenhuma delas toca objeto pré-existente, e o código então publicado não chamava nenhum objeto novo.
 
 > **Nota sobre o projeto de QA** (`olyjfluaioafuizbnrpl`, descartável): está em **1–23**, atrás da produção. Não é
@@ -363,7 +363,71 @@ foi ao ar. Não há 29: ver a nota ao final. As 24–27 foram ao ar **antes** do
 > Aditiva: as demais chaves saem idênticas, e o código antigo ignora a nova. O índice é **parcial** — a linha entra
 > nele enquanto deve nota e sai sozinha quando a nota chega.
 
-> **A 29 não existe (ainda).** O rate limit do cadastro foi desenhado, escrito, revisado — e **retirado da entrega**
+## Fase 9 — Onda QA (relatórios v1/v2 do cliente)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 29 | `20260817120000_fase9_qa_janela_alcance.sql` | `dia_na_lista` e `janela_alcance(horarios, prazo) → {alcancavel, teto}`. **Aditiva pura:** cria funções novas e não toca em nada existente. |
+
+> **Obs.:** a Fase 5 acertou o essencial (a janela é barreira de servidor) e respondeu à pergunta errada.
+> `dentro_da_janela` pergunta *"posso consumir AGORA?"* — certo para a exibição. A **ativação** precisa de outra:
+> *"o prazo que nasce agora ALCANÇA a janela?"*. Cupom "Sex 18:00–22:00" aberto às 17:48 com prazo de 5h valeria
+> até 22:48 e cobriria a janela inteira; recusar só obrigava o consumidor a voltar ao app, e quem esquecia perdia
+> o cupom (relatório de QA v2 §3.1).
+>
+> **Uma função devolve `alcancavel` E `teto` porque são a mesma decisão.** Aceitar a ativação antecipada obriga a
+> limitar `expira_em` — sem isso o código valeria até 22:48 e seria validável no balcão às 22:30, **fora** do
+> horário que o lojista definiu. As duas regras falam da **mesma ocorrência** da janela; separá-las em duas funções
+> seria pedir que duas varreduras independentes concordassem sempre sobre qual ocorrência foi escolhida. Mesmo
+> argumento que a 17 usa para `pode_reusar`: uma regra, uma expressão.
+>
+> **Três ocorrências candidatas (−1, 0, +1 dia)**, cada uma com motivo: **ontem** para janela que cruza a
+> meia-noite e ainda está aberta (sem ela, ativar 00:30 num "22:00–02:00" seria recusado); **hoje** é o caso do
+> relatório; **amanhã** para prazo longo na virada.
+>
+> ⚠️ **O teto quase virou uma regressão silenciosa.** A primeira versão cortava `expira_em` no fim da ocorrência
+> isolada — e um cupom `00:00–23:59` (o padrão que o **/e** grava, ou seja, a maioria) ativado às 22:50 passaria a
+> expirar às 23:59 em vez de 03:50: **4h de prazo perdidas sem proteger nada**, já que a janela reabre um minuto
+> depois. Quem acusou foi a suíte da Fase 2 (`expira_em ≈ agora + 5h — 1.13h`). Agora o teto é o fim da janela
+> **contígua**: sem restrição de dia + dia inteiro devolve `teto: null`, e com dias declarados a extensão para no
+> primeiro dia **não** declarado — que é onde o consumo de fato deixa de ser permitido.
+>
+> Herda a doutrina da 15 sem exceção: **dado malformado é "sem restrição"**, nunca "fora da janela" e nunca
+> exceção — um `''::time` aqui dentro abortaria a transação de `ativar_cupom` (definer, sem bloco `exception`) e
+> deixaria o cupom permanentemente inativável.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 30 | `20260817130000_fase9_qa_ativar_cupom.sql` | `ativar_cupom` passa a admitir por **alcance** (com `expira_em` limitado ao teto) e a registrar o **clique** no servidor. |
+
+> **Obs.:** recriada a partir da versão **vigente**, que é a da **17** — não a da 15. Recriar a partir da 15
+> perderia o tratamento de `limite_por_usuario = NULL` e voltaria a travar cupom ilimitado depois da primeira
+> validação. `create or replace` sem mudança de assinatura: nada do problema da 21, e o ACL é preservado.
+>
+> **O clique virou evento de servidor.** O relatório (v2 §3.3) reportou *"mais ativações que cliques"* e teorizou
+> ativações em sequência sem fechar a tela. **A teoria não se sustenta** — toda ativação passava pelo mesmo botão,
+> que registrava o clique. A causa real era **assimetria de durabilidade**: `ativacao` era gravada aqui, na
+> transação, e `clique` era `void registrarEventoAction(...)` no cliente — fire-and-forget, sem `await` nem retry.
+> Clique perdido na rede = ativação sem clique, e o funil do portal exibia a impossibilidade. A sugestão do
+> relatório (fechar a tela após ativar) trataria o sintoma errado e cobraria um toque a mais de quem tem cupom
+> ilimitado.
+>
+> ⚠️ **A ordem dentro da função é significativa, e custou um teste vermelho.** A busca do cupom **subiu** para
+> antes do clique: `cupom_eventos.cupom_id` tem FK para `cupons`, então gravar clique de id inexistente abortava a
+> transação com violação de FK em vez de devolver `nao_encontrado` (acusado por `test:fase2`). O clique fica
+> **depois** da checagem de sessão (sem `v_uid` não há linha a gravar) e **antes** do ramo idempotente — senão
+> reabrir o cupom ativo não contaria clique. E é gravado **antes** dos `return` de recusa de propósito: tentativa
+> barrada por janela ou limite **é** intenção do consumidor, e é o que o lojista precisa ver no funil.
+>
+> **`validar_cupom` continua sem rechecar a janela**, e agora isso é deliberado *e* suficiente: quem carrega a
+> garantia é o `expira_em` limitado, que a validação já respeita. Rechecar lá quebraria o caso legítimo de validar
+> 22:00:30 um código ativado às 21:50.
+>
+> **Janela banco-antes-código:** entre a 30 e o deploy, o clique é contado **duas vezes** (aqui e no cliente, que
+> ainda envia). É aditivo e se corrige sozinho no deploy. Subir o código antes deixaria a janela **sem clique
+> nenhum** — perder dado é pior que duplicar.
+
+> **A antiga "29" não existe, e o número foi reaproveitado.** O rate limit do cadastro foi desenhado, escrito, revisado — e **retirado da entrega**
 > pela própria revisão. Ele chaveava a janela por um **parâmetro do cliente** (`p_ip`) numa RPC concedida a `anon`:
 > quem rotacionasse o IP nunca era contado, e quem fixasse o IP de uma vítima negava cadastro a todos atrás daquele
 > CGNAT. A Fase 8 acertou porque chaveava por `auth.uid()`, derivado no servidor — aqui a chave foi para o cliente
