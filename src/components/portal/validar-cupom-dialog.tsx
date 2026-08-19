@@ -15,6 +15,7 @@ const MENSAGEM: Record<string, string> = {
   expirado: "Este cupom expirou e não pode mais ser validado.",
   outro_estabelecimento: "Este cupom não é do seu estabelecimento.",
   cupom_proprio: "Você não pode validar o seu próprio cupom.",
+  esgotado: "Este cupom atingiu o limite de resgates.",
   sem_permissao: "Sua conta não tem um estabelecimento vinculado.",
   erro: "Não foi possível validar agora. Tente novamente.",
 };
