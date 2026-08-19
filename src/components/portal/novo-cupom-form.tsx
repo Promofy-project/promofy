@@ -56,6 +56,7 @@ export function NovoCupomForm({
   categoriaPrincipal,
   cupomInicial,
   duplicar = false,
+  prorrogandoExpirado = false,
   estabelecimentoId,
   onSalvar,
   onCancelar,
@@ -72,6 +73,12 @@ export function NovoCupomForm({
    * id novo, contadores do zero.
    */
   duplicar?: boolean;
+  /**
+   * Fase 9/D2: só faz sentido com `editando` — é a edição aberta a partir de
+   * "Prorrogar e reenviar" num cupom expirado. O card já avisou; aqui repete
+   * dentro do form, porque é onde o lojista efetivamente decide a nova data.
+   */
+  prorrogandoExpirado?: boolean;
   /** Fase 7/C4: pasta do bucket de imagens. */
   estabelecimentoId?: string | null;
   onSalvar: (item: ItemCupomPortal) => void;
@@ -263,6 +270,16 @@ export function NovoCupomForm({
             ? "Os dados vieram da campanha anterior — ajuste o que precisar. Ao salvar, nasce um cupom novo, com contadores zerados, e ele vai para análise."
             : "Preencha os campos — a pré-visualização atualiza em tempo real."}
         </p>
+
+        {/* Fase 9/D2 — mesmo texto/estilo do aviso que já existe no card
+            (coupon-portal-card.tsx), repetido aqui porque é dentro do form
+            que o lojista de fato decide a nova validade. */}
+        {editando && prorrogandoExpirado && (
+          <p className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Ao salvar uma nova validade, este cupom voltará para análise e só
+            ficará disponível novamente após aprovação.
+          </p>
+        )}
 
         <div className="mt-5 flex flex-col gap-4">
           <Field label="Título" htmlFor="f-titulo">
