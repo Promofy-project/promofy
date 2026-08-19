@@ -224,5 +224,63 @@ for (const [tela, caminho] of [
 }
 
 // ---------------------------------------------------------------
+// D3.1 — paridade do motivo `esgotado` na validação do Portal
+//
+// `validar_cupom` (migration 33) devolve motivo 'esgotado' quando o limite
+// total já foi consumido. O /e traduz isso em ResultadoValidacao. O dialog
+// do Portal caía no fallback genérico (`MENSAGEM.erro`) porque a chave
+// não existia no mapa — o lojista via "Não foi possível validar agora"
+// para um recusa de negócio explícita.
+// ---------------------------------------------------------------
+console.log("\nD3.1 — Portal traduz motivo esgotado (paridade com /e)");
+
+const dialogPortal = fonteSemComentarios(
+  "src/components/portal/validar-cupom-dialog.tsx",
+);
+const resultadoE = fonteSemComentarios(
+  "src/components/estab/resultado-validacao.tsx",
+);
+
+function stringDoMapa(fonte: string, chave: string): string | null {
+  const m = fonte.match(new RegExp(`${chave}:\\s*"([^"]+)"`));
+  return m?.[1] ?? null;
+}
+function descricaoDoErro(fonte: string, chave: string): string | null {
+  const m = fonte.match(
+    new RegExp(`${chave}:\\s*\\{[\\s\\S]*?descricao:\\s*"([^"]+)"`),
+  );
+  return m?.[1] ?? null;
+}
+
+const msgEsgotadoPortal = stringDoMapa(dialogPortal, "esgotado");
+const msgErroPortal = stringDoMapa(dialogPortal, "erro");
+const descEsgotadoE = descricaoDoErro(resultadoE, "esgotado");
+
+check(
+  "o mapa do Portal tem a chave esgotado",
+  typeof msgEsgotadoPortal === "string" && msgEsgotadoPortal.length > 0,
+  msgEsgotadoPortal ?? "(ausente)",
+);
+check(
+  "a mensagem de esgotado NÃO é o fallback genérico",
+  !!msgEsgotadoPortal &&
+    !!msgErroPortal &&
+    msgEsgotadoPortal !== msgErroPortal,
+  `esgotado=${msgEsgotadoPortal ?? "(ausente)"} erro=${msgErroPortal ?? "(ausente)"}`,
+);
+check(
+  "o /e continua com tratamento específico de esgotado",
+  !!descEsgotadoE,
+  descEsgotadoE ?? "(ausente)",
+);
+check(
+  "Portal e /e usam a mesma frase de esgotado",
+  !!msgEsgotadoPortal &&
+    !!descEsgotadoE &&
+    msgEsgotadoPortal === descEsgotadoE,
+  `portal=${msgEsgotadoPortal ?? "(ausente)"} /e=${descEsgotadoE ?? "(ausente)"}`,
+);
+
+// ---------------------------------------------------------------
 console.log("");
 process.exit(encerrar(passed, failed));
