@@ -185,6 +185,155 @@ async function main(): Promise<number> {
     await destruirContaQa(svc, qa2.id);
 
     // ============================================================
+    console.log("\n[D1-B2] RESERVA DE CAPACIDADE — ativação viva segura a vaga");
+    // ============================================================
+    //
+    // A regra que mudou: capacidade = validados + ativos vigentes. Antes só
+    // `validado` contava, e um teste concorrente com limite 1 terminava com
+    // DOIS códigos vivos — um dos dois ia ouvir "esgotado" na frente do
+    // caixa. Agora quem ativou enquanto havia vaga reservou aquela unidade.
+
+    const CAP = "f9d1-capacidade";
+    const qaB = await criarContaQa(svc, "f9d1c2", { nome: "Cliente B" });
+    const clienteB = await logar(qaB.email, qaB.senha);
+
+    // Arrow function, e não `function` — o tsconfig mira ES5, e declaração de
+    // função dentro de bloco é erro de compilação lá (o `next build` acusa;
+    // rodar só a suíte não acusa, porque o tsx transpila sem essa checagem).
+    const recriarCap = async (limite: number) => {
+      await svc.from("cupons_usuario").delete().eq("cupom_id", CAP);
+      await svc.from("cupom_eventos").delete().eq("cupom_id", CAP);
+      await svc.from("cupons").delete().eq("id", CAP);
+      await svc.from("cupons").insert({
+        ...base, id: CAP, titulo: "F9D1 capacidade", beneficio: "Cupom da suíte",
+        validade_fim: "2035-12-31", limite_total: limite, limite_por_usuario: 1,
+      });
+    };
+    /** Faz a reserva de alguém vencer, como o relógio faria. */
+    const expirarAtivacao = async (rowId: number) => {
+      await svc.from("cupons_usuario")
+        .update({ expira_em: new Date(Date.now() - 60_000).toISOString() })
+        .eq("id", rowId);
+    };
+    const capacidade = async () => {
+      const { data } = await svc
+        .from("cupons_usuario").select("status, expira_em").eq("cupom_id", CAP);
+      const agora = Date.now();
+      return (data ?? []).filter(
+        (r) => r.status === "validado" ||
+          (r.status === "ativo" && new Date(r.expira_em as string).getTime() > agora),
+      ).length;
+    };
+
+    // --- TESTE B: reserva bloqueia; expiração devolve a vaga ---
+    await recriarCap(1);
+    const b1 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/B: A ativa a última vaga", b1?.ok === true, JSON.stringify(b1));
+    const b2 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/B: B é recusado com 'esgotado' — a vaga está RESERVADA",
+      b2?.ok === false && b2?.motivo === "esgotado", JSON.stringify(b2));
+    check("D1/B: capacidade ocupada = 1 (a reserva conta)", (await capacidade()) === 1);
+    const { data: naoCarimbou } = await svc
+      .from("cupons").select("status").eq("id", CAP).maybeSingle();
+    check("D1/B: a campanha NÃO foi carimbada 'esgotado' por uma reserva",
+      naoCarimbou?.status === "ativo", String(naoCarimbou?.status));
+
+    await expirarAtivacao(b1.estado.row_id);
+    const b3 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/B: expirada a reserva de A, B consegue ativar",
+      b3?.ok === true, JSON.stringify(b3));
+    check("D1/B: e a ativação expirada NÃO conta capacidade", (await capacidade()) === 1);
+
+    // --- TESTE C: reserva vira validação; aí sim a campanha esgota ---
+    await recriarCap(1);
+    const c1 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/C: A ativa (reserva a única vaga)", c1?.ok === true);
+    const c2 = (await dono.rpc("validar_cupom", { p_codigo: c1.estado.codigo })).data as any;
+    check("D1/C: A VALIDA a própria reserva — não pode ser recusado por esgotado",
+      c2?.ok === true, JSON.stringify(c2));
+    const { data: cCarimbou } = await svc
+      .from("cupons").select("status").eq("id", CAP).maybeSingle();
+    check("D1/C: agora sim a campanha é 'esgotado' (consumo irreversível)",
+      cCarimbou?.status === "esgotado", String(cCarimbou?.status));
+    const c3 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/C: B recebe 'esgotado' (motivo próprio, não 'indisponivel')",
+      c3?.ok === false && c3?.motivo === "esgotado", JSON.stringify(c3));
+
+    // --- TESTE D: duas reservas, duas validações ---
+    await recriarCap(2);
+    const d1 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    const d2 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/D: A e B reservam as duas vagas", d1?.ok === true && d2?.ok === true);
+    const d3 = (await dono.rpc("validar_cupom", { p_codigo: d1.estado.codigo })).data as any;
+    check("D1/D: A valida a vaga dele", d3?.ok === true, JSON.stringify(d3));
+    const { data: meio } = await svc
+      .from("cupons").select("status").eq("id", CAP).maybeSingle();
+    check("D1/D: com 1 validado de 2, a campanha ainda NÃO esgotou",
+      meio?.status === "ativo", String(meio?.status));
+    const d4 = (await dono.rpc("validar_cupom", { p_codigo: d2.estado.codigo })).data as any;
+    check("D1/D: B TAMBÉM valida — a reserva dele valia", d4?.ok === true, JSON.stringify(d4));
+    const { data: fim } = await svc
+      .from("cupons").select("status").eq("id", CAP).maybeSingle();
+    check("D1/D: só então a campanha vira 'esgotado' (2/2)",
+      fim?.status === "esgotado", String(fim?.status));
+    const { count: validadosD } = await svc
+      .from("cupons_usuario").select("id", { count: "exact", head: true })
+      .eq("cupom_id", CAP).eq("status", "validado");
+    check("D1/D: e o limite não foi ultrapassado", (validadosD ?? 0) === 2, String(validadosD));
+
+    // A PROPRIEDADE QUE RESOLVE O ACHADO DA AUDITORIA:
+    //
+    // A auditoria mostrou que, ao virar 'esgotado', o cupom sai da policy
+    // pública — e quem tivesse ativação viva perderia a página do próprio
+    // cupom. Com a reserva isso não pode mais acontecer: capacidade =
+    // validados + vivos <= limite, então validados == limite implica vivos
+    // == 0. O carimbo só chega quando não há mais ninguém esperando para
+    // usar. Isto aqui é a prova, e é o motivo de o achado não virar item de
+    // produto.
+    const { data: vivosNoCarimbo } = await svc
+      .from("cupons_usuario").select("status, expira_em").eq("cupom_id", CAP);
+    const aindaVivos = (vivosNoCarimbo ?? []).filter(
+      (r) => r.status === "ativo" && new Date(r.expira_em as string).getTime() > Date.now(),
+    ).length;
+    check("D1/D: quando a campanha é carimbada, NÃO há ativação viva órfã",
+      aindaVivos === 0, `vivos=${aindaVivos}`);
+
+    // --- TESTE E: terceira pessoa espera a vaga voltar ---
+    await recriarCap(2);
+    const e1 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    const e2 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    const qaC = await criarContaQa(svc, "f9d1c3", { nome: "Cliente C" });
+    const clienteC = await logar(qaC.email, qaC.senha);
+    const e3 = (await clienteC.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/E: com as duas vagas reservadas, C é recusado",
+      e3?.ok === false && e3?.motivo === "esgotado", JSON.stringify(e3));
+    await expirarAtivacao(e1.estado.row_id);
+    const e4 = (await clienteC.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1/E: expirada a reserva de A, C entra", e4?.ok === true, JSON.stringify(e4));
+    check("D1/E: capacidade segue em 2 (B + C)", (await capacidade()) === 2);
+    void e2;
+
+    // --- limite POR USUÁRIO continua separado do limite global ---
+    await recriarCap(5);
+    const u1 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1: com capacidade sobrando, o consumidor ativa", u1?.ok === true);
+    await svc.from("cupons_usuario")
+      .update({ status: "validado", validado_em: new Date().toISOString() })
+      .eq("id", u1.estado.row_id);
+    const u2 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1: mas a COTA INDIVIDUAL (1) o barra — motivo limite_usuario, não esgotado",
+      u2?.ok === false && u2?.motivo === "limite_usuario", JSON.stringify(u2));
+    const u3 = (await clienteB.rpc("ativar_cupom", { p_cupom_id: CAP })).data as any;
+    check("D1: …e outro consumidor continua entrando (limite global tem folga)",
+      u3?.ok === true, JSON.stringify(u3));
+
+    await svc.from("cupons_usuario").delete().eq("cupom_id", CAP);
+    await svc.from("cupom_eventos").delete().eq("cupom_id", CAP);
+    await svc.from("cupons").delete().eq("id", CAP);
+    await destruirContaQa(svc, qaB.id);
+    await destruirContaQa(svc, qaC.id);
+
+    // ============================================================
     console.log("\n[D1-C] NOVA CAMPANHA — id novo, contadores do zero");
     // ============================================================
 
@@ -283,6 +432,53 @@ async function main(): Promise<number> {
       .from("cupons").select("status").eq("id", CUPOM_VENCIDO).maybeSingle();
     check("D1: só DEPOIS da aprovação o cupom volta a 'ativo'",
       aprovado?.status === "ativo", String(aprovado?.status));
+
+    // ============================================================
+    console.log("\n[D1-D2] INDISPONIVEL — está na vitrine, logo segue o mesmo ciclo");
+    // ============================================================
+    //
+    // A auditoria pegou esta: a policy pública lê `status in
+    // ('ativo','indisponivel')`, então `indisponivel` É vitrine. Deixá-lo
+    // fora da regra permitia prorrogar um cupom vencido e devolvê-lo ao
+    // consumidor SEM moderação.
+
+    const IND = "f9d1-indisponivel";
+    await svc.from("cupons").delete().eq("id", IND);
+    await svc.from("cupons").insert({
+      ...base, id: IND, titulo: "F9D1 indisponivel", beneficio: "Cupom da suíte",
+      validade_fim: emDias(45), status: "indisponivel" as const,
+    });
+    const { data: indVigente } = await dono
+      .from("cupons").update({ titulo: "F9D1 indisponivel (editado)" }).eq("id", IND)
+      .select("status").maybeSingle();
+    check("D1: indisponivel VIGENTE editado continua indisponivel",
+      indVigente?.status === "indisponivel", String(indVigente?.status));
+
+    const { data: indVencido } = await dono
+      .from("cupons").update({ validade_fim: emDias(-4) }).eq("id", IND)
+      .select("status").maybeSingle();
+    check("D1: indisponivel com validade vencida vira 'expirado'",
+      indVencido?.status === "expirado", String(indVencido?.status));
+
+    // e o caminho que a auditoria denunciou: prorrogar sem moderação
+    await svc.from("cupons").update({ status: "indisponivel", validade_fim: emDias(-4) }).eq("id", IND);
+    const { data: indProrrogado } = await dono
+      .from("cupons").update({ validade_fim: emDias(60) }).eq("id", IND)
+      .select("status, moderacao_historico").maybeSingle();
+    check("D1: indisponivel VENCIDO prorrogado vai para 'pendente' — não volta à vitrine sozinho",
+      indProrrogado?.status === "pendente", String(indProrrogado?.status));
+    check("D1: …e a prorrogação fica registrada",
+      ((indProrrogado?.moderacao_historico ?? []) as any[]).some((h) => h.acao === "prorrogado"));
+
+    await svc.from("cupons").update({ status: "indisponivel", validade_fim: emDias(-4) }).eq("id", IND);
+    const { data: indAindaPassada } = await dono
+      .from("cupons").update({ validade_fim: emDias(-1) }).eq("id", IND)
+      .select("status").maybeSingle();
+    check("D1: com data ainda passada, NÃO volta à vitrine",
+      indAindaPassada?.status === "expirado", String(indAindaPassada?.status));
+    check("D1: o Portal também lê indisponivel vencido como expirado",
+      statusPortalDe("indisponivel", emDias(-1), emDias(0)) === "expirado");
+    await svc.from("cupons").delete().eq("id", IND);
 
     // ============================================================
     console.log("\n[D1-E] REJEITADO — não regressão do fluxo da Fase 6.5");

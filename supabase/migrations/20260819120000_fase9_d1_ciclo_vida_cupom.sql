@@ -131,6 +131,16 @@ begin
   -- importa aqui é se ESTA validação foi a que fechou a campanha. Sob o
   -- mesmo `for update` de cima — nenhuma concorrente entra no meio.
   --
+  -- CONTA SÓ VALIDAÇÕES, e isso é a definição do estado. `esgotado` significa
+  -- "o limite foi DEFINITIVAMENTE consumido", não "não há vagas agora". A
+  -- diferença aparece com a reserva da migration 34: quando alguém ativa a
+  -- última unidade, a campanha fica sem vagas para novos consumidores — mas
+  -- essa vaga pode voltar se a ativação expirar sem uso. Carimbar `esgotado`
+  -- ali deixaria a campanha morta por uma reserva temporária, e o status
+  -- persistido tira o cupom da vitrine (a policy filtra por status). Por isso
+  -- a recusa temporária mora em `ativar_cupom` (motivo 'esgotado', mesmo
+  -- contrato) e o CARIMBO mora aqui, onde o consumo é irreversível.
+  --
   -- Só toca cupom 'ativo': um cupom já 'esgotado' não precisa ser remarcado,
   -- e 'pendente'/'rejeitado'/'excluido' não são estados que o balcão deva
   -- reescrever (validar um código continua funcionando para eles, porque a
@@ -202,15 +212,21 @@ begin
   -- "estava vencido" = o estado ANTERIOR já não valia mais, seja porque a
   -- coluna dizia 'expirado', seja porque a data dizia (o caso comum: o
   -- cupom vence sozinho e ninguém toca nele até o lojista voltar).
+  --
+  -- `indisponivel` entra junto com `ativo` porque ele TAMBÉM está na vitrine:
+  -- a policy pública lê `status in ('ativo','indisponivel')` (migration 3).
+  -- Deixá-lo de fora abria a porta que a auditoria encontrou — um cupom
+  -- indisponível e vencido, prorrogado, voltava a aparecer para o consumidor
+  -- SEM passar pela moderação, contrariando a decisão da D1.
   v_estava_vencido :=
        old.status = 'expirado'
-    or (old.status = 'ativo' and old.validade_fim < v_hoje);
+    or (old.status in ('ativo', 'indisponivel') and old.validade_fim < v_hoje);
 
   -- (a) PRORROGAÇÃO → volta para a fila, nunca direto ao ar.
   --     Decisão de produto da D1: expirado é a MESMA campanha continuando,
   --     então preserva id, métricas e histórico — mas não pula a moderação.
   if v_estava_vencido and new.validade_fim >= v_hoje
-     and new.status in ('ativo', 'expirado') then
+     and new.status in ('ativo', 'indisponivel', 'expirado') then
     new.status := 'pendente';
     new.moderacao_historico := coalesce(new.moderacao_historico, '[]'::jsonb)
       || jsonb_build_array(jsonb_build_object(
@@ -221,10 +237,11 @@ begin
          ));
 
   -- (b) VENCIMENTO → o estado alcança a data.
-  --     Só a partir de 'ativo': 'pendente' e 'rejeitado' têm ciclo próprio
-  --     (o lojista ainda está mexendo), e 'excluido' é arquivo — nenhum
-  --     deles deve ser reescrito por uma data.
-  elsif new.status = 'ativo' and new.validade_fim < v_hoje then
+  --     Só a partir dos status DE VITRINE ('ativo' e 'indisponivel'):
+  --     'pendente' e 'rejeitado' têm ciclo próprio (o lojista ainda está
+  --     mexendo), 'esgotado' é fim de campanha por consumo e 'excluido' é
+  --     arquivo — nenhum deles deve ser reescrito por uma data.
+  elsif new.status in ('ativo', 'indisponivel') and new.validade_fim < v_hoje then
     new.status := 'expirado';
   end if;
 
