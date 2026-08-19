@@ -55,6 +55,7 @@ export function NovoCupomForm({
   categorias,
   categoriaPrincipal,
   cupomInicial,
+  duplicar = false,
   estabelecimentoId,
   onSalvar,
   onCancelar,
@@ -64,12 +65,21 @@ export function NovoCupomForm({
   categoriaPrincipal: string | null;
   /** Presente = modo EDITAR (DTO fiel à linha, ver buscarCupomParaEdicao). */
   cupomInicial?: CupomParaEdicao;
+  /**
+   * Fase 9/D1: com `cupomInicial` presente, muda o destino do Salvar — em
+   * vez de editar aquele cupom, CRIA outro com estes valores como ponto de
+   * partida. É o "criar nova campanha" do cupom esgotado: mesmo formulário,
+   * id novo, contadores do zero.
+   */
+  duplicar?: boolean;
   /** Fase 7/C4: pasta do bucket de imagens. */
   estabelecimentoId?: string | null;
   onSalvar: (item: ItemCupomPortal) => void;
   onCancelar: () => void;
 }) {
-  const editando = Boolean(cupomInicial);
+  // Fase 9/D1: `duplicar` desliga o modo edição sem descartar os valores —
+  // o formulário nasce preenchido, mas o Salvar cria um cupom NOVO.
+  const editando = Boolean(cupomInicial) && !duplicar;
   const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
   const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
   // Fase 4: o estabelecimento pode ter N categorias — seleção entre elas,
@@ -125,7 +135,15 @@ export function NovoCupomForm({
   );
   const [salvando, setSalvando] = React.useState(false);
   // `undefined` = intocado (CONTRATO PARCIAL da Fase 6.5).
-  const [imagem, setImagem] = React.useState<string | undefined>(undefined);
+  // `undefined` = "não mexi" (contrato parcial da edição). Ao DUPLICAR isso
+  // não serve: o formulário mostra a imagem da campanha anterior, então ela
+  // precisa entrar no payload de criação — senão o cupom novo nasceria sem a
+  // imagem que o lojista está vendo na pré-visualização. Aponta para o MESMO
+  // arquivo do Storage, de propósito: é do mesmo estabelecimento, e a
+  // exclusão de cupom é lógica, então nada apaga o arquivo por baixo.
+  const [imagem, setImagem] = React.useState<string | undefined>(
+    duplicar ? cupomInicial?.imagem : undefined,
+  );
   const [erro, setErro] = React.useState<string | null>(null);
 
   const toggleDia = (d: string) =>
@@ -214,7 +232,7 @@ export function NovoCupomForm({
       ...(imagem !== undefined ? { imagem } : {}),
     };
     // estabelecimento_id é derivado no SERVIDOR (owner_id) — nunca do form
-    const r = cupomInicial
+    const r = editando && cupomInicial
       ? await editarCupomAction({
           id: cupomInicial.id,
           ...campos,
@@ -237,9 +255,13 @@ export function NovoCupomForm({
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       {/* Formulário */}
       <Card className="p-5 lg:p-6">
-        <h2 className="text-lg font-bold">{editando ? "Editar oferta" : "Dados da oferta"}</h2>
+        <h2 className="text-lg font-bold">
+          {editando ? "Editar oferta" : duplicar ? "Nova campanha" : "Dados da oferta"}
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Preencha os campos — a pré-visualização atualiza em tempo real.
+          {duplicar
+            ? "Os dados vieram da campanha anterior — ajuste o que precisar. Ao salvar, nasce um cupom novo, com contadores zerados, e ele vai para análise."
+            : "Preencha os campos — a pré-visualização atualiza em tempo real."}
         </p>
 
         <div className="mt-5 flex flex-col gap-4">

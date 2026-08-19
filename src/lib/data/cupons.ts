@@ -4,6 +4,7 @@ import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types
 import type { JanelaConsumo } from "@/lib/janela";
 import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
 import { motivoAtual } from "@/lib/moderacao";
+import { statusPortalDe } from "@/lib/ciclo-cupom";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -365,7 +366,7 @@ export async function buscarCuponsBusca(): Promise<Cupom[]> {
 }
 
 /** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */
-function hojeBrt(): string {
+export function hojeBrt(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
@@ -442,20 +443,14 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
     ]),
   );
 
+  // Fase 9/D1: a tradução vive em `ciclo-cupom` (módulo puro). O que mudou
+  // aqui é que um cupom 'ativo' com validade vencida passa a aparecer como
+  // EXPIRADO — antes ele se misturava aos ativos, porque nada carimba a
+  // coluna quando a data passa (só o trigger da 33, quando o lojista mexe).
+  const hoje = hojeBrt();
   const itens: ItemCupomPortal[] = cupons.map((row) => ({
     cupom: linhaParaCupom(row, estabelecimento.nome),
-    statusPortal:
-      row.status === "excluido"
-        ? "excluido"
-        : row.status === "esgotado"
-          ? "esgotado"
-          : row.status === "expirado"
-            ? "expirado"
-            : row.status === "pendente"
-              ? "pendente"
-              : row.status === "rejeitado"
-                ? "rejeitado"
-                : "ativo",
+    statusPortal: statusPortalDe(row.status, row.validade_fim, hoje),
     metricas:
       metricasPorCupom.get(row.id) ?? {
         visualizacoes: 0,

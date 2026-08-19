@@ -193,11 +193,27 @@ async function main(): Promise<number> {
     const rA = (await consumidor.rpc("ativar_cupom", { p_cupom_id: "c03" })).data as Jsonb;
     const rB = (await segundo.rpc("ativar_cupom", { p_cupom_id: "c03" })).data as Jsonb;
     const codA = (rA as { estado?: { codigo?: string } }).estado?.codigo ?? "";
-    const codB = (rB as { estado?: { codigo?: string } }).estado?.codigo ?? "";
-    check("dois usuários ativam c03 (limite_total=1 ainda não valida)", ok(rA) && ok(rB));
+    // FASE 9/D1 — A SEMÂNTICA MUDOU AQUI, e este teste mudou com ela.
+    //
+    // Até a D1, `limite_total` só era conferido contra VALIDAÇÕES: dois
+    // consumidores ativavam a última unidade e a vaga se decidia no balcão —
+    // um dos dois ouviria "esgotado" na frente do caixa, com o código na mão.
+    // Era o que este bloco afirmava ("dois usuários ativam … ainda não
+    // valida"), e o relatório de QA cobrou justamente a promessa quebrada.
+    //
+    // Agora a ativação RESERVA a unidade (migration 34): o segundo é recusado
+    // na hora de ativar, não depois. A intenção do teste continua a mesma —
+    // `limite_total` não é ultrapassado —, o que mudou é ONDE a barreira age.
+    check("com limite_total=1, o 1º ativa e o 2º é recusado na ATIVAÇÃO (reserva)",
+      ok(rA) && !ok(rB) && motivo(rB) === "esgotado", `rB=${JSON.stringify(rB)}`);
     const v1 = motivo((await lojista2.rpc("validar_cupom", { p_codigo: codA })).data as Jsonb);
-    const v2 = motivo((await lojista2.rpc("validar_cupom", { p_codigo: codB })).data as Jsonb);
-    check("1ª validação passa, 2ª → esgotado", v1 === undefined && v2 === "esgotado", `v1=${v1} v2=${v2}`);
+    check("a reserva do 1º vira validação sem cair em 'esgotado'", v1 === undefined, `v1=${v1}`);
+    const { data: c03Depois } = await svc
+      .from("cupons").select("status").eq("id", "c03").maybeSingle();
+    check("…e a campanha é carimbada 'esgotado' só quando o limite é CONSUMIDO",
+      c03Depois?.status === "esgotado", String(c03Depois?.status));
+    // devolve c03 ao estado do seed: o carimbo é efeito do teste, não do seed
+    await svc.from("cupons").update({ status: "ativo" }).eq("id", "c03");
     await svc.from("cupons").update({ limite_total: null }).eq("id", "c03");
     await limparCiclo(segundoId);
   }

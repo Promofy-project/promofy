@@ -475,3 +475,84 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > quem rotacionasse o IP nunca era contado, e quem fixasse o IP de uma vítima negava cadastro a todos atrás daquele
 > CGNAT. A Fase 8 acertou porque chaveava por `auth.uid()`, derivado no servidor — aqui a chave foi para o cliente
 > **e** a autenticação caiu. O arquivo está em `_promofy_handoff/pendentes/`, aguardando decisão de desenho.
+
+---
+
+## Fase 9 · Onda D1 — o ciclo de vida do cupom passa a existir
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 33 | `20260819120000_fase9_d1_ciclo_vida_cupom.sql` | `validar_cupom` carimba **`esgotado`** quando a validação alcança `limite_total`; trigger `trg_cupons_ciclo_vida` mantém validade e status coerentes. |
+
+> **O diagnóstico que originou a migration.** `esgotado` e `expirado` estavam no enum desde a migration 1 e
+> apareciam nas telas — mas **nenhuma linha de código os gravava**. Os únicos cupons nesses estados vinham do
+> `seed.sql`, e a auditoria mediu os dois **dessincronizados do próprio dado**: o "expirado" tinha validade
+> **futura**, e o "esgotado" tinha 500 resgates em `cupom_eventos` e **zero** validações em `cupons_usuario`
+> — que é a contabilidade que de fato governa a admissão. Um teste que lesse o seed teria "provado" uma regra
+> que não existia.
+>
+> **Esgotado nasce na validação**, porque é lá que o contador cresce. `validar_cupom` já serializava a linha
+> do cupom (`for update`) para o recheck autoritativo do limite; a materialização entra **depois** do update
+> da ativação, sob o **mesmo lock** e na mesma transação. Não há janela entre "esgotou" e "está marcado como
+> esgotado", e duas validações concorrentes continuam sem passar do limite. `limite_total is null` (migration
+> 17) nunca esgota.
+>
+> **Expirado continua derivado da data** — e isso é decisão, não omissão. Um cron varrendo a tabela todo dia
+> só para carimbar vencimento acrescentaria peça móvel, horário de execução e modo de falha novos para
+> produzir uma informação que `validade_fim` já carrega. Quem lê responde com `validade_fim < hoje_brt()`, e
+> o Portal passa a apresentar isso como "Expirado" (`src/lib/ciclo-cupom.ts`).
+>
+> **O que a coluna precisa fazer é fechar o ciclo na prorrogação:** um cupom vencido que ganha data futura
+> **não volta ao ar sozinho** — vira `pendente` e passa pela moderação. É a decisão de produto da D1, e o
+> trigger a aplica no único instante em que a resposta muda: o `UPDATE`.
+>
+> **Trigger separado do `checar_edicao_cupom` (20), de propósito.** Aquele é a matriz de imutabilidade, uma
+> barreira que **recusa**; este é coerência de dado, que **ajusta**. Misturá-los faria uma função de 250
+> linhas responder a duas perguntas, e obrigaria a reescrevê-la inteira para mudar meia regra. A ordem é
+> garantida pelo nome: o Postgres dispara triggers de mesmo tipo em ordem **alfabética**, e
+> `trg_cupons_ciclo_vida` vem depois de `trg_cupons_checar_edicao`.
+>
+> **Age para todos, inclusive `service_role` e seed** — ao contrário da 20, que isenta admin. Não é regra de
+> permissão: um cupom `ativo` com validade vencida é estado que não deveria existir, tenha sido escrito por
+> quem for.
+>
+> **Esgotado não reativa.** Campanha encerrada vira **campanha nova** (id próprio, contadores do zero), porque
+> reabrir o mesmo registro somaria métricas, ativações e NPS de duas vidas no mesmo funil, que agrega por
+> `cupom_id` **sem recorte de período** — sem jeito de separar depois. Expirado é a **mesma** campanha
+> continuando, então preserva id e histórico.
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 34 | `20260819130000_fase9_d1_reserva_limite.sql` | `ativar_cupom`: a ativação **reserva** a vaga (capacidade = validados + ativos vigentes), serializada pelo lock da linha do cupom. |
+
+> **A promessa que o QA cobrou.** Até aqui `limite_total` só era conferido contra VALIDAÇÕES. Medido em teste
+> concorrente com `limite_total = 1`: dois consumidores ativaram ao mesmo tempo e ficaram **ambos** com código
+> vivo (`ativos vigentes: 2 | validados: 0 | limite: 1`). A vaga só se decidia no balcão — um dos dois ouviria
+> "esgotado" na frente do caixa, com o código na mão. Agora quem ativa enquanto há vaga **reserva** aquela
+> unidade até validar ou expirar.
+>
+> **`validar_cupom` continua contando só `validado`** (migration 33), e isso é o que faz a reserva funcionar: a
+> linha que está validando já reservou a própria vaga, e contá-la de novo recusaria justamente quem tinha
+> direito. `ativo → validado` não aumenta consumo — converte reservado em consumido.
+>
+> **O carimbo `esgotado` também continua só de validações.** Sem vagas por reserva é estado TEMPORÁRIO: a
+> contagem filtra `expira_em > now()`, então uma reserva que vence devolve a vaga sem varredura nenhuma.
+> Carimbar por reserva tiraria o cupom da vitrine (a policy filtra status) e mataria a campanha sem ninguém
+> ter consumido nada.
+>
+> ⚠️ **O lock entra ANTES do clique, e isso custou um deadlock para descobrir.** A primeira versão pegava
+> `for update` junto da contagem de capacidade, e o teste concorrente devolveu `deadlock detected … while
+> locking tuple in relation "cupons"`. A causa é o clique: `cupom_eventos.cupom_id` tem FK para `cupons`, e o
+> INSERT adquire **FOR KEY SHARE** na linha do cupom. As duas transações registravam o clique e só então
+> pediam FOR UPDATE — cada uma esperando a outra soltar o KEY SHARE que ela mesma segurava. Deadlock de
+> *upgrade* de lock, invisível em teste sequencial. Tomar a linha inteira antes de qualquer KEY SHARE resolve.
+>
+> **Sem ciclo com `validar_cupom`**, que trava a ativação antes do cupom: para fechar um ciclo esta função
+> precisaria esperar por uma linha de `cupons_usuario` que a outra detivesse — a expiração lazy só toca linhas
+> **vencidas do próprio usuário**, e diante de uma dessas `validar_cupom` retorna 'expirado' antes de sequer
+> pedir o lock do cupom.
+>
+> **Efeito colateral que a auditoria previa e a reserva eliminou:** como capacidade = validados + vivos ≤
+> limite, `validados == limite` implica **zero ativações vivas**. O cupom só é carimbado quando não há mais
+> ninguém esperando para usar — então ninguém perde a página do próprio cupom por causa do carimbo. Há
+> asserção dedicada a essa propriedade.
