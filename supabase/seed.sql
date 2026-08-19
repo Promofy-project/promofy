@@ -113,6 +113,15 @@ insert into public.cupons
    'ativo', false, 3.7, '/img/cupons/c12.jpg', 12, 4.6, 738),
   -- Campanhas anteriores do e1 (só aparecem no portal; a policy pública
   -- e o filtro da home excluem status esgotado/expirado)
+  --
+  -- ATENÇÃO (Fase 9/D1): estes dois são FIXTURES VISUAIS, não prova de
+  -- regra. O status aqui é escrito à mão e NÃO corresponde ao dado: o
+  -- "esgotado" abaixo tem limite_total 500 e ZERO linhas em cupons_usuario
+  -- (os números que a tela mostra vêm de cupom_eventos, que é métrica de
+  -- funil e não governa limite), e a validade do "expirado" é relativa à
+  -- data em que o seed rodou. Servem para a UI ter os dois estados na tela;
+  -- quem prova esgotamento e vencimento de verdade é `test-fase9d1`, que
+  -- monta cupom com limite 1 e valida no balcão.
   ('p-campanha-esgotada', 'e1', 'Combo casal + 2 sobremesas', 'alimentacao',
    'Para 2 pessoas, no jantar', 60, null, null, current_date + 28, 500,
    '["Válido no jantar, mediante reserva.","Limite de 1 por mesa."]'::jsonb,

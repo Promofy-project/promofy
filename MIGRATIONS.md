@@ -475,3 +475,48 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > quem rotacionasse o IP nunca era contado, e quem fixasse o IP de uma vítima negava cadastro a todos atrás daquele
 > CGNAT. A Fase 8 acertou porque chaveava por `auth.uid()`, derivado no servidor — aqui a chave foi para o cliente
 > **e** a autenticação caiu. O arquivo está em `_promofy_handoff/pendentes/`, aguardando decisão de desenho.
+
+---
+
+## Fase 9 · Onda D1 — o ciclo de vida do cupom passa a existir
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 33 | `20260819120000_fase9_d1_ciclo_vida_cupom.sql` | `validar_cupom` carimba **`esgotado`** quando a validação alcança `limite_total`; trigger `trg_cupons_ciclo_vida` mantém validade e status coerentes. |
+
+> **O diagnóstico que originou a migration.** `esgotado` e `expirado` estavam no enum desde a migration 1 e
+> apareciam nas telas — mas **nenhuma linha de código os gravava**. Os únicos cupons nesses estados vinham do
+> `seed.sql`, e a auditoria mediu os dois **dessincronizados do próprio dado**: o "expirado" tinha validade
+> **futura**, e o "esgotado" tinha 500 resgates em `cupom_eventos` e **zero** validações em `cupons_usuario`
+> — que é a contabilidade que de fato governa a admissão. Um teste que lesse o seed teria "provado" uma regra
+> que não existia.
+>
+> **Esgotado nasce na validação**, porque é lá que o contador cresce. `validar_cupom` já serializava a linha
+> do cupom (`for update`) para o recheck autoritativo do limite; a materialização entra **depois** do update
+> da ativação, sob o **mesmo lock** e na mesma transação. Não há janela entre "esgotou" e "está marcado como
+> esgotado", e duas validações concorrentes continuam sem passar do limite. `limite_total is null` (migration
+> 17) nunca esgota.
+>
+> **Expirado continua derivado da data** — e isso é decisão, não omissão. Um cron varrendo a tabela todo dia
+> só para carimbar vencimento acrescentaria peça móvel, horário de execução e modo de falha novos para
+> produzir uma informação que `validade_fim` já carrega. Quem lê responde com `validade_fim < hoje_brt()`, e
+> o Portal passa a apresentar isso como "Expirado" (`src/lib/ciclo-cupom.ts`).
+>
+> **O que a coluna precisa fazer é fechar o ciclo na prorrogação:** um cupom vencido que ganha data futura
+> **não volta ao ar sozinho** — vira `pendente` e passa pela moderação. É a decisão de produto da D1, e o
+> trigger a aplica no único instante em que a resposta muda: o `UPDATE`.
+>
+> **Trigger separado do `checar_edicao_cupom` (20), de propósito.** Aquele é a matriz de imutabilidade, uma
+> barreira que **recusa**; este é coerência de dado, que **ajusta**. Misturá-los faria uma função de 250
+> linhas responder a duas perguntas, e obrigaria a reescrevê-la inteira para mudar meia regra. A ordem é
+> garantida pelo nome: o Postgres dispara triggers de mesmo tipo em ordem **alfabética**, e
+> `trg_cupons_ciclo_vida` vem depois de `trg_cupons_checar_edicao`.
+>
+> **Age para todos, inclusive `service_role` e seed** — ao contrário da 20, que isenta admin. Não é regra de
+> permissão: um cupom `ativo` com validade vencida é estado que não deveria existir, tenha sido escrito por
+> quem for.
+>
+> **Esgotado não reativa.** Campanha encerrada vira **campanha nova** (id próprio, contadores do zero), porque
+> reabrir o mesmo registro somaria métricas, ativações e NPS de duas vidas no mesmo funil, que agrega por
+> `cupom_id` **sem recorte de período** — sem jeito de separar depois. Expirado é a **mesma** campanha
+> continuando, então preserva id e histórico.

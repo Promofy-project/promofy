@@ -79,6 +79,8 @@ export function CuponsClient({
   const [reenviando, setReenviando] = React.useState<string | null>(null);
   /** Fase 9/C3: "todos" ou um `statusPortal`. */
   const [filtroStatus, setFiltroStatus] = React.useState<string>("todos");
+  /** Fase 9/D1: o form está preenchido com uma campanha anterior, mas CRIA. */
+  const [duplicando, setDuplicando] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
 
   /**
@@ -96,8 +98,32 @@ export function CuponsClient({
       setErro(r.erro);
       return;
     }
+    setDuplicando(false);
     setEmEdicao(r.cupom);
     setView("editar");
+  };
+
+  /**
+   * NOVA CAMPANHA a partir de uma esgotada — Fase 9/D1.
+   *
+   * O clique NÃO cria nada: busca o cupom encerrado e abre o formulário de
+   * criação com os valores dele. O registro só nasce no Salvar, pela
+   * `criarCupomAction` de sempre — com id próprio, `pendente`, e contadores
+   * que começam do zero porque são de outro cupom. A campanha anterior fica
+   * intacta, com todo o histórico dela.
+   */
+  const abrirNovaCampanha = async (item: ItemCupomPortal) => {
+    setErro(null);
+    setCarregando(item.cupom.id);
+    const r = await carregarCupomParaEdicaoAction(item.cupom.id);
+    setCarregando(null);
+    if (!r.ok) {
+      setErro(r.erro);
+      return;
+    }
+    setDuplicando(true);
+    setEmEdicao(r.cupom);
+    setView("novo");
   };
 
   const reenviar = async (item: ItemCupomPortal) => {
@@ -334,8 +360,10 @@ export function CuponsClient({
                 onEditar={carregando ? undefined : abrirEdicao}
                 onReenviar={reenviar}
                 onExcluir={excluir}
+                onNovaCampanha={carregando ? undefined : abrirNovaCampanha}
                 excluindo={excluindo === item.cupom.id}
                 reenviando={reenviando === item.cupom.id}
+                carregando={carregando === item.cupom.id}
               />
             ))}
           </div>
@@ -359,25 +387,30 @@ export function CuponsClient({
         <NovoCupomForm
           // `key` remonta o form ao trocar de cupom (ou entre criar/editar):
           // os useState só leem `cupomInicial` na montagem.
-          key={emEdicao?.id ?? "novo"}
+          key={`${duplicando ? "dup" : "ed"}-${emEdicao?.id ?? "novo"}`}
           estabelecimentoNome={estabelecimentoNome}
           estabelecimentoId={estabelecimentoId}
           categorias={categorias}
           categoriaPrincipal={categoriaPrincipal}
           cupomInicial={emEdicao ?? undefined}
+          duplicar={duplicando}
           onCancelar={() => {
             setView("lista");
             setEmEdicao(null);
+            setDuplicando(false);
           }}
           onSalvar={(item) => {
+            // Fase 9/D1: duplicando, o item que volta é OUTRO cupom (id novo)
+            // — entra na lista, e o esgotado de origem fica onde estava.
+            const editou = Boolean(emEdicao) && !duplicando;
             setLista((prev) =>
-              emEdicao
+              editou
                 ? prev.map((i) => (i.cupom.id === item.cupom.id ? item : i))
                 : [item, ...prev],
             );
-            const editou = Boolean(emEdicao);
             setView("lista");
             setEmEdicao(null);
+            setDuplicando(false);
             setSucesso(
               editou
                 ? item.statusPortal === "pendente"

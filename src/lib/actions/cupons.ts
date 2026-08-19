@@ -4,9 +4,11 @@ import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import {
   buscarCupomParaEdicao,
+  hojeBrt,
   linhaParaCupom,
   type CupomParaEdicao,
 } from "@/lib/data/cupons";
+import { statusPortalDe } from "@/lib/ciclo-cupom";
 import {
   PRAZO_ATIVACAO_MIN_HORAS,
   sanearFormasConsumo,
@@ -519,16 +521,10 @@ export async function editarCupomAction(
 
     const item: ItemCupomPortal = {
       cupom: linhaParaCupom(row, est.nome),
-      statusPortal:
-        row.status === "esgotado"
-          ? "esgotado"
-          : row.status === "expirado"
-            ? "expirado"
-            : row.status === "pendente"
-              ? "pendente"
-              : row.status === "rejeitado"
-                ? "rejeitado"
-                : "ativo",
+      // Fase 9/D1: mesma tradução da listagem — inclusive o 'ativo' vencido,
+      // que a edição precisa devolver como expirado para o card não voltar
+      // ao estado errado logo depois de salvar.
+      statusPortal: statusPortalDe(row.status, row.validade_fim, hojeBrt()),
       metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
       limiteTotal: row.limite_total ?? 1000,
       limiteUsuario: row.limite_por_usuario,

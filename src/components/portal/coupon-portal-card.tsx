@@ -1,4 +1,4 @@
-import { AlertTriangle, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Copy, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import { getCategoria } from "@/lib/mock-data";
 import { cn, formatNumber } from "@/lib/utils";
@@ -29,6 +29,8 @@ export function CouponPortalCard({
   reenviando,
   onExcluir,
   excluindo,
+  onNovaCampanha,
+  carregando,
 }: {
   item: ItemCupomPortal;
   /** Fase 6.5/C2: ausente = card só de leitura (landing, seed). */
@@ -39,6 +41,14 @@ export function CouponPortalCard({
   /** Fase 9/C4: exclusão lógica. Ausente = o card não oferece a ação. */
   onExcluir?: (item: ItemCupomPortal) => void;
   excluindo?: boolean;
+  /**
+   * Fase 9/D1: abre o formulário de criação PREENCHIDO com os dados desta
+   * campanha. Só aparece em cupom esgotado — e não cria nada sozinho: o
+   * registro só nasce quando o lojista salva.
+   */
+  onNovaCampanha?: (item: ItemCupomPortal) => void;
+  /** Busca do cupom no servidor em curso (editar ou duplicar). */
+  carregando?: boolean;
 }) {
   const { cupom, statusPortal, metricas } = item;
   const categoria = getCategoria(cupom.categoria);
@@ -136,13 +146,45 @@ export function CouponPortalCard({
         </p>
       )}
 
-      {(onEditar || onReenviar || onExcluir) && statusPortal !== "excluido" && (
+      {/* Fase 9/D1 — o lojista precisa saber o que vai acontecer ANTES de
+          clicar. Nos dois casos a campanha não volta ao ar sozinha: uma
+          recomeça do zero, a outra passa pela moderação de novo. */}
+      {(statusPortal === "esgotado" || statusPortal === "expirado") && (onEditar || onNovaCampanha) && (
+        <p className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          {statusPortal === "esgotado"
+            ? "Esta campanha atingiu o limite de resgates. Os números dela ficam no histórico — para oferecer de novo, crie uma campanha nova a partir dela."
+            : "A validade desta campanha terminou. Ao definir uma nova data, ela volta para análise e só fica disponível depois de aprovada."}
+        </p>
+      )}
+
+      {(onEditar || onReenviar || onExcluir || onNovaCampanha) && statusPortal !== "excluido" && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {onEditar && (
-            <Button size="sm" variant="outline" onClick={() => onEditar(item)}>
-              <Pencil className="h-4 w-4" /> Editar
+          {/* Fase 9/D1 — ESGOTADO É CAMPANHA ENCERRADA.
+              Não se edita o que já cumpriu o limite: reabrir o mesmo cupom
+              somaria as métricas de duas campanhas no mesmo funil, sem jeito
+              de separar depois. A ação aqui é começar OUTRA, com os dados
+              desta como ponto de partida — id novo, contadores do zero. */}
+          {statusPortal === "esgotado" ? (
+            onNovaCampanha && (
+              <Button size="sm" onClick={() => onNovaCampanha(item)} disabled={carregando}>
+                <Copy className="h-4 w-4" />
+                {carregando ? "Abrindo…" : "Criar nova campanha"}
+              </Button>
+            )
+          ) : onEditar ? (
+            <Button size="sm" variant={statusPortal === "expirado" ? "default" : "outline"} onClick={() => onEditar(item)} disabled={carregando}>
+              {statusPortal === "expirado" ? (
+                <>
+                  <CalendarClock className="h-4 w-4" />
+                  {carregando ? "Abrindo…" : "Prorrogar e reenviar"}
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4" /> Editar
+                </>
+              )}
             </Button>
-          )}
+          ) : null}
           {onReenviar && statusPortal === "rejeitado" && (
             <Button size="sm" onClick={() => onReenviar(item)} disabled={reenviando}>
               <RotateCcw className="h-4 w-4" />
