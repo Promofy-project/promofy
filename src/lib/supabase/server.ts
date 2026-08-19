@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import type { Database } from "./database.types";
+import { semCacheDoNext } from "./sem-cache";
 
 /**
  * Client Supabase para Server Components, Server Actions e Route Handlers.
@@ -14,6 +15,7 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: { fetch: semCacheDoNext },
       cookies: {
         getAll() {
           return cookieStore.getAll();

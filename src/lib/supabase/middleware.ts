@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { semCacheDoNext } from "./sem-cache";
+
 /**
  * Refresca a sessão e devolve os claims do usuário para o middleware raiz
  * (src/middleware.ts) decidir redirects por papel.
@@ -19,6 +21,7 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: { fetch: semCacheDoNext },
       cookies: {
         getAll() {
           return request.cookies.getAll();

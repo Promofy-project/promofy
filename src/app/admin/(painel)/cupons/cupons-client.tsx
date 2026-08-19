@@ -28,6 +28,11 @@ const STATUS: Record<string, { variant: BadgeProps["variant"]; label: string }> 
   rejeitado: { variant: "danger", label: "Rejeitado" },
   esgotado: { variant: "muted", label: "Esgotado" },
   expirado: { variant: "muted", label: "Expirado" },
+  // Fase 9/D2: sem entrada aqui, caía no fallback `?? STATUS.ativo` e o
+  // admin lia "excluído" como "Ativo" — inclusive na contagem por badge.
+  // Mesma cor neutra do Portal (Fase 9/C4): não é erro nem alerta, é
+  // decisão do próprio lojista.
+  excluido: { variant: "outline", label: "Excluído" },
 };
 
 function mensagemErro(motivo: string): string {

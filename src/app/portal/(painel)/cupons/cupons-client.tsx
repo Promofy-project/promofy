@@ -81,6 +81,13 @@ export function CuponsClient({
   const [filtroStatus, setFiltroStatus] = React.useState<string>("todos");
   /** Fase 9/D1: o form está preenchido com uma campanha anterior, mas CRIA. */
   const [duplicando, setDuplicando] = React.useState(false);
+  /**
+   * Fase 9/D2: a edição aberta é a de um cupom EXPIRADO (via "Prorrogar e
+   * reenviar"). O card já avisa que a nova validade manda o cupom para
+   * análise; sem isso repetido dentro do form, quem só olha o formulário
+   * (sem ter visto o card) não sabe que Salvar não deixa o cupom no ar.
+   */
+  const [prorrogandoExpirado, setProrrogandoExpirado] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
 
   /**
@@ -99,6 +106,7 @@ export function CuponsClient({
       return;
     }
     setDuplicando(false);
+    setProrrogandoExpirado(item.statusPortal === "expirado");
     setEmEdicao(r.cupom);
     setView("editar");
   };
@@ -122,6 +130,7 @@ export function CuponsClient({
       return;
     }
     setDuplicando(true);
+    setProrrogandoExpirado(false);
     setEmEdicao(r.cupom);
     setView("novo");
   };
@@ -394,10 +403,12 @@ export function CuponsClient({
           categoriaPrincipal={categoriaPrincipal}
           cupomInicial={emEdicao ?? undefined}
           duplicar={duplicando}
+          prorrogandoExpirado={prorrogandoExpirado}
           onCancelar={() => {
             setView("lista");
             setEmEdicao(null);
             setDuplicando(false);
+            setProrrogandoExpirado(false);
           }}
           onSalvar={(item) => {
             // Fase 9/D1: duplicando, o item que volta é OUTRO cupom (id novo)
@@ -411,6 +422,7 @@ export function CuponsClient({
             setView("lista");
             setEmEdicao(null);
             setDuplicando(false);
+            setProrrogandoExpirado(false);
             setSucesso(
               editou
                 ? item.statusPortal === "pendente"
