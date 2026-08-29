@@ -616,7 +616,9 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > nova** (cliente antigo ignora chave que não conhece), e `nps_pendentes` só encolhe — e só para
 > quem recusou. É a janela banco-antes-código de sempre.
 >
-> ⚠️ **LOCAL ONLY até autorização.** Não entra em `db push --linked`. Produção permanece em 1–34.
-> Esta é a **única** migration nova da branch `fix/adendo-0508-finalizacao`: a E1 da taxonomia
-> (`categorias_folha`) **não** está aqui — ficou na `fase-estrutural-e1-taxonomia-schema`, aguardando
-> a decisão de arquitetura em WP próprio.
+> ✅ **APLICADA EM PRODUÇÃO** (WP AD-2, 29/08/2026) — `db push --linked`, EXIT=0, coreografia
+> completa em gates (baseline lido, dry-run conferido, prova pós-migration dos 10 itens, smoke
+> funcional hospedado 57 PASS/0 FAIL). Detalhe em `_promofy_handoff/ADENDO-0508-RELATORIO.md`,
+> seção "DEPLOY AD-2". Foi a **única** migration nova da branch `fix/adendo-0508-finalizacao`: a E1
+> da taxonomia (`categorias_folha`) **não** entrou — ficou na `fase-estrutural-e1-taxonomia-schema`,
+> aguardando a decisão de arquitetura em WP próprio.

@@ -1,9 +1,11 @@
-# Adendo da reunião de 05/08 — relatório (WP AD-1R, isolado)
+# Adendo da reunião de 05/08 — relatório (WP AD-1R + AD-2)
 
-> **Branch:** `fix/adendo-0508-finalizacao`, criada **a partir da `main`** (`f978d0c`).
-> **Taxonomia fora de escopo.** Nenhuma linha de `categorias`, `categorias_folha` ou
-> `cupons.categoria_folha_id` nesta branch.
-> **Nada saiu da máquina:** sem push, sem PR, sem `db push`, sem hospedado, sem QA, sem deploy.
+> **WP AD-1R** — branch `fix/adendo-0508-finalizacao`, criada a partir da `main` (`f978d0c`).
+> Taxonomia fora de escopo em toda a extensão deste documento: nenhuma linha de `categorias`,
+> `categorias_folha` ou `cupons.categoria_folha_id` no adendo.
+>
+> **WP AD-2 — PUBLICADO.** O adendo foi implantado até produção, por gates, com banco antes do
+> código. Ver a seção **[DEPLOY AD-2](#deploy-ad-2)** ao final para a coreografia completa.
 
 ---
 
@@ -331,3 +333,166 @@ Nenhum teste foi apagado, afrouxado ou mascarado. `database.types.ts` foi regene
 - **Pré-requisito comum aos dois:** o "risco 1" do T4 (fim do `as CategoriaId`, `getCategoria` com
   fallback que nunca lança, visual vindo do banco) vale em qualquer um dos desenhos — é a única
   tarefa da taxonomia que dá para começar antes da decisão.
+
+---
+
+## DEPLOY AD-2
+
+> Coreografia em 12 gates, modo manual, "Banco antes do código" sem inversão. Nenhum gate foi
+> atravessado com evidência divergente. Todos os comandos e leituras abaixo são reprodutíveis.
+
+### Preflight (Gate 0) e baseline remoto (Gate 1)
+
+Branch `fix/adendo-0508-finalizacao`, HEAD `80b46bc` no início do WP. `git status --short` só com
+`promofy.xml` (untracked). `c4f8ae0` não ancestral do HEAD (`exit=1`). `git diff --name-status
+main..HEAD -- supabase/migrations` devolveu exatamente `A
+supabase/migrations/20260821120000_adendo_nps_recusa.sql`.
+
+Projeto confirmado por `get_project`: `bpeqpxvxgdyjjdcoycgp`, nome "Promofy-project's", região
+`sa-east-1` — a conta certa (nunca "Vertexa").
+
+`supabase migration list --linked`: 34 timestamps com par local/remoto idêntico; o local tinha um
+timestamp extra sem par remoto — `20260821120000` — exatamente a migration do adendo. Nenhuma
+migration de taxonomia na lista local.
+
+### Dry-run (Gate 2)
+
+```
+$ supabase db push --linked --dry-run
+Would push these migrations:
+ • 20260821120000_adendo_nps_recusa.sql
+```
+
+Nada além disso — sem taxonomia, sem reset, sem operação destrutiva.
+
+### Baseline funcional pré-migration (Gate 3)
+
+Somente leitura, via `execute_sql` (MCP Supabase).
+
+| Item | Resultado |
+|---|---|
+| `public.cupons_usuario` existe | `true` |
+| `responder_nps(bigint, integer)` existe | `true` |
+| `nps_recusado_em` já existe | `false` |
+| `recusar_nps` já existe | `false` |
+
+Contagens: `profiles=5 · estabelecimentos=6 · cupons=34 · cupons_usuario=28 · pontos_transacoes=37`.
+
+### Aplicação (Gate 4)
+
+```
+$ supabase db push --linked
+Applying migration 20260821120000_adendo_nps_recusa.sql...
+Finished supabase db push.
+EXIT=0
+```
+
+### Prova pós-migration (Gate 5) — os 10 itens
+
+1. Ledger remoto passa a conter `20260821120000` (confirmado, mesmo lado local/remoto).
+2. `cupons_usuario.nps_recusado_em` — `timestamp with time zone`, `nullable: YES`.
+3. `recusar_nps(bigint)` existe.
+4. `responder_nps(bigint, integer)` continua existindo.
+5. Índice: `CREATE INDEX cupons_usuario_nps_pendente_idx ... WHERE (status = 'validado' AND nps IS
+   NULL AND nps_recusado_em IS NULL)`.
+6. `meu_estado_consumidor` — corpo contém `nps_recusado_em` (filtra as recusadas).
+7. `estado_cupom_json` — corpo contém `nps_recusado_em` (expõe a recusa).
+8. ACL de `recusar_nps`: `authenticated` com `EXECUTE`; `anon`/`public` ausentes da lista (só
+   `authenticated`, `postgres`, `service_role` aparecem — os dois últimos são dono/superusuário, não
+   PostgREST).
+9. Grants de coluna em `nps_recusado_em`: `authenticated` tem apenas `SELECT`/`REFERENCES` — sem
+   `UPDATE`, sem `INSERT`. Só `service_role`/`postgres` têm `UPDATE` (bypassam RLS, nunca falados
+   pelo PostgREST autenticado).
+10. `to_regclass('public.categorias_folha')` → `null`; `cupons.categoria_folha_id` → coluna
+    inexistente. Confirmado: nenhum objeto de taxonomia entrou.
+
+Contagens pós-migration: idênticas ao baseline (`5/6/34/28/37`), zero linhas com `nps_recusado_em`
+preenchido — a migration foi puramente aditiva, sem efeito colateral em dado existente.
+
+### Smoke do banco hospedado (Gate 6) — pontos A–G
+
+Rodei `npm run test:fase9:hosted` (a suíte que já cobre exatamente A–G, com conta `qa-*` efêmera e
+`lojista@promofy.test` — conta de teste da casa, não de cliente). 57 PASS, 0 FAIL.
+
+| Item | Cobertura |
+|---|---|
+| A — pendência normal aparece | PASS "APÓS a validação no balcão, a fila oferece a pesquisa" |
+| B — responder mais tarde: sem escrita, reoferece | PASS x2 |
+| C — não responder: carimba, sai da fila, zero pontos | PASS x3 |
+| D — recusar de novo idempotente, 1º timestamp preservado | PASS |
+| E — recusar → `responder_nps` direto: motivo `nps_recusado`, nps NULL, saldo/ledger intocados | PASS x4 |
+| F — pendência alheia → `nao_encontrado` | PASS |
+| G — NPS normal responde, credita 1x, 2ª não duplica | PASS x2 |
+
+**Achado durante o gate, corrigido no próprio gate:** o `finally` de `test-fase9.ts` esquecia de
+apagar `CUPOM_FILA_A`/`CUPOM_FILA_B` (do bloco `[Z1c]` do WP anterior) — vazaram 2 cupons sintéticos
+(`f9-nps-fila-a/b`) para o hospedado. Limpos por id exato, contagens conferidas de volta ao baseline
+exato. Corrigido em `7c9336c` ("fix(adendo-0508): finally do test-fase9 esquecia de apagar os cupons
+da fila [Z1c]") — HEAD mudou de `80b46bc` para `7c9336c` antes do push, por essa razão declarada.
+Nenhuma limpeza ampla: só os dois ids que eu mesmo criei.
+
+### Push, PR e preview (Gates 7–9)
+
+- **Push**: `git push -u origin fix/adendo-0508-finalizacao` — branch remota criada, HEAD remoto =
+  HEAD local = `7c9336c`, sem force. `git status --short` seguia só com `promofy.xml`.
+- **PR #1**: `fix/adendo-0508-finalizacao → main`,
+  https://github.com/Promofy-project/promofy/pull/1. Checks: `Vercel` (SUCCESS), `Vercel Preview
+  Comments` (SUCCESS). `mergeStateStatus: CLEAN`, `mergeable: MERGEABLE`.
+- **Smoke visual da preview** (`https://promofy-11k21dgks-promo-project.vercel.app`, acesso via
+  Protection Bypass — SSO nunca foi desligado), com conta `qa-ad2smoke@promofy.test` (criada e
+  destruída só para este gate) e um cupom sintético (`ad2-smoke-nps`, apagado ao fim):
+
+  | # | Item | Resultado |
+  |---|---|---|
+  | 1–2 | Card com três saídas, sem o "X" | confirmado por snapshot de acessibilidade |
+  | 3 | Responder funciona | botão habilita ao escolher nota (não exercido além disso — coberto no Gate 6) |
+  | 4 | Responder mais tarde some da sessão | `document.body.innerText` sem o card, sem reload |
+  | 5 | Reload traz de volta | confirmado após navegação |
+  | 6–7 | Não responder → confirmação inline → encerra | texto exato: "Esta avaliação não volta a aparecer, e os 30 pontos não são creditados." |
+  | 8 | Reload não traz de volta | confirmado |
+  | 9 | Nenhuma animação de pontos na recusa | saldo antes/depois idêntico (50 → 50) |
+  | 10–11 | `/m/cupom/[id]` sem depoimento fake, texto do estabelecimento | confirmado |
+  | 12–15 | as três landings sem prova social, sem quebra de layout | confirmado por screenshot full-page + leitura de texto |
+
+  Dados sintéticos limpos ao final do gate (`qa-ad2smoke` destruída, `ad2-smoke-nps` apagado);
+  contagens de volta ao baseline exato (`5/6/34/28/37`, zero resíduos).
+
+### Merge, deploy e smoke final (Gates 10–12)
+
+- **Merge**: `gh pr merge 1 --merge`. Merge commit `c9daf84`, `mergedAt` 2026-08-29T18:15:25Z. `main`
+  remota avançou `f978d0c..c9daf84`.
+- **Produção**: deployment `dpl_EhNtCpkXbYb7j8tqxgvPMxLAeuTt`, `READY`, commit `c9daf84`. Rollback
+  candidate anotado antes do push: `dpl_ELHcHvmasgEx9z3HSuZtZ6yHZCr3` (`f978d0c`, produção anterior).
+- **Smoke final em produção** (`https://promofy-pro.vercel.app` — domínio público, sem SSO):
+
+  | # | Item | Resultado |
+  |---|---|---|
+  | 1 | Páginas públicas carregam | `/` responde 200, título correto |
+  | 2 | Landings sem prova social inventada | confirmado em `/` |
+  | 3 | Login consumidor (`convidado@`) | funciona, redireciona para `/m` |
+  | 4 | Fluxo de cupom não regressa | `/m/cupom/[id]` carrega, sem erro, com o estado honesto do Z3 |
+  | 5–8 | NPS normal / não responder / recusa persiste / recusa não credita | já provados nos Gates 6 e 9 contra o mesmo banco hospedado (preview e produção compartilham o mesmo Supabase); não repetidos com dado irreversível de `convidado@` — ver nota abaixo |
+  | 9 | Nenhum erro 5xx | nenhum nas 8 navegações do smoke |
+  | 10 | Admin/portal acessíveis | `/portal/login` e `/admin/login` carregam sem erro |
+
+  **Nota deliberada sobre 5–8 em produção:** ao logar como `convidado@` (conta autorizada para smoke
+  pelo CLAUDE.md), a home mostrou uma pendência de NPS real — 6 linhas genuínas do histórico de demo,
+  4 delas do cupom "Café do dia". Testei as ações não destrutivas (o card aparece; "Responder mais
+  tarde" avança a fila sem gravar nada — confirmado por leitura direta: as 6 linhas continuam com
+  `nps_recusado_em is null`) e não cliquei em "Não responder" sobre um registro real e irreversível
+  da conta de demo do Lucas, por não ser necessário: o caminho de recusa já foi provado, na íntegra,
+  contra este mesmo banco, duas vezes (Gate 6 e Gate 9), com dados sintéticos que puderam ser limpos
+  depois.
+
+### Divergências e incidentes
+
+| # | O quê | Gravidade | Tratamento |
+|---|---|---|---|
+| 1 | `finally` de `test-fase9.ts` vazou 2 cupons sintéticos no hospedado durante o próprio Gate 6 | Baixa — dado de teste, sem custo de negócio | Limpo na hora (ids exatos); corrigido em código no mesmo gate (`7c9336c`) |
+| 2 | HEAD mudou de `80b46bc` (aprovado no AD-1R) para `7c9336c` antes do push | Processual | Declarado explicitamente antes do Gate 7; motivo é o item 1, não uma feature nova |
+
+Nenhum outro incidente. Nenhum gate foi reexecutado por divergência de premissa.
+
+### Veredito
+
+## ADENDO 05/08 PUBLICADO E VALIDADO
