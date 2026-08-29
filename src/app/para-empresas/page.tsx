@@ -82,21 +82,6 @@ const BENEFICIOS: { icon: LucideIcon; titulo: string; desc: string }[] = [
   },
 ];
 
-const DEPOIMENTOS = [
-  {
-    nome: "Lanchonete Graciosa · Palmas-TO",
-    avatar: `${IMG}/avatar-parceiro-1.png`,
-    texto:
-      "Depois de entrar na Promofy, meu movimento cresceu 40% durante os dias da semana.",
-  },
-  {
-    nome: "Restaurante do Chef · Palmas-TO",
-    avatar: `${IMG}/avatar-parceiro-2.png`,
-    texto:
-      "Com a Promofy consegui melhorar as vendas nos dias de baixa procura.",
-  },
-];
-
 const FAQ: FaqItem[] = [
   {
     q: "Quanto custa para ser parceiro?",
@@ -756,51 +741,21 @@ export default function ParaEmpresasPage() {
         </div>
       </section>
 
-      {/* ───────── DEPOIMENTOS DE PARCEIROS (destaque em amarelo cheio) ───────── */}
-      <section className="relative overflow-hidden bg-yellow">
-        <img
-          src={`${IMG}/wave-amarela.png`}
-          alt=""
-          aria-hidden
-          className="absolute inset-0 h-full w-full object-cover opacity-70"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-6 select-none whitespace-nowrap text-center text-4xl font-extrabold uppercase tracking-tight text-white/30 sm:text-5xl lg:text-6xl"
-        >
-          Depoimentos de Parceiros Depoimentos de Parceiros
-        </div>
+      {/* ───────── DEPOIMENTOS DE PARCEIROS — SEÇÃO REMOVIDA (adendo 05/08) ─────────
+          O modelo do Figma do cliente (src/images/lp-estabelecimentos/
+          lp-modelo-estabelecimentos.png) reserva esta faixa amarela, mas com dois
+          cards de PLACEHOLDER rotulados "Restaurante exemplo" e texto de preenchimento:
+          o cliente nunca entregou depoimento de parceiro nenhum.
 
-        <div className="relative mx-auto max-w-5xl px-6 pb-16 pt-28 sm:pb-24 sm:pt-32">
-          <div className="grid gap-6 md:grid-cols-2">
-            {DEPOIMENTOS.map((d, i) => (
-              <figure
-                key={i}
-                className="relative mt-8 rounded-2xl border border-border/60 bg-surface px-6 pb-6 pt-12 text-center shadow-[0_1px_2px_rgba(20,20,60,0.04),0_10px_30px_-12px_rgba(20,20,60,0.15)]"
-              >
-                <span className="absolute -top-8 left-1/2 h-16 w-16 -translate-x-1/2 overflow-hidden rounded-full border-4 border-surface bg-muted shadow-sm">
-                  <img
-                    src={d.avatar}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                </span>
-                <figcaption className="text-lg font-bold text-foreground">
-                  {d.nome}
-                </figcaption>
-                <div className="mt-2 flex justify-center gap-1">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star key={s} className="h-4 w-4 fill-primary text-primary" />
-                  ))}
-                </div>
-                <blockquote className={cn("mt-4", LP_CARD_TEXT)}>
-                  {d.texto}
-                </blockquote>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
+          O que estava no ar era invenção nossa — "Lanchonete Graciosa · Palmas-TO" e
+          "Restaurante do Chef · Palmas-TO", cinco estrelas cheias e a frase "meu
+          movimento cresceu 40%". Pior que depoimento genérico: nome de estabelecimento
+          que pode existir de verdade, assinando um número que ninguém mediu.
+
+          A seção volta quando existir depoimento REAL, com autorização de quem falou.
+          Até lá ela não existe — substituir por outro nome, outra frase ou outro número
+          seria a mesma mentira com roupa nova. A faixa amarela do CTA logo acima
+          continua fazendo o destaque de cor da página. ───────── */}
 
       {/* ───────── FAQ ───────── */}
       <section className="relative overflow-hidden bg-surface">

@@ -13,7 +13,6 @@ import {
   LandingHowItWorks,
   LandingMerchantBlock,
   LandingPlans,
-  LandingReviews,
   LandingCta,
 } from "@/components/landing/sections";
 
@@ -105,8 +104,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      <LandingReviews />
 
       <LandingCta
         title="Pronto para economizar?"
