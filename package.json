@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:reset": "supabase db reset && tsx scripts/seed-users.ts",
-    "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
+    "db:types": "tsx scripts/db-types-safe.ts",
     "seed:users": "tsx scripts/seed-users.ts",
     "seed:users:hosted": "tsx scripts/seed-users.ts --hosted",
     "test:rls": "tsx scripts/test-rls.ts",
@@ -45,7 +45,8 @@
     "test:fase9d1": "tsx scripts/test-fase9d1.ts",
     "test:fase9d1:hosted": "tsx scripts/test-fase9d1.ts --hosted",
     "test:fase9d2": "tsx scripts/test-fase9d2.ts",
-    "test:fase9d2:hosted": "tsx scripts/test-fase9d2.ts --hosted"
+    "test:fase9d2:hosted": "tsx scripts/test-fase9d2.ts --hosted",
+    "test:db-types": "tsx scripts/test-db-types-safe.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",
