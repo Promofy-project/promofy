@@ -12,6 +12,15 @@ export type { JanelaConsumo };
  * uma união fechada de 6 valores. TX-P1: o catálogo real pode crescer sem
  * exigir mudança de tipo aqui; quem precisa do visual (label/icon/gradiente)
  * usa `categoriaVisual` (abaixo) ou `resolverCategoriaVisual`.
+ *
+ * DÍVIDA EXPLÍCITA (TX-P2AF): em `Cupom.categoria` este valor é o slug do
+ * FILTRO de descoberta (`catalogo_filtros`/`categoria_para_filtro` — ver
+ * src/lib/data/taxonomia.ts), NÃO necessariamente a categoria FOLHA física
+ * do cupom. Hoje as duas coincidem; depois do cutover um cupom de folha
+ * "pizzarias" carrega aqui o slug do segmento "alimentacao". Renomear o
+ * campo é escopo do TX-P7 (quando existir filtro por segmento E por folha
+ * ao mesmo tempo) — mantido como `categoria` por compatibilidade com
+ * `/m/buscar` (`c.categoria === cat`) e com todo consumidor atual.
  */
 export type CategoriaId = string;
 

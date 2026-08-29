@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { buscarCuponsHome, contarNovidades } from "@/lib/data/cupons";
-import { buscarCategorias, categoriaValida } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos, categoriaValida } from "@/lib/data/categorias";
 import { HomeHeader } from "@/components/home-header";
 import { BannerCarousel } from "@/components/banner-carousel";
 import { HomeSearchBar } from "@/components/home-search-bar";
@@ -24,7 +24,7 @@ export default async function MobileHome({
   // Fase 6/H5: o chip selecionado vive na URL, não em estado de cliente.
   // A categoria é saneada contra a tabela ANTES de virar predicado — um
   // `?cat=xpto` vira "sem filtro" e a home segue cheia, nunca vazia.
-  const categorias = await buscarCategorias();
+  const categorias = await buscarFiltrosPublicos();
   const cat = categoriaValida(searchParams?.cat, categorias);
 
   const [grid, novidades] = await Promise.all([

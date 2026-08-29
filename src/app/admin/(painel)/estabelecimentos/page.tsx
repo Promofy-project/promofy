@@ -1,5 +1,5 @@
 import { buscarEstabelecimentosAdmin } from "@/lib/data/admin";
-import { buscarCategorias } from "@/lib/data/categorias";
+import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminEstabelecimentosPage() {
   const [estabelecimentos, catalogo] = await Promise.all([
     buscarEstabelecimentosAdmin(),
-    buscarCategorias(),
+    buscarCatalogoCategorias(),
   ]);
   const ativos = estabelecimentos.filter((e) => e.status === "ativo").length;
   const pendentes = estabelecimentos.filter((e) => e.status === "pendente").length;

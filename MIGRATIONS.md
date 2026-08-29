@@ -622,3 +622,59 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > seção "DEPLOY AD-2". Foi a **única** migration nova da branch `fix/adendo-0508-finalizacao`: a E1
 > da taxonomia (`categorias_folha`) **não** entrou — ficou na `fase-estrutural-e1-taxonomia-schema`,
 > aguardando a decisão de arquitetura em WP próprio.
+
+## TX-P2A/TX-P2AF — a fronteira estável da taxonomia
+
+`20260829120000_tx_p2a_fronteira_taxonomia.sql`
+
+Três views, **nenhuma tabela, nenhuma coluna, nenhum dado**. Não cria segmentos, não cria
+categorias folha, não muda o significado de `public.categorias`. É a preparação para o cutover,
+não o cutover.
+
+| view | hoje | depois do cutover |
+|---|---|---|
+| `catalogo_filtros` | `select id as slug, label, icon, gradiente, ordem from categorias` | passa a ler `segmentos` |
+| `catalogo_categorias` | `select id as categoria_id, id as slug, label, icon, gradiente, ordem from categorias` (identidade) | passa a ler as categorias folha |
+| `categoria_para_filtro` | `select id as categoria_id, id as filtro_slug from categorias` (identidade) | folha → segmento |
+
+**TX-P2AF corrigiu uma colisão semântica da primeira versão (duas views, não três).** Havia uma
+única `buscarCategorias()` servindo ao mesmo tempo o **filtro de descoberta** (`/m`, `/m/buscar`,
+`/m/filtros` — vai virar 14 segmentos) e a **categoria operacional** (admin edita o vínculo
+estabelecimento↔categoria; portal usa no form de cupom — vai virar categoria folha). Hoje as duas
+coincidem porque `categorias` é as duas coisas ao mesmo tempo; a auditoria apontou que depois do
+cutover elas **não coincidem mais**, e o admin receberia segmento onde precisa de UUID de folha —
+em silêncio, sem erro, comparando a categoria física errada contra o catálogo errado. Por isso
+`catalogo_filtros` e `catalogo_categorias` são **propositalmente duplicadas hoje**: fundi-las
+obrigaria a desfundi-las no cutover, no pior momento possível. Nenhuma referencia a outra.
+
+**Nomenclatura deliberadamente comprida no cliente** (`buscarFiltrosPublicos()` /
+`buscarFiltrosTaxonomia()` para filtro; `buscarCatalogoCategorias()` para operacional) —
+um `buscarCategorias()` genérico é exatamente o nome que escondeu a colisão uma vez.
+`test:tx-p2a/H` tem prova estrutural (lê o código-fonte) de que cada consumidor usa a metade certa
+e que o nome ambíguo não volta a existir.
+
+**Por que view e não RPC.** O contrato é uma **relação**, não um cálculo: entra no
+`database.types.ts`, compõe com `.in()` do PostgREST e, com `security_invoker = true`, herda a RLS
+que `categorias` já tem (`"categorias: leitura publica"` libera anon). Nenhuma função
+`security definer` nova para auditar; nenhum privilégio novo. Uma RPC daria a mesma coisa com uma
+assinatura a mais para versionar.
+
+**Nenhuma regra de visibilidade de cupom foi movida para cá** — e isso é deliberado. O cutover
+quebraria exatamente um ponto do runtime: o predicado `cupons.categoria_id = <slug>`. Levar
+validade/`ocultar_ate_inicio`/favoritos/ordenação para dentro de SQL seria reescrever o que já está
+no ar, com risco de deriva de comportamento, para resolver um problema que não existe.
+
+**`Cupom.categoria` fica com uma dívida explícita** (documentada em `src/lib/types.ts`): continua
+carregando o `filtro_slug`, não a categoria folha física — por compatibilidade com `/m/buscar`
+(`c.categoria === cat`). Renomear o campo é escopo do TX-P7, quando existir filtro por segmento E
+por folha ao mesmo tempo.
+
+> ⚠️ **View simples é auto-atualizável no Postgres.** Sem `revoke`, um `insert` na view escreveria
+> em `public.categorias`. Por isso a migration faz `revoke all ... from public, anon, authenticated`
+> e devolve **só `select`** — nas TRÊS views. `test:tx-p2a` tem as contraprovas (insert/update/delete
+> negados em cada uma, mais o insert na tabela base) e confere que nada vazou.
+
+**Aditiva, e a janela banco-antes-código é confortável:** as views não são lidas por nenhum código
+publicado. Podem ir ao ar muito antes do deploy sem efeito nenhum.
+
+⏳ **Ainda NÃO aplicada no hospedado** — TX-P2A/TX-P2AF são locais por decisão do WP.

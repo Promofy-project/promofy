@@ -8,9 +8,9 @@ import { statusPortalDe } from "@/lib/ciclo-cupom";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import type { CategoriaVisual } from "@/lib/categoria-visual";
 import { resolverCategoriaVisual } from "@/lib/categoria-visual";
-import { buscarCategorias } from "@/lib/data/categorias";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import type { FiltroTaxonomia } from "@/lib/data/taxonomia";
 
 type CupomRow = Database["public"]["Tables"]["cupons"]["Row"];
 
@@ -71,15 +71,21 @@ function janelaDeJson(horarios: CupomRow["horarios"]): JanelaConsumo | undefined
 export function linhaParaCupom(
   row: CupomRow,
   estabelecimentoNome: string,
-  catalogo: readonly CategoriaVisual[],
+  filtro: FiltroTaxonomia,
 ): Cupom {
+  // TX-P2A: a categoria FISICA da linha atravessa a fronteira e vira slug
+  // publico ANTES de virar visual. Sem esta traducao o cutover (folha uuid
+  // em cupons.categoria_id) faria TODO card cair no fallback cinza — em
+  // silencio, sem erro nenhum. `?? row.categoria_id` mantem a tolerancia:
+  // categoria fora do mapa nao quebra, so nao acha visual.
+  const slug = filtro.filtroSlugDe(row.categoria_id) ?? row.categoria_id;
   return {
     id: row.id,
     titulo: row.titulo,
     estabelecimento: estabelecimentoNome,
     estabelecimentoId: row.estabelecimento_id,
-    categoria: row.categoria_id,
-    categoriaVisual: resolverCategoriaVisual(row.categoria_id, catalogo),
+    categoria: slug,
+    categoriaVisual: resolverCategoriaVisual(slug, filtro.catalogo),
     economia: Number(row.economia),
     economiaVariavel: row.economia_variavel,
     // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
@@ -143,20 +149,37 @@ export async function buscarCuponsHome(
   const { data: claims } = await supabase.auth.getClaims();
   const logado = Boolean(claims?.claims?.sub);
 
+  // Com filtro, os ids fisicos sao PRE-REQUISITO do predicado: nao ha como
+  // paralelizar essa leitura com a consulta que depende dela. Sem filtro,
+  // nada precisa ser resolvido antes e o filtro volta no Promise.all de
+  // sempre — o caminho quente (home sem chip) nao paga round trip novo.
+  const filtroPre = categoriaId ? await buscarFiltrosTaxonomia() : undefined;
+
   let query = supabase
     .from("cupons")
     .select("*, estabelecimentos(nome)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
   // Fase 6/H5: filtro dos chips da home. Roda NO SERVIDOR (é predicado de
-  // consulta, não `.filter()` no cliente) e o id já vem saneado contra a
-  // tabela `categorias` — ver categoriaValida em src/lib/data/categorias.ts.
-  if (categoriaId) query = query.eq("categoria_id", categoriaId);
+  // consulta, não `.filter()` no cliente) e o slug já vem saneado contra o
+  // catálogo — ver categoriaValida em src/lib/data/categorias.ts.
+  //
+  // TX-P2A: o predicado deixou de ser `categoria_id = <slug>`. O slug é
+  // público; `cupons.categoria_id` é FÍSICO. Hoje a fronteira devolve
+  // `[slug]` (identidade) e o resultado é idêntico ao `.eq` anterior;
+  // após o cutover devolve as folhas do segmento, e este código não muda.
+  //
+  // Lista vazia NÃO vira "sem filtro": um slug do catálogo sem nenhuma
+  // categoria física é um filtro legítimo com zero resultados. Trocar isso
+  // por "mostra tudo" seria mentir na tela.
+  if (categoriaId) {
+    query = query.in("categoria_id", filtroPre!.idsFisicosDoFiltro(categoriaId));
+  }
   // com filtro, a folga do limite não vale: o corte por categoria pode
   // deixar de fora justamente os que sobrariam
   if (!logado && !categoriaId) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
 
-  const [{ data, error }, favSet, catalogo] = await Promise.all([
+  const [{ data, error }, favSet, filtro] = await Promise.all([
     query,
     logado
       ? supabase
@@ -164,7 +187,7 @@ export async function buscarCuponsHome(
           .select("estabelecimento_id")
           .then(({ data: favs }) => new Set((favs ?? []).map((f) => f.estabelecimento_id)))
       : Promise.resolve(new Set<string>()),
-    buscarCategorias(),
+    filtroPre ?? buscarFiltrosTaxonomia(),
   ]);
 
   if (error) {
@@ -184,7 +207,7 @@ export async function buscarCuponsHome(
       : visiveis;
   return ordenados
     .slice(0, limite)
-    .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo));
+    .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro));
 }
 
 // Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
@@ -215,15 +238,15 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
   const ids = (data as unknown as NovidadesRpc | null)?.cupom_ids ?? [];
   if (ids.length === 0) return [];
 
-  const [{ data: rows }, catalogo] = await Promise.all([
+  const [{ data: rows }, filtro] = await Promise.all([
     supabase.from("cupons").select("*, estabelecimentos(nome)").in("id", ids),
-    buscarCategorias(),
+    buscarFiltrosTaxonomia(),
   ]);
 
   const porId = new Map(
     (rows ?? []).map((row) => [
       row.id,
-      linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
+      linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
     ]),
   );
   return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
@@ -236,18 +259,18 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
  */
 export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   const supabase = createClient();
-  const [{ data }, catalogo] = await Promise.all([
+  const [{ data }, filtro] = await Promise.all([
     supabase
       .from("cupons")
       .select("*, estabelecimentos(nome)")
       .eq("id", id)
       .in("status", ["ativo", "indisponivel"])
       .maybeSingle(),
-    buscarCategorias(),
+    buscarFiltrosTaxonomia(),
   ]);
   if (!data) return null;
   if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
-  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "", catalogo);
+  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "", filtro);
 }
 
 /**
@@ -341,21 +364,21 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   const ids = (favs ?? []).map((f) => f.estabelecimento_id);
   if (ids.length === 0) return [];
 
-  const [{ data, error }, catalogo] = await Promise.all([
+  const [{ data, error }, filtro] = await Promise.all([
     supabase
       .from("cupons")
       .select("*, estabelecimentos(nome)")
       .in("estabelecimento_id", ids)
       .in("status", ["ativo", "indisponivel"])
       .order("ordem", { ascending: true }),
-    buscarCategorias(),
+    buscarFiltrosTaxonomia(),
   ]);
   if (error) {
     throw new Error(`Falha ao buscar cupons dos favoritos: ${error.message}`);
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
   );
 }
 
@@ -365,13 +388,13 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
  */
 export async function buscarCuponsBusca(): Promise<Cupom[]> {
   const supabase = createClient();
-  const [{ data, error }, catalogo] = await Promise.all([
+  const [{ data, error }, filtro] = await Promise.all([
     supabase
       .from("cupons")
       .select("*, estabelecimentos(nome)")
       .in("status", ["ativo", "indisponivel"])
       .order("ordem", { ascending: true }),
-    buscarCategorias(),
+    buscarFiltrosTaxonomia(),
   ]);
 
   if (error) {
@@ -379,7 +402,7 @@ export async function buscarCuponsBusca(): Promise<Cupom[]> {
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
   );
 }
 
@@ -441,7 +464,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
     return { estabelecimento: estOut, itens: [] };
   }
 
-  const [{ data: metricas }, catalogo] = await Promise.all([
+  const [{ data: metricas }, filtro] = await Promise.all([
     supabase
       .from("cupom_metricas")
       .select("*")
@@ -449,7 +472,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
         "cupom_id",
         cupons.map((c) => c.id),
       ),
-    buscarCategorias(),
+    buscarFiltrosTaxonomia(),
   ]);
 
   const metricasPorCupom = new Map<string, MetricasCupom>(
@@ -470,7 +493,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
   // coluna quando a data passa (só o trigger da 33, quando o lojista mexe).
   const hoje = hojeBrt();
   const itens: ItemCupomPortal[] = cupons.map((row) => ({
-    cupom: linhaParaCupom(row, estabelecimento.nome, catalogo),
+    cupom: linhaParaCupom(row, estabelecimento.nome, filtro),
     statusPortal: statusPortalDe(row.status, row.validade_fim, hoje),
     metricas:
       metricasPorCupom.get(row.id) ?? {
