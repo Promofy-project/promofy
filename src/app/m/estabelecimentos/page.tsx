@@ -4,7 +4,8 @@ import * as React from "react";
 import { Bell, MapPin, Ticket } from "lucide-react";
 
 import type { Estabelecimento } from "@/lib/types";
-import { estabelecimentos, getCategoria } from "@/lib/mock-data";
+import { estabelecimentos } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn } from "@/lib/utils";
 import { MobilePageHeader } from "@/components/mobile-page-header";
 import { CategoryChips } from "@/components/category-chips";
@@ -38,7 +39,7 @@ function NotifyBell({ nome }: { nome: string }) {
 }
 
 function EstabelecimentoCard({ e }: { e: Estabelecimento }) {
-  const categoria = getCategoria(e.categoria);
+  const categoria = e.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   return (
     <article className="flex items-start gap-3 rounded-card border border-border bg-card p-3.5 shadow-card">
       {/* Avatar da categoria */}

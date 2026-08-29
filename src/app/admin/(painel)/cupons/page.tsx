@@ -1,4 +1,5 @@
 import { buscarCuponsAdmin } from "@/lib/data/admin";
+import { buscarCategorias } from "@/lib/data/categorias";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 
@@ -7,7 +8,10 @@ import { CuponsAdminClient } from "./cupons-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCuponsPage() {
-  const cupons = await buscarCuponsAdmin();
+  const [cupons, catalogo] = await Promise.all([
+    buscarCuponsAdmin(),
+    buscarCategorias(),
+  ]);
   const pendentes = cupons.filter((c) => c.status === "pendente").length;
   const ativos = cupons.filter((c) => c.status === "ativo").length;
   const rejeitados = cupons.filter((c) => c.status === "rejeitado").length;
@@ -30,7 +34,7 @@ export default async function AdminCuponsPage() {
       </div>
 
       <div className="mt-6">
-        <CuponsAdminClient cupons={cupons} />
+        <CuponsAdminClient cupons={cupons} catalogo={catalogo} />
       </div>
     </>
   );

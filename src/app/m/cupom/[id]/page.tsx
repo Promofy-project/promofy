@@ -9,8 +9,10 @@ import {
   MessageSquareOff,
 } from "lucide-react";
 
-import { getCupom, getCategoria } from "@/lib/mock-data";
+import { getCupom } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
+import { buscarCategorias } from "@/lib/data/categorias";
+import { resolverCategoriaVisual } from "@/lib/categoria-visual";
 import { janelaAlcancavel } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
 import { diaSemanaBrt } from "@/lib/dias";
@@ -42,7 +44,10 @@ export default async function CupomDetalhe({
   // exibia duas validades no mesmo fluxo: a home lia do banco ("até 20/08") e
   // esta tela lia do mock ("até 12/08", mock-data.ts:180). O mock fica só como
   // fallback dos ids que existem apenas no protótipo — nenhuma rota some.
-  const doBanco = await buscarCupomPorId(params.id);
+  const [doBanco, catalogo] = await Promise.all([
+    buscarCupomPorId(params.id),
+    buscarCategorias(),
+  ]);
   const doMock = getCupom(params.id);
   const cupom = doBanco ?? doMock;
   if (!cupom) notFound();
@@ -71,7 +76,7 @@ export default async function CupomDetalhe({
   // Fase 6.5/EXTRA: tira a regra que e copia do beneficio (cupons legados)
   const regrasVisiveis = regrasParaExibir(cupom.regras, cupom.beneficio);
 
-  const categoria = getCategoria(cupom.categoria);
+  const categoria = cupom.categoriaVisual ?? resolverCategoriaVisual(cupom.categoria, catalogo);
 
   return (
     <div className="flex min-h-full flex-col bg-background">

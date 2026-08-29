@@ -1,7 +1,5 @@
 import type {
   Avaliacao,
-  Categoria,
-  CategoriaId,
   Cupom,
   Estabelecimento,
   FunilEtapa,
@@ -10,11 +8,13 @@ import type {
   SerieMensal,
   Usuario,
 } from "./types";
+import type { CategoriaVisual } from "./categoria-visual";
+import { resolverCategoriaVisual } from "./categoria-visual";
 
 // ============================================================
 // CATEGORIAS
 // ============================================================
-export const categorias: Categoria[] = [
+const categoriasDemo: CategoriaVisual[] = [
   {
     id: "alimentacao",
     label: "Alimentação",
@@ -53,19 +53,13 @@ export const categorias: Categoria[] = [
   },
 ];
 
-export const categoriaMap: Record<CategoriaId, Categoria> = categorias.reduce(
-  (acc, c) => ({ ...acc, [c.id]: c }),
-  {} as Record<CategoriaId, Categoria>,
-);
-
-export function getCategoria(id: CategoriaId): Categoria {
-  return categoriaMap[id];
-}
+/** Catálogo DEMO (landing, app-mockup) — nome público preservado (category-chips.tsx, portal/estabelecimento). */
+export const categorias = categoriasDemo;
 
 // ============================================================
 // ESTABELECIMENTOS (6)
 // ============================================================
-export const estabelecimentos: Estabelecimento[] = [
+const estabelecimentosBase: Estabelecimento[] = [
   {
     id: "e1",
     nome: "Sabor & Cia",
@@ -134,6 +128,11 @@ export const estabelecimentos: Estabelecimento[] = [
   },
 ];
 
+export const estabelecimentos: Estabelecimento[] = estabelecimentosBase.map((e) => ({
+  ...e,
+  categoriaVisual: resolverCategoriaVisual(e.categoria, categoriasDemo),
+}));
+
 export function getEstabelecimento(id: string): Estabelecimento | undefined {
   return estabelecimentos.find((e) => e.id === id);
 }
@@ -141,7 +140,7 @@ export function getEstabelecimento(id: string): Estabelecimento | undefined {
 // ============================================================
 // CUPONS (12 — 2 por categoria)
 // ============================================================
-export const cupons: Cupom[] = [
+const cuponsBase: Cupom[] = [
   // Alimentação — Sabor & Cia
   {
     id: "c01",
@@ -380,6 +379,11 @@ export const cupons: Cupom[] = [
     horarios: "Seg a Sáb, 8h às 18h",
   },
 ];
+
+export const cupons: Cupom[] = cuponsBase.map((c) => ({
+  ...c,
+  categoriaVisual: resolverCategoriaVisual(c.categoria, categoriasDemo),
+}));
 
 export function getCupom(id: string): Cupom | undefined {
   return cupons.find((c) => c.id === id);

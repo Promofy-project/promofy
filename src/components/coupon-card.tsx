@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MapPin, CalendarClock } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn, formatBRLValue, formatDistance, formatShortDate } from "@/lib/utils";
 import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export function CouponCard({
   overlay?: React.ReactNode;
   className?: string;
 }) {
-  const categoria = getCategoria(cupom.categoria);
+  const categoria = cupom.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   const imagemUrl = urlPublicaImagem(
     cupom.imagem,
     cupom.estabelecimentoId,

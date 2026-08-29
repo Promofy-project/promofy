@@ -12,6 +12,7 @@ import { NovoCupomForm } from "@/components/portal/novo-cupom-form";
 import { ValidarCupomDialog } from "@/components/portal/validar-cupom-dialog";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
 import {
   carregarCupomParaEdicaoAction,
   excluirCupomAction,
@@ -49,6 +50,7 @@ export function CuponsClient({
   estabelecimentoId,
   categorias,
   categoriaPrincipal,
+  catalogoVisual,
   abrirEmNovo = false,
 }: {
   initialLista: ItemCupomPortal[];
@@ -57,6 +59,8 @@ export function CuponsClient({
   estabelecimentoId: string | null;
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
+  /** Catálogo real (icon+gradiente) para o preview do form (TX-P1). */
+  catalogoVisual: CategoriaVisual[];
   /**
    * Abre já no formulário de criação. Vem de `?novo=1`, lido no server
    * component — é o destino do botão "Novo cupom" do dashboard (`/portal`),
@@ -401,6 +405,7 @@ export function CuponsClient({
           estabelecimentoId={estabelecimentoId}
           categorias={categorias}
           categoriaPrincipal={categoriaPrincipal}
+          catalogoVisual={catalogoVisual}
           cupomInicial={emEdicao ?? undefined}
           duplicar={duplicando}
           prorrogandoExpirado={prorrogandoExpirado}

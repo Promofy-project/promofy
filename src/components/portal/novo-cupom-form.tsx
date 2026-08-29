@@ -3,7 +3,9 @@
 import * as React from "react";
 import { Check } from "lucide-react";
 
-import type { CategoriaId, Cupom } from "@/lib/types";
+import type { Cupom } from "@/lib/types";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual } from "@/lib/categoria-visual";
 import { DIAS_SEMANA } from "@/lib/dias";
 import {
   FORMAS_CONSUMO,
@@ -54,6 +56,7 @@ export function NovoCupomForm({
   estabelecimentoNome,
   categorias,
   categoriaPrincipal,
+  catalogoVisual,
   cupomInicial,
   duplicar = false,
   prorrogandoExpirado = false,
@@ -64,6 +67,8 @@ export function NovoCupomForm({
   estabelecimentoNome: string;
   categorias: { id: string; label: string }[];
   categoriaPrincipal: string | null;
+  /** Catálogo real (icon+gradiente) usado no preview ao vivo (TX-P1). */
+  catalogoVisual: CategoriaVisual[];
   /** Presente = modo EDITAR (DTO fiel à linha, ver buscarCupomParaEdicao). */
   cupomInicial?: CupomParaEdicao;
   /**
@@ -94,7 +99,7 @@ export function NovoCupomForm({
   const [categoriaSel, setCategoriaSel] = React.useState<string>(
     cupomInicial?.categoriaId ?? categoriaPrincipal ?? categorias[0]?.id ?? "alimentacao",
   );
-  const categoria = categoriaSel as CategoriaId;
+  const categoria = categoriaSel;
   const categoriaLabel =
     categorias.find((c) => c.id === categoriaSel)?.label ?? categoriaSel;
   const [economia, setEconomia] = React.useState(
@@ -171,6 +176,7 @@ export function NovoCupomForm({
     estabelecimento: estabelecimentoNome,
     estabelecimentoId: "preview",
     categoria,
+    categoriaVisual: resolverCategoriaVisual(categoria, catalogoVisual),
     economia: Number(economia) || 0,
     economiaVariavel,
     taxas,

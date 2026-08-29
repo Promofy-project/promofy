@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Check, X, Eye, ImageOff } from "lucide-react";
 
 import type { AdminCupom } from "@/lib/data/admin";
-import type { CategoriaId } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual } from "@/lib/categoria-visual";
 import { regrasParaExibir } from "@/lib/cupom-campos";
 import { rotuloAcao } from "@/lib/moderacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
@@ -50,7 +50,13 @@ const FILTRO_LABEL: Record<string, string> = {
   rejeitado: "Rejeitados",
 };
 
-export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
+export function CuponsAdminClient({
+  cupons,
+  catalogo,
+}: {
+  cupons: AdminCupom[];
+  catalogo: CategoriaVisual[];
+}) {
   const router = useRouter();
   const [filtro, setFiltro] = React.useState<string>("todos");
   const [detalhe, setDetalhe] = React.useState<AdminCupom | null>(null);
@@ -95,7 +101,7 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
       key: "cupom",
       header: "Cupom",
       render: (c) => {
-        const cat = getCategoria(c.categoriaId as CategoriaId);
+        const cat = resolverCategoriaVisual(c.categoriaId, catalogo);
         return (
           <div className="flex items-center gap-3">
             <div
@@ -201,6 +207,7 @@ export function CuponsAdminClient({ cupons }: { cupons: AdminCupom[] }) {
       {detalhe && (
         <DetalheModal
           cupom={detalhe}
+          catalogo={catalogo}
           processando={processando === detalhe.id}
           onClose={() => setDetalhe(null)}
           onAprovar={aprovar}
@@ -358,18 +365,20 @@ function ImagemModeracao({ cupom }: { cupom: AdminCupom }) {
 
 function DetalheModal({
   cupom,
+  catalogo,
   processando,
   onClose,
   onAprovar,
   onRejeitar,
 }: {
   cupom: AdminCupom;
+  catalogo: CategoriaVisual[];
   processando: boolean;
   onClose: () => void;
   onAprovar: (id: string) => void;
   onRejeitar: (cupom: AdminCupom) => void;
 }) {
-  const cat = getCategoria(cupom.categoriaId as CategoriaId);
+  const cat = resolverCategoriaVisual(cupom.categoriaId, catalogo);
   const s = STATUS[cupom.status] ?? STATUS.ativo;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

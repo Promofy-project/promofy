@@ -1,4 +1,5 @@
 import { buscarEstabelecimentosAdmin } from "@/lib/data/admin";
+import { buscarCategorias } from "@/lib/data/categorias";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 
@@ -7,7 +8,10 @@ import { EstabAdminClient } from "./estab-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminEstabelecimentosPage() {
-  const estabelecimentos = await buscarEstabelecimentosAdmin();
+  const [estabelecimentos, catalogo] = await Promise.all([
+    buscarEstabelecimentosAdmin(),
+    buscarCategorias(),
+  ]);
   const ativos = estabelecimentos.filter((e) => e.status === "ativo").length;
   const pendentes = estabelecimentos.filter((e) => e.status === "pendente").length;
   const suspensos = estabelecimentos.filter((e) => e.status === "suspenso").length;
@@ -26,7 +30,7 @@ export default async function AdminEstabelecimentosPage() {
       </div>
 
       <div className="mt-6">
-        <EstabAdminClient estabelecimentos={estabelecimentos} />
+        <EstabAdminClient estabelecimentos={estabelecimentos} catalogo={catalogo} />
       </div>
     </>
   );
