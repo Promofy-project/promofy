@@ -1,7 +1,7 @@
 import { MapPin, Ticket, RefreshCw } from "lucide-react";
 
 import type { Estabelecimento } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn, formatNumber } from "@/lib/utils";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ export function BusinessCard({
   estabelecimento: Estabelecimento;
   className?: string;
 }) {
-  const categoria = getCategoria(estabelecimento.categoria);
+  const categoria = estabelecimento.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   const status = statusMap[estabelecimento.status];
 
   return (

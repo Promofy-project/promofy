@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarClock, Copy, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
-import { getCategoria } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn, formatNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -51,7 +51,7 @@ export function CouponPortalCard({
   carregando?: boolean;
 }) {
   const { cupom, statusPortal, metricas } = item;
-  const categoria = getCategoria(cupom.categoria);
+  const categoria = cupom.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   const imagemUrl = urlPublicaImagem(
     cupom.imagem,
     cupom.estabelecimentoId,

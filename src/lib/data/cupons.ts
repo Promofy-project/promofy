@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { CategoriaId, Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
+import type { Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
 import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
 import { motivoAtual } from "@/lib/moderacao";
@@ -8,6 +8,9 @@ import { statusPortalDe } from "@/lib/ciclo-cupom";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual } from "@/lib/categoria-visual";
+import { buscarCategorias } from "@/lib/data/categorias";
 
 type CupomRow = Database["public"]["Tables"]["cupons"]["Row"];
 
@@ -65,13 +68,18 @@ function janelaDeJson(horarios: CupomRow["horarios"]): JanelaConsumo | undefined
  * rating/avaliacoes/distancia_km são colunas-protótipo POR CUPOM
  * (paridade visual com o mock — ver plano D9).
  */
-export function linhaParaCupom(row: CupomRow, estabelecimentoNome: string): Cupom {
+export function linhaParaCupom(
+  row: CupomRow,
+  estabelecimentoNome: string,
+  catalogo: readonly CategoriaVisual[],
+): Cupom {
   return {
     id: row.id,
     titulo: row.titulo,
     estabelecimento: estabelecimentoNome,
     estabelecimentoId: row.estabelecimento_id,
-    categoria: row.categoria_id as CategoriaId,
+    categoria: row.categoria_id,
+    categoriaVisual: resolverCategoriaVisual(row.categoria_id, catalogo),
     economia: Number(row.economia),
     economiaVariavel: row.economia_variavel,
     // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
@@ -148,7 +156,7 @@ export async function buscarCuponsHome(
   // deixar de fora justamente os que sobrariam
   if (!logado && !categoriaId) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
 
-  const [{ data, error }, favSet] = await Promise.all([
+  const [{ data, error }, favSet, catalogo] = await Promise.all([
     query,
     logado
       ? supabase
@@ -156,6 +164,7 @@ export async function buscarCuponsHome(
           .select("estabelecimento_id")
           .then(({ data: favs }) => new Set((favs ?? []).map((f) => f.estabelecimento_id)))
       : Promise.resolve(new Set<string>()),
+    buscarCategorias(),
   ]);
 
   if (error) {
@@ -175,7 +184,7 @@ export async function buscarCuponsHome(
       : visiveis;
   return ordenados
     .slice(0, limite)
-    .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? ""));
+    .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo));
 }
 
 // Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
@@ -206,15 +215,15 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
   const ids = (data as unknown as NovidadesRpc | null)?.cupom_ids ?? [];
   if (ids.length === 0) return [];
 
-  const { data: rows } = await supabase
-    .from("cupons")
-    .select("*, estabelecimentos(nome)")
-    .in("id", ids);
+  const [{ data: rows }, catalogo] = await Promise.all([
+    supabase.from("cupons").select("*, estabelecimentos(nome)").in("id", ids),
+    buscarCategorias(),
+  ]);
 
   const porId = new Map(
     (rows ?? []).map((row) => [
       row.id,
-      linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+      linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
     ]),
   );
   return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
@@ -227,15 +236,18 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
  */
 export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("cupons")
-    .select("*, estabelecimentos(nome)")
-    .eq("id", id)
-    .in("status", ["ativo", "indisponivel"])
-    .maybeSingle();
+  const [{ data }, catalogo] = await Promise.all([
+    supabase
+      .from("cupons")
+      .select("*, estabelecimentos(nome)")
+      .eq("id", id)
+      .in("status", ["ativo", "indisponivel"])
+      .maybeSingle(),
+    buscarCategorias(),
+  ]);
   if (!data) return null;
   if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
-  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "");
+  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "", catalogo);
 }
 
 /**
@@ -329,18 +341,21 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   const ids = (favs ?? []).map((f) => f.estabelecimento_id);
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
-    .from("cupons")
-    .select("*, estabelecimentos(nome)")
-    .in("estabelecimento_id", ids)
-    .in("status", ["ativo", "indisponivel"])
-    .order("ordem", { ascending: true });
+  const [{ data, error }, catalogo] = await Promise.all([
+    supabase
+      .from("cupons")
+      .select("*, estabelecimentos(nome)")
+      .in("estabelecimento_id", ids)
+      .in("status", ["ativo", "indisponivel"])
+      .order("ordem", { ascending: true }),
+    buscarCategorias(),
+  ]);
   if (error) {
     throw new Error(`Falha ao buscar cupons dos favoritos: ${error.message}`);
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
   );
 }
 
@@ -350,18 +365,21 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
  */
 export async function buscarCuponsBusca(): Promise<Cupom[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("cupons")
-    .select("*, estabelecimentos(nome)")
-    .in("status", ["ativo", "indisponivel"])
-    .order("ordem", { ascending: true });
+  const [{ data, error }, catalogo] = await Promise.all([
+    supabase
+      .from("cupons")
+      .select("*, estabelecimentos(nome)")
+      .in("status", ["ativo", "indisponivel"])
+      .order("ordem", { ascending: true }),
+    buscarCategorias(),
+  ]);
 
   if (error) {
     throw new Error(`Falha ao buscar cupons da busca: ${error.message}`);
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? ""),
+    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", catalogo),
   );
 }
 
@@ -423,13 +441,16 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
     return { estabelecimento: estOut, itens: [] };
   }
 
-  const { data: metricas } = await supabase
-    .from("cupom_metricas")
-    .select("*")
-    .in(
-      "cupom_id",
-      cupons.map((c) => c.id),
-    );
+  const [{ data: metricas }, catalogo] = await Promise.all([
+    supabase
+      .from("cupom_metricas")
+      .select("*")
+      .in(
+        "cupom_id",
+        cupons.map((c) => c.id),
+      ),
+    buscarCategorias(),
+  ]);
 
   const metricasPorCupom = new Map<string, MetricasCupom>(
     (metricas ?? []).map((m) => [
@@ -449,7 +470,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
   // coluna quando a data passa (só o trigger da 33, quando o lojista mexe).
   const hoje = hojeBrt();
   const itens: ItemCupomPortal[] = cupons.map((row) => ({
-    cupom: linhaParaCupom(row, estabelecimento.nome),
+    cupom: linhaParaCupom(row, estabelecimento.nome, catalogo),
     statusPortal: statusPortalDe(row.status, row.validade_fim, hoje),
     metricas:
       metricasPorCupom.get(row.id) ?? {

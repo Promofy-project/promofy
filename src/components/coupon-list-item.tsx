@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { Cupom } from "@/lib/types";
-import { getCategoria } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn, formatBRLValue } from "@/lib/utils";
 import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Icon } from "@/components/icon";
@@ -19,7 +19,7 @@ export function CouponListItem({
   overlay?: React.ReactNode;
   className?: string;
 }) {
-  const categoria = getCategoria(cupom.categoria);
+  const categoria = cupom.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   const indisponivel = cupom.status === "indisponivel";
 
   return (

@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Check, Pencil, X } from "lucide-react";
 
 import type { AdminEstabelecimento } from "@/lib/data/admin";
-import type { CategoriaId } from "@/lib/types";
-import { categorias as todasCategorias, getCategoria } from "@/lib/mock-data";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual } from "@/lib/categoria-visual";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -34,8 +34,10 @@ const FILTRO_LABEL: Record<string, string> = {
 
 export function EstabAdminClient({
   estabelecimentos,
+  catalogo,
 }: {
   estabelecimentos: AdminEstabelecimento[];
+  catalogo: CategoriaVisual[];
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = React.useState<string>("todos");
@@ -69,7 +71,7 @@ export function EstabAdminClient({
       key: "nome",
       header: "Estabelecimento",
       render: (e) => {
-        const cat = getCategoria(e.categoriaId as CategoriaId);
+        const cat = resolverCategoriaVisual(e.categoriaId, catalogo);
         return (
           <div className="flex items-center gap-3">
             <div
@@ -95,7 +97,7 @@ export function EstabAdminClient({
         <div className="flex flex-wrap items-center gap-1.5">
           {e.categorias.map((c) => (
             <Badge key={c} variant="muted">
-              {getCategoria(c as CategoriaId).label}
+              {resolverCategoriaVisual(c, catalogo).label}
             </Badge>
           ))}
           <button
@@ -198,6 +200,7 @@ export function EstabAdminClient({
       {editando && (
         <CategoriasModal
           estabelecimento={editando}
+          catalogo={catalogo}
           onClose={() => setEditando(null)}
           onSalvo={() => {
             setEditando(null);
@@ -216,10 +219,12 @@ export function EstabAdminClient({
  */
 function CategoriasModal({
   estabelecimento,
+  catalogo,
   onClose,
   onSalvo,
 }: {
   estabelecimento: AdminEstabelecimento;
+  catalogo: CategoriaVisual[];
   onClose: () => void;
   onSalvo: () => void;
 }) {
@@ -279,7 +284,7 @@ function CategoriasModal({
         </p>
 
         <div className="mt-4 flex flex-col gap-2">
-          {todasCategorias.map((c) => {
+          {catalogo.map((c) => {
             const principal = c.id === estabelecimento.categoriaId;
             return (
               <label

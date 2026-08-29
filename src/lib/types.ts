@@ -3,27 +3,19 @@
 // ============================================================
 
 import type { JanelaConsumo } from "@/lib/janela";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
 
 export type { JanelaConsumo };
 
-export type CategoriaId =
-  | "alimentacao"
-  | "fitness"
-  | "beleza"
-  | "eletronicos"
-  | "educacao"
-  | "pet";
+/**
+ * Id de categoria — dado dinâmico do banco (tabela `categorias`), não mais
+ * uma união fechada de 6 valores. TX-P1: o catálogo real pode crescer sem
+ * exigir mudança de tipo aqui; quem precisa do visual (label/icon/gradiente)
+ * usa `categoriaVisual` (abaixo) ou `resolverCategoriaVisual`.
+ */
+export type CategoriaId = string;
 
 export type CupomStatus = "ativo" | "indisponivel";
-
-export interface Categoria {
-  id: CategoriaId;
-  label: string;
-  /** lucide-react icon name, mapped to a component in the UI layer */
-  icon: string;
-  /** CSS gradient used for image placeholders + chips */
-  gradiente: string;
-}
 
 export interface Cupom {
   id: string;
@@ -58,6 +50,8 @@ export interface Cupom {
    * mock tem `horarios` como texto solto e não sabe dias/início/fim.
    */
   janela?: JanelaConsumo;
+  /** Visual resolvido contra o catálogo real (icon+gradiente); ausência = usar CATEGORIA_VISUAL_FALLBACK. */
+  categoriaVisual?: CategoriaVisual;
   /**
    * Prazo de ativação em horas (Fase 6; null no banco = o default de 5).
    *
@@ -89,6 +83,8 @@ export interface Estabelecimento {
   id: string;
   nome: string;
   categoria: CategoriaId;
+  /** Visual resolvido contra o catálogo real (icon+gradiente); ausência = usar CATEGORIA_VISUAL_FALLBACK. */
+  categoriaVisual?: CategoriaVisual;
   cidade: string;
   rating: number;
   avaliacoes: number;

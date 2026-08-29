@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
 
 /** Categoria como as telas do consumidor precisam dela (rótulo + id). */
 export interface CategoriaFiltro {
@@ -10,7 +11,9 @@ export interface CategoriaFiltro {
 
 /**
  * As categorias REAIS do catálogo (tabela `categorias`), na ordem definida
- * pelo produto.
+ * pelo produto — já com o visual (icon/gradiente) usado pelos cards e
+ * avatares (TX-P1: fonte única, nada de `src/lib/mock-data.ts` para dado
+ * operacional).
  *
  * Existe porque os chips da home listavam
  * ["alimentação","lazer","compras","serviços","saúde","beleza"] — e QUATRO
@@ -21,14 +24,19 @@ export interface CategoriaFiltro {
  * visitante e a logado igual. Banco fora do ar → lista vazia: a home
  * simplesmente não mostra a faixa de chips, em vez de quebrar.
  */
-export async function buscarCategorias(): Promise<CategoriaFiltro[]> {
+export async function buscarCategorias(): Promise<CategoriaVisual[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("categorias")
-    .select("id, label")
+    .select("id, label, icon, gradiente")
     .order("ordem", { ascending: true });
   if (error) return [];
-  return (data ?? []).map((c) => ({ id: c.id, label: c.label }));
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    label: c.label,
+    icon: c.icon,
+    gradiente: c.gradiente,
+  }));
 }
 
 /**

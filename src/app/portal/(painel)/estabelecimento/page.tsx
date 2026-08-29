@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import { categorias } from "@/lib/mock-data";
-import type { CategoriaId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,7 +39,10 @@ function Field({
 
 export default function PortalEstabelecimento() {
   const [nome, setNome] = React.useState("Sabor & Cia");
-  const [categoria, setCategoria] = React.useState<CategoriaId>("alimentacao");
+  // Tela 100% local (sem server action de fato — "Salvar" só reseta o aviso
+  // de sucesso), fora do escopo do catálogo real por não persistir nada;
+  // ver auditoria do TX-P1.
+  const [categoria, setCategoria] = React.useState<string>("alimentacao");
   const [cidade, setCidade] = React.useState("São Paulo, SP");
   const [descricao, setDescricao] = React.useState(
     "Rodízios, almoço executivo e ambiente família. Há 12 anos no bairro.",

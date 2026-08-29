@@ -1,6 +1,7 @@
 import { Menu, Signal, Wifi, BatteryFull } from "lucide-react";
 
-import { cupons, getCategoria } from "@/lib/mock-data";
+import { cupons } from "@/lib/mock-data";
+import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { formatBRLValue } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { RelogioStatusBar } from "@/components/relogio-status-bar";
@@ -69,7 +70,9 @@ export function AppMockup() {
             >
               <div
                 className="h-12"
-                style={{ background: getCategoria(t.categoria).gradiente }}
+                style={{
+                  background: (t.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK).gradiente,
+                }}
               />
               <div className="p-1.5">
                 <p className="line-clamp-1 text-[9px] font-bold leading-tight">
