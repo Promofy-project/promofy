@@ -7,6 +7,7 @@ import type { EconomiaDTO } from "@/lib/economia";
 import {
   ativarCupomAction,
   consultarCupomAction,
+  recusarNpsAction,
   responderNpsAction,
   type EstadoCupomDTO,
   type UsoCupomDTO,
@@ -22,6 +23,16 @@ export interface EstadoCupom {
   ativadoEm: string;
   expiraEm: string | null;
   nps: number | null;
+  /**
+   * Adendo 05/08 — carimbo de "Não responder". `null` = nunca recusou.
+   *
+   * Sem este campo, `nps === null` era o único sinal, e ele mistura "ainda
+   * pode responder" com "encerrou de vez" — foi por isso que a folha do
+   * cupom oferecia "Avaliar experiência" sobre pesquisa encerrada. Quem
+   * decide continua sendo a RPC; isto é só o que a tela precisa saber para
+   * não prometer o que o banco vai negar.
+   */
+  npsRecusadoEm: string | null;
 }
 
 /** Config de pontos (fonte única: config_pontos no banco). */
@@ -76,6 +87,14 @@ export type ResultadoNps =
   | { ok: true; pontos: number }
   | { ok: false; motivo: string };
 
+/**
+ * Recusa do NPS (adendo 05/08). SEM `pontos` de propósito: "não responder"
+ * não credita nada, e um campo de pontos aqui convidaria a UI a animar "+0".
+ */
+export type ResultadoRecusaNps =
+  | { ok: true }
+  | { ok: false; motivo: string };
+
 /** Comemoração de pontos: `seq` remonta o componente e reinicia a animação. */
 export interface PontosPopState {
   valor: number;
@@ -119,8 +138,18 @@ interface CouponStateValue {
   responderNps: (id: string, nota: number) => Promise<ResultadoNps>;
   /** Fase 9/Z1: responde pelo `row_id`, sem depender do mapa de estados. */
   responderNpsPendente: (rowId: number, nota: number) => Promise<ResultadoNps>;
-  /** Fase 9/Z1: tira a oferta da frente — só nesta sessão, nada é gravado. */
+  /**
+   * "Responder mais tarde" (Fase 9/Z1): tira a oferta da frente — só nesta
+   * sessão, nada é gravado. A próxima abertura oferece de novo.
+   */
   dispensarNpsPendente: () => void;
+  /**
+   * "Não responder" (adendo 05/08): encerramento DEFINITIVO. Grava a recusa
+   * no banco e a linha nunca mais volta à fila. Sem crédito de pontos.
+   * Só sai da fila local se o servidor confirmar — recusa que falhou na rede
+   * e sumisse da tela seria uma promessa que o banco não guardou.
+   */
+  recusarNpsPendente: (rowId: number) => Promise<ResultadoRecusaNps>;
   fecharNps: () => void;
 
   /** Id do cupom com a folha aberta (derivado de `sheetCupom`). */
@@ -148,6 +177,9 @@ function dtoParaEstado(d: EstadoCupomDTO): EstadoCupom | null {
     ativadoEm: d.ativado_em,
     expiraEm: d.expira_em,
     nps: d.nps,
+    // `?? null` porque a chave é opcional no DTO (payload antigo não a traz):
+    // ausência é "não recusou", nunca `undefined` circulando pela UI.
+    npsRecusadoEm: d.nps_recusado_em ?? null,
   };
 }
 
@@ -311,9 +343,34 @@ export function CouponStateProvider({
         return { ok: true, pontos: r.pontos ?? 0 };
       },
 
-      /** Tira da fila só nesta sessão — nada é gravado. */
+      /** "Responder mais tarde": tira da fila só nesta sessão — nada é gravado. */
       dispensarNpsPendente: () =>
         setFilaNps((prev) => prev.slice(1)),
+
+      /**
+       * "Não responder" (adendo 05/08): encerramento definitivo no banco.
+       *
+       * A ordem importa — a linha só sai da fila DEPOIS do `ok` do servidor.
+       * Tirar antes deixaria a UI dizendo "encerrado" para uma recusa que a
+       * rede engoliu, e a pendência reapareceria no próximo reload sem que
+       * ninguém entendesse por quê.
+       */
+      recusarNpsPendente: async (rowId) => {
+        const r = await recusarNpsAction(rowId);
+        if (!r?.ok) return { ok: false, motivo: r?.motivo ?? "erro" };
+        setFilaNps((prev) => prev.filter((p) => p.row_id !== rowId));
+        // Se esta linha também está no mapa de estados, o carimbo entra AQUI
+        // — senão a folha do cupom seguiria oferecendo "Avaliar experiência"
+        // até o próximo reload, para uma pesquisa que o banco já encerrou.
+        // O valor é do cliente e serve só para a tela; a verdade é a RPC.
+        setEstados((prev) => {
+          const id = Object.keys(prev).find((k) => prev[k].rowId === rowId);
+          return id
+            ? { ...prev, [id]: { ...prev[id], npsRecusadoEm: new Date().toISOString() } }
+            : prev;
+        });
+        return { ok: true };
+      },
 
       fecharNps: () => {
         setNpsId(null);
@@ -376,6 +433,7 @@ export function useCouponState(): CouponStateValue {
       responderNps: async () => ({ ok: false, motivo: "sem_sessao" }),
       responderNpsPendente: async () => ({ ok: false, motivo: "sem_sessao" }),
       dispensarNpsPendente: () => {},
+      recusarNpsPendente: async () => ({ ok: false, motivo: "sem_sessao" }),
       npsPendente: null,
       fecharNps: () => {},
       sheetId: null,

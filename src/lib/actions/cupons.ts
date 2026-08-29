@@ -37,6 +37,16 @@ export interface EstadoCupomDTO {
   ativado_em: string;
   expira_em: string | null;
   nps: number | null;
+  /**
+   * Adendo 05/08 — quando o consumidor encerrou a pesquisa com "Não
+   * responder". `null` = nunca recusou.
+   *
+   * Existe porque `nps === null` sozinho é ambíguo: ele diz tanto "ainda
+   * pode responder" quanto "encerrou de vez", e quem lê só o `nps` oferece
+   * avaliação para uma pesquisa que o banco já fechou. Opcional no tipo
+   * porque um payload gravado antes desta migration não a traz.
+   */
+  nps_recusado_em?: string | null;
   /** Pontos que o banco creditou POR ESTE resgate (Fase 5) — 0 se não validado. */
   pontos_resgate?: number;
 }
@@ -85,6 +95,14 @@ type ConsultarResult =
   | { ok: false };
 type NpsResult =
   | { ok: true; ja_respondido: boolean; saldo: number; pontos: number }
+  | { ok: false; motivo: string };
+/**
+ * Adendo 05/08 — "Não responder" é encerramento definitivo, e por isso NÃO
+ * devolve `saldo` nem `pontos`: não há crédito nenhum por trás desta ação, e
+ * um campo `pontos` aqui convidaria a UI a animar "+0".
+ */
+type RecusaNpsResult =
+  | { ok: true; ja_respondido: boolean; ja_recusado: boolean }
   | { ok: false; motivo: string };
 export interface ValidarDadosDTO {
   codigo: string;
@@ -165,6 +183,24 @@ export async function responderNpsAction(rowId: number, nota: number): Promise<N
     });
     if (error) return { ok: false, motivo: "erro" };
     return data as unknown as NpsResult;
+  } catch {
+    return { ok: false, motivo: "erro" };
+  }
+}
+
+/**
+ * Adendo 05/08 — "Não responder": encerra a pesquisa DE VEZ, sem pontos.
+ *
+ * A diferença para `dispensarNpsPendente` (o "responder mais tarde") é o
+ * banco: aquele é estado de sessão no provider e volta na próxima abertura;
+ * este grava `nps_recusado_em` e a linha nunca mais é oferecida.
+ */
+export async function recusarNpsAction(rowId: number): Promise<RecusaNpsResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("recusar_nps", { p_row_id: rowId });
+    if (error) return { ok: false, motivo: "erro" };
+    return data as unknown as RecusaNpsResult;
   } catch {
     return { ok: false, motivo: "erro" };
   }

@@ -6,9 +6,10 @@ import {
   MapPin,
   Phone,
   MessageCircle,
+  MessageSquareOff,
 } from "lucide-react";
 
-import { getCupom, getCategoria, avaliacoes } from "@/lib/mock-data";
+import { getCupom, getCategoria } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
 import { janelaAlcancavel } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
@@ -22,7 +23,6 @@ import {
 } from "@/lib/cupom-campos";
 import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
-import { FeedbackCarousel } from "@/components/feedback-carousel";
 import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
 import { FavoriteButton } from "@/components/favorite-button";
 import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
@@ -250,10 +250,37 @@ export default async function CupomDetalhe({
           </section>
         )}
 
-        {/* Feedbacks */}
+        {/* Avaliações
+            Fase 9/Z3 — os depoimentos saíram. Eram de `mock-data`: "Mariana
+            Alves" e "Rafael Souza" com textos que ninguém escreveu, colados a
+            um cupom REAL, na única das três telas com dado inventado que o
+            CONSUMIDOR via. É a mesma decisão que matou o "8,7" do portal e os
+            cards do dashboard — depoimento fictício ao lado de oferta real
+            contamina a credibilidade da oferta.
+
+            ADENDO 05/08 — o cliente decidiu o destino: avaliação é do
+            ESTABELECIMENTO, e NUNCA volta para a página do cupom. Por isso o
+            estado honesto não promete mais "avaliações deste cupom" — dizer
+            isso seria prometer uma tela que, por decisão de produto, não vai
+            existir. O sistema de estrelas + texto vive no perfil do
+            estabelecimento (backlog da Fase 10). */}
         <section>
-          <h3 className="mb-3 text-base font-bold">Feedbacks</h3>
-          <FeedbackCarousel items={avaliacoes.slice(0, 4)} />
+          <h3 className="mb-3 text-base font-bold">Avaliações</h3>
+          <div className="flex items-start gap-3 rounded-card border border-border bg-card p-4">
+            <MessageSquareOff
+              className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <div>
+              <p className="text-sm font-semibold">
+                Cupom não recebe avaliação
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Quem resgata avalia o estabelecimento, e não a oferta. É no
+                perfil do estabelecimento que essas avaliações ficam.
+              </p>
+            </div>
+          </div>
         </section>
 
         {/* Localização e Contato */}

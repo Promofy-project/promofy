@@ -9,7 +9,6 @@ import {
   MousePointerClick,
   CircleCheck,
   Lock,
-  Star,
   AtSign,
   Send,
   MessageCircle,
@@ -130,21 +129,6 @@ const PLANOS_LINHA2: PlanoLP[] = [
       "Participação no ranking de pontuação para premiações (com pontuação dobrada)",
       "Convites para eventos e promoções especiais com parceiros",
     ],
-  },
-];
-
-const REVIEWS = [
-  {
-    nome: "Mariana A. · Palmas-TO",
-    avatar: `${IMG}/avatar-review-1.png`,
-    texto:
-      "Economizei mais de R$ 200 no primeiro mês só usando cupom onde eu já ia. Virou hábito abrir a Promofy antes de sair.",
-  },
-  {
-    nome: "Juliana R. · Palmas-TO",
-    avatar: `${IMG}/avatar-review-2.png`,
-    texto:
-      "Achei academia, rodízio e salão com desconto perto de casa. O resgate é na hora, sem burocracia nenhuma.",
   },
 ];
 
@@ -363,47 +347,23 @@ export default function ParaVocePage() {
         </div>
       </section>
 
-      {/* ───────── 6. FEEDBACKS (destaque em amarelo cheio) ───────── */}
-      <section className="relative overflow-hidden bg-yellow">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-6 select-none whitespace-nowrap text-center text-6xl font-extrabold uppercase tracking-tight text-white/25 sm:text-7xl lg:text-8xl"
-        >
-          FEEDBACKS FEEDBACKS FEEDBACKS FEEDBACKS
-        </div>
-        <div className="relative mx-auto max-w-5xl px-6 pb-16 pt-28 sm:pb-24 sm:pt-32">
-          <div className="grid gap-6 md:grid-cols-2">
-            {REVIEWS.map((r, i) => (
-              <figure
-                key={i}
-                className="relative mt-8 rounded-2xl border border-border/60 bg-surface px-6 pb-6 pt-12 text-center shadow-[0_1px_2px_rgba(20,20,60,0.04),0_10px_30px_-12px_rgba(20,20,60,0.15)]"
-              >
-                <span className="absolute -top-8 left-1/2 h-16 w-16 -translate-x-1/2 overflow-hidden rounded-full border-4 border-surface bg-muted shadow-sm">
-                  <img
-                    src={r.avatar}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                </span>
-                <figcaption className="text-lg font-bold text-foreground">
-                  {r.nome}
-                </figcaption>
-                <div className="mt-2 flex justify-center gap-1">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star
-                      key={s}
-                      className="h-4 w-4 fill-primary text-primary"
-                    />
-                  ))}
-                </div>
-                <blockquote className={cn("mt-4", LP_CARD_TEXT)}>
-                  {r.texto}
-                </blockquote>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ───────── 6. FEEDBACKS — SEÇÃO REMOVIDA (adendo 05/08) ─────────
+          MESMA PROVA, MESMA DECISÃO da faixa de depoimentos da /para-empresas.
+          O modelo do Figma (src/images/lp-consumidores/modelo-lp-consumidores.png)
+          traz esta faixa com dois cards de PLACEHOLDER: "Nome exemplo lorem" e texto
+          lorem ipsum. O cliente não entregou depoimento de consumidor nenhum.
+
+          O que estava no ar era invenção nossa: "Mariana A. · Palmas-TO" e
+          "Juliana R. · Palmas-TO", cinco estrelas e "economizei mais de R$ 200 no
+          primeiro mês" — a mesma persona falsa que saiu de mock-data.avaliacoes e da
+          página do cupom. Manter aqui o que foi removido a uma página de distância
+          seria contradição, não escopo.
+
+          CONSEQUÊNCIA VISUAL, declarada: esta era a única faixa amarela cheia da
+          página, e a /para-voce fica sem esse respiro de cor entre Planos e FAQ. Não
+          inventei seção nenhuma para tapar o buraco — qualquer coisa escrita para
+          preencher o espaço seria a mesma mentira com outra roupa. Re-equilibrar a
+          cor é decisão de design, não de conteúdo. ───────── */}
 
       {/* ───────── 7. FAQ ───────── */}
       <section className="bg-surface">

@@ -231,7 +231,13 @@ export function CupomAtivoSheet() {
       {/* Rodapé */}
       <div className="border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {validado ? (
-          estado.nps === null ? (
+          // Adendo 05/08 — o CTA exige as DUAS condições. `nps === null`
+          // sozinho não distingue "ainda pode responder" de "encerrou com
+          // Não responder", e oferecer avaliação a quem encerrou é pedir de
+          // novo o que a pessoa já recusou — e prometer um crédito que a RPC
+          // agora nega (`motivo: nps_recusado`). Isto é UX: quem manda é o
+          // servidor.
+          estado.nps === null && estado.npsRecusadoEm === null ? (
             <Button
               type="button"
               className="w-full"

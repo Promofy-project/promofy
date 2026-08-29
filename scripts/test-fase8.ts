@@ -11,7 +11,7 @@ const alvo = resolverAlvo("test-fase8");
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
-import { cpfValido, completarCpfComDv } from "../src/lib/cpf";
+import { cpfValido, completarCpfComDv, formatarCpf, mascararCpf } from "../src/lib/cpf";
 import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
 
 const SENHA = "promofy123";
@@ -335,6 +335,24 @@ async function main(): Promise<number> {
       !JSON.stringify(busca).includes("PRMF-F8CP-FBUS"), "o código vazou na resposta");
     check("CPF volta MASCARADO", /^\d{3}\.\*{3}\.\*{3}-\d{2}$/.test(item?.cpf_mascarado ?? ""), item?.cpf_mascarado);
     check("nome é só o primeiro", typeof item?.nome === "string" && !item.nome.includes(" "), item?.nome);
+
+    // ---- CPF GUARDADO FORMATADO (adendo 05/08) ----
+    // A medição do perfil `consumidor@` em produção mostrou o CPF gravado como
+    // "123.456.789-09", com pontos e hífen — e a decisão de NÃO reescrevê-lo
+    // depende de uma propriedade que até aqui ninguém tinha afirmado em teste:
+    // busca e máscara normalizam os dígitos DENTRO do banco
+    // (`regexp_replace(p.cpf,'\D','','g')` na migration 26 e em `mascarar_cpf`).
+    // Sem esta asserção, "o formato não atrapalha" era leitura de código.
+    const cpfFormatado = formatarCpf(String(cpfDoQa));
+    await svc.from("profiles").update({ cpf: cpfFormatado }).eq("id", qa!.id);
+    const buscaFmt = (await dono.rpc("buscar_ativacoes_por_cpf", { p_cpf: cpfDoQa })).data as any;
+    const itemFmt = buscaFmt?.itens?.[0];
+    check("CPF guardado FORMATADO ainda é encontrado pela busca por dígitos",
+      buscaFmt?.ok === true, JSON.stringify(buscaFmt)?.slice(0, 120));
+    check("…e a máscara sai correta mesmo com pontuação no banco",
+      itemFmt?.cpf_mascarado === mascararCpf(String(cpfDoQa)),
+      `${itemFmt?.cpf_mascarado} ≠ ${mascararCpf(String(cpfDoQa))}`);
+    await svc.from("profiles").update({ cpf: String(cpfDoQa) }).eq("id", qa!.id);
 
     const semCpf = (await dono.rpc("validar_cupom_por_ativacao", { p_row_id: item?.row_id, p_cpf: "123.456.789-00" })).data as any;
     check("confirmar com CPF que NÃO é o da ativação é recusado (row_id não basta)",

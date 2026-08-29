@@ -15,7 +15,6 @@ import {
 import {
   cupons,
   planos,
-  avaliacoes,
   landingStats,
   resgatesMensais,
 } from "@/lib/mock-data";
@@ -24,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CouponCard } from "@/components/coupon-card";
 import { PlanCard } from "@/components/plan-card";
-import { ReviewCard } from "@/components/review-card";
 import { AppMockup } from "@/components/app-mockup";
 import { BarChart } from "@/components/bar-chart";
 
@@ -315,23 +313,28 @@ export function LandingPlans({ id }: { id?: string }) {
 }
 
 // ───────────────────────── Avaliações ─────────────────────────
-
-export function LandingReviews() {
-  return (
-    <section className="bg-surface">
-      <div className="container py-16 lg:py-20">
-        <h2 className="text-center text-3xl font-extrabold tracking-tight">
-          Quem usa, recomenda
-        </h2>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {avaliacoes.slice(0, 3).map((a) => (
-            <ReviewCard key={a.id} avaliacao={a} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+//
+// A SEÇÃO "Quem usa, recomenda" FOI REMOVIDA (adendo 05/08).
+//
+// Ela renderizava `mock-data.avaliacoes` — "Mariana Alves", "Rafael Souza",
+// "Camila Ferreira": pessoas que não existem, com frases que ninguém disse,
+// ATRIBUÍDAS A ESTABELECIMENTOS REAIS ("Sabor & Cia", "PowerFit Academia").
+// Na página pública, isso não é placeholder: é depoimento falso assinado com
+// o nome de um parceiro. É a mesma decisão que tirou os depoimentos do
+// `/m/cupom/[id]`, o "8,7" do `/portal/avaliacoes` e os cards do dashboard.
+//
+// NÃO foi substituída por nada — e essa é a parte deliberada. Outro nome
+// inventado, uma frase genérica, um número de "usuários satisfeitos" ou o NPS
+// do estabelecimento disfarçado de depoimento seriam a mesma mentira com
+// roupa nova. Enquanto não houver depoimento REAL, a seção não existe.
+//
+// A rítmica da página sobrevive: a `frentes` (bg-background) passa a
+// encostar direto na `LandingCta`, que carrega o próprio cartão `bg-primary`
+// e já fazia a quebra visual sozinha.
+//
+// `ReviewCard` (`src/components/review-card.tsx`) fica no repositório, sem
+// uso, como o `FeedbackCarousel`: ele serve no dia em que existir avaliação
+// de verdade — no perfil do estabelecimento (backlog da Fase 10).
 
 // ───────────────────────── Faixa de CTA ─────────────────────────
 

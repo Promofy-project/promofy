@@ -556,3 +556,67 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > limite, `validados == limite` implica **zero ativações vivas**. O cupom só é carimbado quando não há mais
 > ninguém esperando para usar — então ninguém perde a página do próprio cupom por causa do carimbo. Há
 > asserção dedicada a essa propriedade.
+
+## Adendo da reunião de 05/08 — as três saídas do NPS
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 35 | `20260821120000_adendo_nps_recusa.sql` | `cupons_usuario.nps_recusado_em` (timestamptz, nullable) · RPC `recusar_nps(bigint)` · `responder_nps` passa a **recusar** nota de linha recusada · `estado_cupom_json` ganha `nps_recusado_em` · `nps_pendentes` exclui as recusadas · índice parcial com a mesma condição. |
+
+> **O pedido.** O card de NPS passa a ter três saídas: **Responder**, **Responder mais tarde** e
+> **Não responder**. Só a terceira precisa de banco — "mais tarde" já é o `dispensarNpsPendente` do
+> provider (estado de sessão, nada gravado, reoferece na próxima abertura) e "responder" é a
+> `responder_nps` da Fase 2.
+>
+> **Coluna nova em vez de sentinela em `nps`.** Marcar recusa como `nps = -1` (ou 0) contaminaria a
+> única coluna de onde sai o NPS do estabelecimento: `indicadores_estabelecimento` (migration 25)
+> monta a base com `nps is not null` e classifica **0–6 como detrator**. Quem recusou viraria
+> detrator — o oposto do que "não quis responder" significa.
+>
+> **`timestamptz`, não `boolean`.** Mesmo custo (`is null` / `is not null`) e responde "quando" de
+> graça, como `validado_em`. Nullable nasce NULL em todas as linhas, sem backfill nem DEFAULT.
+>
+> **Sem grant novo.** A migration 2 revogou `insert, update` de `cupons_usuario` para
+> `authenticated`; toda escrita passa por RPC `security definer`. A coluna entra nesse regime — não
+> há PATCH por PostgREST para marcar **nem para desmarcar** a recusa. Há asserção disso na suíte.
+
+### O contrato final: as duas direções fechadas NO SERVIDOR
+
+> A primeira versão desta migration deixava um buraco que a auditoria do líder pegou: `recusar_nps`
+> tirava a linha da fila, mas **`responder_nps` continuava aceitando nota naquela linha**. Ou seja,
+> "encerramento definitivo" era promessa da TELA — bastava chamar a RPC com o `row_id` para
+> ressuscitar a pesquisa, gravar a nota e levar os pontos que a recusa dizia não creditar. O
+> consumidor fala PostgREST tão bem quanto o lojista (é o raciocínio da migration 20).
+>
+> | Sequência | Resultado |
+> |---|---|
+> | responder → responder | `ok: true`, `ja_respondido: true`, `pontos: 0` — **idempotente**, a nota é a primeira |
+> | responder → **recusar** | `ok: true`, `ja_respondido: true` — **não marca recusa**; a nota dada não vira "não quis responder" |
+> | recusar → recusar | `ok: true`, `ja_recusado: true` — **preserva o carimbo da PRIMEIRA** recusa |
+> | recusar → **responder** | `ok: false`, `motivo: 'nps_recusado'` — **nada escrito, nada creditado, nada no ledger** |
+>
+> `motivo: 'nps_recusado'` segue o vocabulário da casa (`nao_validado`, `nao_encontrado`,
+> `cpf_invalido`, `limite_usuario`): snake_case, curto, estável.
+>
+> **Ordem dos ramos em `responder_nps`, e ela é deliberada:** `nps is not null` vem ANTES da recusa,
+> para preservar byte a byte a idempotência que já estava no ar.
+
+### `estado_cupom_json` — o estado precisa saber
+
+> A mesma auditoria mostrou que `estados[]` só carregava `nps`, e `nps = null` mistura duas coisas
+> opostas: **"ainda pode responder"** e **"encerrou de vez"**. O rodapé de `cupom-ativo-sheet`
+> decidia o CTA "Avaliar experiência" exatamente por esse null — e passaria a oferecer uma pesquisa
+> que a RPC agora nega. A chave `nps_recusado_em` entra em `estado_cupom_json` para os três estados
+> serem distinguíveis na leitura. **É UX; a autoridade continua sendo a RPC.**
+>
+> `create or replace` preserva o ACL — a função não é promovida a ninguém, e o `revoke ... from
+> public, anon` da migration 2 é re-emitido para a migration ser legível sozinha.
+
+> **Aditiva.** `usos`, `saldo`, `config` e `usuario` saem idênticos; `estados` ganha **uma chave
+> nova** (cliente antigo ignora chave que não conhece), e `nps_pendentes` só encolhe — e só para
+> quem recusou. É a janela banco-antes-código de sempre.
+>
+> ⚠️ **LOCAL ONLY até autorização.** Não entra em `db push --linked`. Produção permanece em 1–34.
+> Esta é a **única** migration nova da branch `fix/adendo-0508-finalizacao`: a E1 da taxonomia
+> (`categorias_folha`) **não** está aqui — ficou na `fase-estrutural-e1-taxonomia-schema`, aguardando
+> a decisão de arquitetura em WP próprio.
