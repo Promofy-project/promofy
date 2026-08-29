@@ -518,6 +518,12 @@ async function main(): Promise<number> {
     await svc.from("cupons").delete().eq("id", CUPOM_ANTECIPADO);
     await svc.from("cupons").delete().eq("id", CUPOM_LONGE);
     await svc.from("cupons").delete().eq("id", CUPOM_RECUSA);
+    // Faltavam aqui (achado no smoke hospedado do AD-2): dois cupons do
+    // bloco [Z1c] vazaram para o hospedado porque as constantes existiam
+    // mas nunca entraram nesta lista. Limpos manualmente uma vez; a lista
+    // agora cobre os seis cupons que a suíte cria.
+    await svc.from("cupons").delete().eq("id", CUPOM_FILA_A);
+    await svc.from("cupons").delete().eq("id", CUPOM_FILA_B);
     if (qa) await destruirContaQa(svc, qa.id);
   }
 
