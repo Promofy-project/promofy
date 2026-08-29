@@ -1,5 +1,5 @@
 -- ============================================================
--- Promofy — Adendo 05/08 · Migration 36: "Não responder" no NPS
+-- Promofy — Adendo 05/08 · Migration 35: "Não responder" no NPS
 --
 -- O PEDIDO (refinamento do cliente sobre o Z1). O card da pesquisa passa a
 -- ter três saídas, e não duas:
@@ -30,9 +30,26 @@
 -- coluna nova entra nesse mesmo regime: não há PATCH possível por PostgREST,
 -- nem para marcar nem para desmarcar a recusa.
 --
--- ADITIVA. `estados`, `usos`, `saldo`, `config` e `usuario` saem idênticos.
--- O código publicado que não conhece `nps_recusado_em` continua funcionando:
--- ninguém recusa nada, e `nps_pendentes` se comporta como antes.
+-- A REGRA É DO SERVIDOR, NÃO DA TELA. Recusar é definitivo, e "definitivo"
+-- que só existe no React não é definitivo: o consumidor fala PostgREST tão
+-- bem quanto o lojista. Por isso `responder_nps` é reescrita aqui para
+-- RECUSAR a nota de uma linha já recusada — sem gravar `nps`, sem creditar,
+-- sem tocar o ledger. As duas direções ficam fechadas:
+--
+--     responder → recusar   já era proibido (devolve `ja_respondido`)
+--     recusar   → responder passa a ser proibido (`motivo: nps_recusado`)
+--
+-- E O ESTADO PRECISA SABER. `estado_cupom_json` devolvia `nps` e mais nada
+-- sobre a pesquisa: um cliente lendo `nps === null` concluía "ainda dá para
+-- responder" e mostrava o CTA de avaliação sobre uma pesquisa encerrada. A
+-- chave `nps_recusado_em` entra ali para que os três estados sejam
+-- distinguíveis na leitura — não respondeu / respondeu / recusou. É UX; a
+-- autoridade continua sendo a RPC.
+--
+-- ADITIVA. `usos`, `saldo`, `config` e `usuario` saem idênticos; `estados`
+-- ganha UMA chave nova (o cliente antigo ignora chave que não conhece, e o
+-- `m/layout.tsx` repassa o DTO inteiro). `nps_pendentes` só encolhe, e só
+-- para quem recusou.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -58,7 +75,48 @@ create index cupons_usuario_nps_pendente_idx
   where status = 'validado' and nps is null and nps_recusado_em is null;
 
 -- ------------------------------------------------------------
--- 3. RECUSAR NPS — encerramento definitivo, sem pontos
+-- 3. ESTADO DO CUPOM — passa a distinguir "recusou" de "não respondeu"
+--
+-- Corpo idêntico ao da migration 6, com UMA chave a mais. Sem ela, o único
+-- sinal sobre a pesquisa era `nps`, e `nps = null` misturava duas coisas
+-- opostas: "ainda pode responder" e "encerrou de vez". A folha do cupom
+-- (`cupom-ativo-sheet`) decidia o CTA "Avaliar experiência" exatamente por
+-- esse null.
+--
+-- `immutable` de propósito, como antes: é função de UMA linha, sem leitura
+-- de outra tabela e sem `now()`.
+-- ------------------------------------------------------------
+create or replace function public.estado_cupom_json(p_row public.cupons_usuario)
+returns jsonb
+language sql immutable set search_path = ''
+as $$
+  select jsonb_build_object(
+    'row_id', p_row.id,
+    'cupom_id', p_row.cupom_id,
+    'status', p_row.status,
+    'codigo', p_row.codigo,
+    'ativado_em', p_row.ativado_em,
+    'expira_em', p_row.expira_em,
+    'nps', p_row.nps,
+    -- Adendo 05/08: null = nunca recusou. Quem lê `nps is null` PRECISA
+    -- olhar aqui antes de oferecer a pesquisa.
+    'nps_recusado_em', p_row.nps_recusado_em
+  );
+$$;
+
+comment on function public.estado_cupom_json(public.cupons_usuario) is
+  'Adendo 05/08: ganha nps_recusado_em, para o cliente distinguir "ainda pode responder" de "encerrou de vez". Resto identico a migration 6.';
+
+-- `create or replace` PRESERVA o ACL — nada aqui promove esta função. O
+-- revoke é re-emitido porque é exatamente o que a migration 2 declarou para
+-- ela (`from public, anon`), e ela NÃO aparece no bloco de `grant ... to
+-- authenticated` de lá: quem a alcança é `meu_estado_consumidor`, e essa
+-- rota não muda.
+revoke execute on function public.estado_cupom_json(public.cupons_usuario)
+  from public, anon;
+
+-- ------------------------------------------------------------
+-- 4. RECUSAR NPS — encerramento definitivo, sem pontos
 --
 -- `security definer` pelo mesmo motivo de `responder_nps`: não existe grant
 -- de UPDATE em `cupons_usuario`. O `usuario_id = auth.uid()` no WHERE é o
@@ -119,7 +177,94 @@ revoke execute on function public.recusar_nps(bigint) from public, anon;
 grant  execute on function public.recusar_nps(bigint) to authenticated;
 
 -- ------------------------------------------------------------
--- 4. MEU ESTADO CONSUMIDOR — a fila passa a ignorar as recusadas
+-- 5. RESPONDER NPS — recusada não aceita nota. NO SERVIDOR.
+--
+-- Corpo da migration 15 (Fase 5) com UM ramo novo. Tudo o mais é byte a byte
+-- o que já estava no ar: a validação da nota, a idempotência, o crédito
+-- lido do RETURNING, o `for update`.
+--
+-- POR QUE ESTE RAMO EXISTE. Sem ele, "encerramento definitivo" seria uma
+-- promessa da tela: bastava a pessoa (ou qualquer coisa com o token dela)
+-- chamar `responder_nps` com o `row_id` para ressuscitar uma pesquisa
+-- encerrada, gravar nota e receber os pontos que a recusa dizia não creditar.
+-- A UI não é fronteira — a fronteira é aqui.
+--
+-- ORDEM DOS RAMOS, e ela é deliberada: `nps is not null` ANTES da recusa.
+-- Isso preserva EXATAMENTE a idempotência que já existia (segunda resposta
+-- devolve `ja_respondido` + `pontos: 0`), e uma linha respondida nunca chega
+-- a ter recusa — `recusar_nps` se recusa a marcá-la.
+--
+-- `motivo: 'nps_recusado'` segue o vocabulário da casa (`nao_validado`,
+-- `nao_encontrado`, `cpf_invalido`, `limite_usuario`): snake_case, curto,
+-- estável, legível pelo cliente sem tradução.
+-- ------------------------------------------------------------
+create or replace function public.responder_nps(p_row_id bigint, p_nota int)
+returns jsonb
+language plpgsql volatile
+security definer set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v public.cupons_usuario%rowtype;
+  v_pontos int;
+  v_creditado int;
+  v_saldo int;
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'motivo', 'sem_sessao');
+  end if;
+  if p_nota is null or p_nota < 0 or p_nota > 10 then
+    return jsonb_build_object('ok', false, 'motivo', 'nota_invalida');
+  end if;
+
+  select * into v from public.cupons_usuario
+   where id = p_row_id and usuario_id = v_uid
+     for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'motivo', 'nao_encontrado');
+  end if;
+  if v.status <> 'validado' then
+    return jsonb_build_object('ok', false, 'motivo', 'nao_validado');
+  end if;
+
+  if v.nps is not null then
+    select coalesce(sum(pontos), 0) into v_saldo
+      from public.pontos_transacoes where usuario_id = v_uid;
+    return jsonb_build_object('ok', true, 'ja_respondido', true,
+      'saldo', v_saldo, 'pontos', 0);
+  end if;
+
+  -- NOVO (adendo 05/08): a pesquisa foi encerrada pelo próprio dono.
+  -- Sai ANTES de qualquer escrita: nada em `cupons_usuario`, nada no ledger.
+  if v.nps_recusado_em is not null then
+    return jsonb_build_object('ok', false, 'motivo', 'nps_recusado');
+  end if;
+
+  update public.cupons_usuario set nps = p_nota where id = v.id;
+
+  select pontos into v_pontos from public.config_pontos where acao = 'nps';
+  insert into public.pontos_transacoes (usuario_id, acao, pontos, referencia_id)
+  values (v_uid, 'nps', coalesce(v_pontos, 0), v.id::text)
+  on conflict do nothing  -- cinto extra sobre o índice único
+  returning pontos into v_creditado;
+
+  select coalesce(sum(pontos), 0) into v_saldo
+    from public.pontos_transacoes where usuario_id = v_uid;
+
+  return jsonb_build_object('ok', true, 'ja_respondido', false,
+    'saldo', v_saldo, 'pontos', coalesce(v_creditado, 0));
+end;
+$$;
+
+comment on function public.responder_nps(bigint, int) is
+  'Adendo 05/08: recusa vinda de recusar_nps bloqueia a nota (motivo nps_recusado), sem escrita e sem ledger. Resto identico a migration 15.';
+
+-- `create or replace` preserva o ACL; re-emitido no padrão da migration 15.
+revoke execute on function public.responder_nps(bigint, int) from public, anon;
+grant  execute on function public.responder_nps(bigint, int) to authenticated;
+
+-- ------------------------------------------------------------
+-- 6. MEU ESTADO CONSUMIDOR — a fila passa a ignorar as recusadas
 --
 -- Corpo idêntico ao da migration 28, com UMA linha a mais no WHERE de
 -- `nps_pendentes`. Reescrita inteira porque é `create or replace` de função

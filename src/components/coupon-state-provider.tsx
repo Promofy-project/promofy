@@ -23,6 +23,16 @@ export interface EstadoCupom {
   ativadoEm: string;
   expiraEm: string | null;
   nps: number | null;
+  /**
+   * Adendo 05/08 — carimbo de "Não responder". `null` = nunca recusou.
+   *
+   * Sem este campo, `nps === null` era o único sinal, e ele mistura "ainda
+   * pode responder" com "encerrou de vez" — foi por isso que a folha do
+   * cupom oferecia "Avaliar experiência" sobre pesquisa encerrada. Quem
+   * decide continua sendo a RPC; isto é só o que a tela precisa saber para
+   * não prometer o que o banco vai negar.
+   */
+  npsRecusadoEm: string | null;
 }
 
 /** Config de pontos (fonte única: config_pontos no banco). */
@@ -167,6 +177,9 @@ function dtoParaEstado(d: EstadoCupomDTO): EstadoCupom | null {
     ativadoEm: d.ativado_em,
     expiraEm: d.expira_em,
     nps: d.nps,
+    // `?? null` porque a chave é opcional no DTO (payload antigo não a traz):
+    // ausência é "não recusou", nunca `undefined` circulando pela UI.
+    npsRecusadoEm: d.nps_recusado_em ?? null,
   };
 }
 
@@ -346,6 +359,16 @@ export function CouponStateProvider({
         const r = await recusarNpsAction(rowId);
         if (!r?.ok) return { ok: false, motivo: r?.motivo ?? "erro" };
         setFilaNps((prev) => prev.filter((p) => p.row_id !== rowId));
+        // Se esta linha também está no mapa de estados, o carimbo entra AQUI
+        // — senão a folha do cupom seguiria oferecendo "Avaliar experiência"
+        // até o próximo reload, para uma pesquisa que o banco já encerrou.
+        // O valor é do cliente e serve só para a tela; a verdade é a RPC.
+        setEstados((prev) => {
+          const id = Object.keys(prev).find((k) => prev[k].rowId === rowId);
+          return id
+            ? { ...prev, [id]: { ...prev[id], npsRecusadoEm: new Date().toISOString() } }
+            : prev;
+        });
         return { ok: true };
       },
 

@@ -25,6 +25,8 @@ const CUPOM_F9 = "f9-nps-pendente";
 const CUPOM_ANTECIPADO = "f9-janela-antecipada";
 const CUPOM_LONGE = "f9-janela-longe";
 const CUPOM_RECUSA = "f9-nps-recusa";
+const CUPOM_FILA_A = "f9-nps-fila-a";
+const CUPOM_FILA_B = "f9-nps-fila-b";
 
 /** Retorno de `janela_alcance` (migration 29). */
 type Alcance = { alcancavel: boolean; teto: string | null };
@@ -70,6 +72,18 @@ async function logar(email: string, senha = SENHA): Promise<SupabaseClient> {
 type Pendente = { row_id: number; cupom_id: string; titulo: string; validado_em: string | null };
 const pendentesDe = (estado: unknown): Pendente[] =>
   ((estado as { nps_pendentes?: Pendente[] } | null)?.nps_pendentes ?? []);
+
+/**
+ * Lançamentos de NPS no livro-razão de um usuário.
+ *
+ * Saldo igual não prova ledger intocado — dois lançamentos que se anulam dão
+ * o mesmo saldo. Para "recusar não credita" a asserção honesta conta LINHAS.
+ */
+async function contarNps(usuarioId: string): Promise<number> {
+  const { data } = await svc
+    .from("pontos_transacoes").select("id").eq("usuario_id", usuarioId).eq("acao", "nps");
+  return (data ?? []).length;
+}
 
 /** Eventos por tipo de UM cupom — a prova de que cliques ≥ ativações. */
 async function contarEventos(cupomId: string): Promise<{ clique: number; ativacao: number }> {
@@ -255,6 +269,97 @@ async function main(): Promise<number> {
     check("PostgREST não consegue desfazer a recusa por PATCH (sem grant de UPDATE)",
       Boolean(patch.error) || (patch.data ?? []).length === 0,
       JSON.stringify({ erro: patch.error?.message, linhas: patch.data }));
+
+    // ---- recusar → responder: PROIBIDO NO SERVIDOR ----
+    // A asserção mais importante deste bloco. Sem ela, "encerramento
+    // definitivo" seria promessa da tela: bastava chamar a RPC com o row_id
+    // para ressuscitar a pesquisa, gravar nota e levar os pontos que a recusa
+    // dizia não creditar. A UI não é fronteira.
+    const ledgerAntes = await contarNps(qa!.id);
+    const revive = (await cliente.rpc("responder_nps", { p_row_id: rowId2, p_nota: 10 })).data as any;
+    const { data: linhaRevive } = await svc
+      .from("cupons_usuario").select("nps, nps_recusado_em").eq("id", rowId2).maybeSingle();
+    const saldoPosRevive = ((await cliente.rpc("meu_estado_consumidor")).data as any)?.saldo ?? -3;
+    const ledgerDepois = await contarNps(qa!.id);
+    check("responder DEPOIS de recusar é recusado com motivo próprio",
+      revive?.ok === false && revive?.motivo === "nps_recusado", JSON.stringify(revive));
+    check("…e a nota continua NULL (nada foi gravado)",
+      linhaRevive?.nps === null, String(linhaRevive?.nps));
+    check("…e a recusa continua carimbada",
+      linhaRevive?.nps_recusado_em === linhaRec?.nps_recusado_em);
+    check("…e o saldo não muda", saldoPosRevive === saldoAntes,
+      `${saldoAntes} → ${saldoPosRevive}`);
+    check("…e o ledger não ganha lançamento de nps",
+      ledgerDepois === ledgerAntes, `${ledgerAntes} → ${ledgerDepois}`);
+
+    // ---- o ESTADO precisa deixar a recusa visível ----
+    // `nps === null` sozinho é ambíguo: diz "ainda pode responder" e "encerrou
+    // de vez". Quem lê só o `nps` oferece avaliação sobre pesquisa fechada —
+    // era o caso do rodapé de `cupom-ativo-sheet`.
+    const estadosPos = ((await cliente.rpc("meu_estado_consumidor")).data as any)?.estados ?? [];
+    const estadoRecusado = (estadosPos as any[]).find((e) => e.row_id === rowId2);
+    check("estados[] expõe nps_recusado_em para a linha recusada",
+      Boolean(estadoRecusado) && estadoRecusado.nps === null &&
+        Boolean(estadoRecusado.nps_recusado_em),
+      JSON.stringify(estadoRecusado));
+    const estadoRespondido = (estadosPos as any[]).find((e) => e.row_id === rowId);
+    check("…e a linha RESPONDIDA sai com nps preenchido e recusa nula",
+      Boolean(estadoRespondido) && estadoRespondido.nps === 9 &&
+        estadoRespondido.nps_recusado_em === null,
+      JSON.stringify(estadoRespondido));
+
+
+    // ============================================================
+    console.log("\n[Z1c] Fila com DUAS pendências — uma por vez, mais recente primeiro");
+    // ============================================================
+
+    // Até aqui a fila nunca teve mais de uma linha ao mesmo tempo: a ordem e o
+    // "uma por vez" eram garantidos por leitura do SQL, não por medição.
+    const filaCupons = [CUPOM_FILA_A, CUPOM_FILA_B];
+    for (const id of filaCupons) {
+      await svc.from("cupons").delete().eq("id", id);
+      await svc.from("cupons").insert({
+        id,
+        estabelecimento_id: "e1",
+        categoria_id: e1!.categoria_id as string,
+        titulo: `F9 fila ${id.slice(-1).toUpperCase()}`,
+        beneficio: "Cupom da suíte do adendo 05/08 (fila)",
+        economia: 10,
+        validade_fim: "2035-12-31",
+        status: "ativo" as const,
+        horarios: { descricao: "todos os dias", dias: [], inicio: "00:00", fim: "23:59" },
+      });
+    }
+
+    // Validadas em ORDEM: A primeiro, B depois. B é a mais recente.
+    const rowsFila: number[] = [];
+    for (const id of filaCupons) {
+      const a = (await cliente.rpc("ativar_cupom", { p_cupom_id: id })).data as any;
+      const v = (await dono.rpc("validar_cupom", { p_codigo: a?.estado?.codigo })).data as any;
+      if (v?.ok !== true) check(`validação da fila (${id})`, false, JSON.stringify(v));
+      rowsFila.push(a?.estado?.row_id as number);
+    }
+
+    const duas = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("as DUAS pendências convivem na fila", duas.length === 2,
+      JSON.stringify(duas.map((p) => p.row_id)));
+    check("a mais RECENTE vem primeiro (B antes de A)",
+      duas[0]?.row_id === rowsFila[1] && duas[1]?.row_id === rowsFila[0],
+      JSON.stringify({ fila: duas.map((p) => p.row_id), esperado: [rowsFila[1], rowsFila[0]] }));
+
+    // Recusar a cabeça: a segunda vira a cabeça. É o "uma por vez" do card.
+    await cliente.rpc("recusar_nps", { p_row_id: duas[0]!.row_id });
+    const restou = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("recusada a cabeça, a fila passa a oferecer a SEGUINTE",
+      restou.length === 1 && restou[0]?.row_id === rowsFila[0],
+      JSON.stringify(restou));
+
+    // Responder a que sobrou esvazia a fila — e credita normalmente.
+    const respFila = (await cliente.rpc("responder_nps", { p_row_id: restou[0]!.row_id, p_nota: 8 })).data as any;
+    const vazia = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("NPS normal continua respondendo e creditando UMA vez depois de tudo isso",
+      respFila?.ok === true && (respFila?.pontos ?? 0) > 0, JSON.stringify(respFila));
+    check("respondida a última, a fila fica vazia", vazia.length === 0, JSON.stringify(vazia));
 
 
     // ============================================================

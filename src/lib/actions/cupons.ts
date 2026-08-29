@@ -37,6 +37,16 @@ export interface EstadoCupomDTO {
   ativado_em: string;
   expira_em: string | null;
   nps: number | null;
+  /**
+   * Adendo 05/08 — quando o consumidor encerrou a pesquisa com "Não
+   * responder". `null` = nunca recusou.
+   *
+   * Existe porque `nps === null` sozinho é ambíguo: ele diz tanto "ainda
+   * pode responder" quanto "encerrou de vez", e quem lê só o `nps` oferece
+   * avaliação para uma pesquisa que o banco já fechou. Opcional no tipo
+   * porque um payload gravado antes desta migration não a traz.
+   */
+  nps_recusado_em?: string | null;
   /** Pontos que o banco creditou POR ESTE resgate (Fase 5) — 0 se não validado. */
   pontos_resgate?: number;
 }
