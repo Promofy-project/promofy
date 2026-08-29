@@ -24,6 +24,7 @@ const SENHA = "promofy123";
 const CUPOM_F9 = "f9-nps-pendente";
 const CUPOM_ANTECIPADO = "f9-janela-antecipada";
 const CUPOM_LONGE = "f9-janela-longe";
+const CUPOM_RECUSA = "f9-nps-recusa";
 
 /** Retorno de `janela_alcance` (migration 29). */
 type Alcance = { alcancavel: boolean; teto: string | null };
@@ -156,6 +157,104 @@ async function main(): Promise<number> {
     const { data: linha } = await svc
       .from("cupons_usuario").select("nps").eq("id", rowId).maybeSingle();
     check("a nota gravada é a primeira (9), não a segunda", linha?.nps === 9, String(linha?.nps));
+
+
+    // ============================================================
+    console.log("\n[Z1b] Adendo 05/08 — as três saídas do card de NPS");
+    // ============================================================
+
+    // Cupom PRÓPRIO para a recusa, e não uma segunda ativação do anterior:
+    // `limite_por_usuario` nasce 1 (schema inicial), então reativar o mesmo
+    // cupom seria recusado por limite — e afrouxá-lo mexeria nas asserções de
+    // `usos` que o Z1 já faz em cima daquele cupom.
+    await svc.from("cupons").delete().eq("id", CUPOM_RECUSA);
+    const criadoRec = await svc.from("cupons").insert({
+      id: CUPOM_RECUSA,
+      estabelecimento_id: "e1",
+      categoria_id: e1!.categoria_id as string,
+      titulo: "F9 nota recusada",
+      beneficio: "Cupom da suíte do adendo 05/08",
+      economia: 10,
+      validade_fim: "2035-12-31",
+      status: "ativo" as const,
+      horarios: { descricao: "todos os dias", dias: [], inicio: "00:00", fim: "23:59" },
+    });
+    check("cupom da recusa criado no e1", !criadoRec.error, criadoRec.error?.message);
+
+    const at2 = (await cliente.rpc("ativar_cupom", { p_cupom_id: CUPOM_RECUSA })).data as any;
+    check("qa ativa o cupom da recusa", at2?.ok === true, JSON.stringify(at2));
+    const val2 = (await dono.rpc("validar_cupom", { p_codigo: at2?.estado?.codigo })).data as any;
+    check("lojista valida a segunda no balcão", val2?.ok === true, JSON.stringify(val2?.motivo));
+
+    const fila2 = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("a segunda validação entra na fila", fila2.length === 1, JSON.stringify(fila2));
+    const rowId2 = fila2[0]!.row_id;
+
+    // ---- "Responder mais tarde" ----
+    // É estado de SESSÃO no provider (`dispensarNpsPendente`), e o teste do
+    // banco é justamente que ele NÃO deixa marca: uma segunda leitura do
+    // servidor — que é o que uma nova abertura do app faz — reoferece.
+    const filaDeNovo = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("\"responder mais tarde\" não grava nada — a fila reoferece na próxima leitura",
+      filaDeNovo.length === 1 && filaDeNovo[0]!.row_id === rowId2,
+      JSON.stringify(filaDeNovo));
+    const fonteProvider = readFileSync("src/components/coupon-state-provider.tsx", "utf8");
+    check("…e o dispensar continua sem tocar em nenhuma action",
+      /dispensarNpsPendente: \(\) =>\s*\n?\s*setFilaNps\(\(prev\) => prev\.slice\(1\)\)/.test(fonteProvider));
+
+    // ---- "Não responder" ----
+    const saldoAntes = ((await cliente.rpc("meu_estado_consumidor")).data as any)?.saldo ?? -1;
+
+    // Recusar o que é de OUTRA pessoa não pode funcionar — e o motivo não
+    // distingue "não é sua" de "não existe".
+    const alheio = (await dono.rpc("recusar_nps", { p_row_id: rowId2 })).data as any;
+    check("recusar a pendência de outra pessoa é recusado",
+      alheio?.ok === false && alheio?.motivo === "nao_encontrado", JSON.stringify(alheio));
+
+    const rec1 = (await cliente.rpc("recusar_nps", { p_row_id: rowId2 })).data as any;
+    check("\"não responder\" é aceito", rec1?.ok === true && rec1?.ja_recusado === false,
+      JSON.stringify(rec1));
+
+    const filaPosRecusa = pendentesDe((await cliente.rpc("meu_estado_consumidor")).data);
+    check("recusada, a pendência SAI da fila para sempre",
+      filaPosRecusa.length === 0, JSON.stringify(filaPosRecusa));
+
+    const saldoDepois = ((await cliente.rpc("meu_estado_consumidor")).data as any)?.saldo ?? -2;
+    check("recusar NÃO credita pontos", saldoDepois === saldoAntes,
+      `${saldoAntes} → ${saldoDepois}`);
+
+    const { data: linhaRec } = await svc
+      .from("cupons_usuario").select("nps, nps_recusado_em").eq("id", rowId2).maybeSingle();
+    check("a recusa fica carimbada e a nota continua nula",
+      linhaRec?.nps === null && Boolean(linhaRec?.nps_recusado_em),
+      JSON.stringify(linhaRec));
+
+    const rec2 = (await cliente.rpc("recusar_nps", { p_row_id: rowId2 })).data as any;
+    const { data: linhaRec2 } = await svc
+      .from("cupons_usuario").select("nps_recusado_em").eq("id", rowId2).maybeSingle();
+    check("recusar de novo é idempotente e preserva o carimbo da PRIMEIRA recusa",
+      rec2?.ok === true && rec2?.ja_recusado === true &&
+        linhaRec2?.nps_recusado_em === linhaRec?.nps_recusado_em,
+      JSON.stringify({ rec2, antes: linhaRec?.nps_recusado_em, depois: linhaRec2?.nps_recusado_em }));
+
+    // Recusar uma JÁ RESPONDIDA não pode apagar a resposta da história.
+    const recRespondida = (await cliente.rpc("recusar_nps", { p_row_id: rowId })).data as any;
+    const { data: linhaResp } = await svc
+      .from("cupons_usuario").select("nps, nps_recusado_em").eq("id", rowId).maybeSingle();
+    check("recusar uma já respondida não marca recusa nem mexe na nota",
+      recRespondida?.ok === true && recRespondida?.ja_respondido === true &&
+        linhaResp?.nps === 9 && linhaResp?.nps_recusado_em === null,
+      JSON.stringify({ recRespondida, linhaResp }));
+
+    // A coluna nova entra no regime da migration 2: escrita só por RPC.
+    const patch = await cliente
+      .from("cupons_usuario")
+      .update({ nps_recusado_em: null } as never)
+      .eq("id", rowId2)
+      .select("id");
+    check("PostgREST não consegue desfazer a recusa por PATCH (sem grant de UPDATE)",
+      Boolean(patch.error) || (patch.data ?? []).length === 0,
+      JSON.stringify({ erro: patch.error?.message, linhas: patch.data }));
 
 
     // ============================================================
@@ -313,6 +412,7 @@ async function main(): Promise<number> {
     await svc.from("cupons").delete().eq("id", CUPOM_F9);
     await svc.from("cupons").delete().eq("id", CUPOM_ANTECIPADO);
     await svc.from("cupons").delete().eq("id", CUPOM_LONGE);
+    await svc.from("cupons").delete().eq("id", CUPOM_RECUSA);
     if (qa) await destruirContaQa(svc, qa.id);
   }
 

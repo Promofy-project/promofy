@@ -422,6 +422,7 @@ export type Database = {
           expira_em: string | null
           id: number
           nps: number | null
+          nps_recusado_em: string | null
           status: Database["public"]["Enums"]["status_cupom_usuario"]
           usuario_id: string
           validado_em: string | null
@@ -433,6 +434,7 @@ export type Database = {
           expira_em?: string | null
           id?: never
           nps?: number | null
+          nps_recusado_em?: string | null
           status?: Database["public"]["Enums"]["status_cupom_usuario"]
           usuario_id: string
           validado_em?: string | null
@@ -444,6 +446,7 @@ export type Database = {
           expira_em?: string | null
           id?: never
           nps?: number | null
+          nps_recusado_em?: string | null
           status?: Database["public"]["Enums"]["status_cupom_usuario"]
           usuario_id?: string
           validado_em?: string | null
@@ -776,6 +779,7 @@ export type Database = {
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
       meu_estado_consumidor: { Args: never; Returns: Json }
       novidades_favoritos: { Args: never; Returns: Json }
+      recusar_nps: { Args: { p_row_id: number }; Returns: Json }
       reenviar_cupom_moderacao: { Args: { p_cupom_id: string }; Returns: Json }
       registrar_evento_cupom: {
         Args: { p_cupom_id: string; p_tipo: string }

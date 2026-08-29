@@ -556,3 +556,37 @@ reaproveitado, ver a nota ao final. As 24–27 foram ao ar **antes** do código 
 > limite, `validados == limite` implica **zero ativações vivas**. O cupom só é carimbado quando não há mais
 > ninguém esperando para usar — então ninguém perde a página do próprio cupom por causa do carimbo. Há
 > asserção dedicada a essa propriedade.
+
+## Adendo da reunião de 05/08
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 36 | `20260821120000_adendo_nps_recusa.sql` | `cupons_usuario.nps_recusado_em` (timestamptz, nullable) + RPC `recusar_nps(bigint)` + `nps_pendentes` passa a excluir as recusadas. O índice parcial ganha a mesma condição. |
+
+> **O pedido.** O card de NPS passa a ter três saídas: **Responder**, **Responder mais tarde** e
+> **Não responder**. Só a terceira precisa de banco — "mais tarde" já é o `dispensarNpsPendente` do
+> provider (estado de sessão, nada gravado, reoferece na próxima abertura) e "responder" é a
+> `responder_nps` da Fase 2.
+>
+> **Coluna nova em vez de sentinela em `nps`.** Marcar recusa como `nps = -1` (ou 0) contaminaria a
+> única coluna de onde sai o NPS do estabelecimento: `indicadores_estabelecimento` (migration 25)
+> monta a base com `nps is not null` e classifica **0–6 como detrator**. Quem recusou viraria
+> detrator — o oposto do que "não quis responder" significa.
+>
+> **`timestamptz`, não `boolean`.** Mesmo custo (`is null` / `is not null`) e responde "quando" de
+> graça, como `validado_em`. Nullable nasce NULL em todas as linhas, sem backfill nem DEFAULT.
+>
+> **Sem grant novo.** A migration 2 revogou `insert, update` de `cupons_usuario` para
+> `authenticated`; toda escrita passa por RPC `security definer`. A coluna entra nesse regime — não
+> há PATCH por PostgREST para marcar **nem para desmarcar** a recusa. Há asserção disso na suíte.
+>
+> **Idempotência nos dois sentidos:** recusar de novo preserva o carimbo da primeira recusa; recusar
+> uma **já respondida** devolve `ja_respondido` e **não** marca recusa — a nota já dada não vira
+> "não quis responder".
+>
+> **Aditiva.** `estados`, `usos`, `saldo`, `config` e `usuario` saem idênticos, e o código publicado
+> que não conhece a coluna se comporta como antes (ninguém recusa nada). É a janela
+> banco-antes-código de sempre.
+>
+> ⚠️ **LOCAL ONLY até autorização**, como a 35 — e as duas viajam juntas: `db push --linked` aplica
+> a fila inteira, então autorizar a 36 é autorizar a 35 antes dela.

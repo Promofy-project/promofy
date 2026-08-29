@@ -86,6 +86,14 @@ type ConsultarResult =
 type NpsResult =
   | { ok: true; ja_respondido: boolean; saldo: number; pontos: number }
   | { ok: false; motivo: string };
+/**
+ * Adendo 05/08 — "Não responder" é encerramento definitivo, e por isso NÃO
+ * devolve `saldo` nem `pontos`: não há crédito nenhum por trás desta ação, e
+ * um campo `pontos` aqui convidaria a UI a animar "+0".
+ */
+type RecusaNpsResult =
+  | { ok: true; ja_respondido: boolean; ja_recusado: boolean }
+  | { ok: false; motivo: string };
 export interface ValidarDadosDTO {
   codigo: string;
   titulo: string;
@@ -165,6 +173,24 @@ export async function responderNpsAction(rowId: number, nota: number): Promise<N
     });
     if (error) return { ok: false, motivo: "erro" };
     return data as unknown as NpsResult;
+  } catch {
+    return { ok: false, motivo: "erro" };
+  }
+}
+
+/**
+ * Adendo 05/08 — "Não responder": encerra a pesquisa DE VEZ, sem pontos.
+ *
+ * A diferença para `dispensarNpsPendente` (o "responder mais tarde") é o
+ * banco: aquele é estado de sessão no provider e volta na próxima abertura;
+ * este grava `nps_recusado_em` e a linha nunca mais é oferecida.
+ */
+export async function recusarNpsAction(rowId: number): Promise<RecusaNpsResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("recusar_nps", { p_row_id: rowId });
+    if (error) return { ok: false, motivo: "erro" };
+    return data as unknown as RecusaNpsResult;
   } catch {
     return { ok: false, motivo: "erro" };
   }
