@@ -33,7 +33,7 @@
     "vercel:env:rm": "tsx scripts/vercel-api.ts env:rm",
     "vercel:rollback": "tsx scripts/vercel-api.ts rollback",
     "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
-    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run test:fase9c && npm run test:fase9d1 && npm run test:fase9d2 && npm run test:qa && npm run test:tx-p1 && npm run test:tx-p2a && npm run build",
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run test:fase9c && npm run test:fase9d1 && npm run test:fase9d2 && npm run test:qa && npm run test:tx-p1 && npm run test:tx-p2a && npm run test:tx-p2b && npm run build",
     "test:fase7:storage": "tsx scripts/test-fase7-storage.ts --qa",
     "test:fase8": "tsx scripts/test-fase8.ts",
     "test:fase8:hosted": "tsx scripts/test-fase8.ts --hosted",
@@ -48,7 +48,8 @@
     "test:fase9d2:hosted": "tsx scripts/test-fase9d2.ts --hosted",
     "test:db-types": "tsx scripts/test-db-types-safe.ts",
     "test:tx-p1": "tsx scripts/test-tx-p1.ts",
-    "test:tx-p2a": "tsx scripts/test-tx-p2a.ts"
+    "test:tx-p2a": "tsx scripts/test-tx-p2a.ts",
+    "test:tx-p2b": "tsx scripts/test-tx-p2b.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",

@@ -246,6 +246,53 @@ export type Database = {
         }
         Relationships: []
       }
+      categorias_novas: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          icon_override: string | null
+          id: string
+          nome: string
+          ordem: number
+          segmento_id: string
+          slug: string
+          tema_override: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          icon_override?: string | null
+          id?: string
+          nome: string
+          ordem: number
+          segmento_id: string
+          slug: string
+          tema_override?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          icon_override?: string | null
+          id?: string
+          nome?: string
+          ordem?: number
+          segmento_id?: string
+          slug?: string
+          tema_override?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorias_novas_segmento_id_fkey"
+            columns: ["segmento_id"]
+            isOneToOne: false
+            referencedRelation: "segmentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       config_pontos: {
         Row: {
           acao: Database["public"]["Enums"]["acao_pontos"]
@@ -823,6 +870,42 @@ export type Database = {
           nome?: string
           role?: Database["public"]["Enums"]["papel_usuario"]
           telefone?: string | null
+        }
+        Relationships: []
+      }
+      segmentos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          icon: string
+          id: string
+          nome: string
+          ordem: number
+          slug: string
+          tema: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          icon: string
+          id?: string
+          nome: string
+          ordem: number
+          slug: string
+          tema: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          icon?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          slug?: string
+          tema?: string
         }
         Relationships: []
       }
