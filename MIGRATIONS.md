@@ -768,5 +768,73 @@ escrever regra sobre um contrato que ainda não existe.
 **`atualizado_em` reusa `public.set_atualizado_em()`** (migration 3) — não se duplica função global
 por estética.
 
-⏳ **Local apenas.** Não aplicada no hospedado. Enquanto não chegar lá, esta migration ainda pode ser
-ajustada — ao contrário da `20260829120000`, que já é imutável.
+✅ **Aplicada no hospedado (TX-P2CD, banco-antes-código) e IMUTÁVEL.** `20260830120000` está no
+Supabase de produção desde então — não editar este arquivo nunca mais, pelo mesmo motivo da
+`20260829120000`. `public.segmentos` e `public.categorias_novas` existem no hospedado, mas
+continuam **staging**: nenhuma tela lê essas tabelas lá, e o runtime publicado segue 100% em
+`public.categorias` legado através das três views da TX-P2A. A janela banco-antes-código foi
+possível pela mesma razão da TX-P2A — nenhum código publicado lê staging, então aplicar antes do
+deploy não teve efeito nenhum no ar. Qualquer mudança de estrutura a partir daqui é migration NOVA.
+
+## TX-P2C — catálogo canônico 14×75 em staging
+
+`20260830130000_tx_p2c_taxonomia_catalogo.sql`
+
+**Dado, não estrutura.** A TX-P2B criou o schema staging vazio; esta migration só faz dois `insert`
+— 14 linhas em `public.segmentos`, 75 em `public.categorias_novas`. Nenhum `alter table`, nenhuma
+mudança nas três views (`catalogo_filtros` / `catalogo_categorias` / `categoria_para_filtro`,
+hospedadas e imutáveis), nenhum toque no legado. Continua staging: nenhuma tela lê estas tabelas.
+
+**Fonte:** `docs/taxonomia/Promofy_Anotacoes_Devs.pdf` §5.1 ("Segmento e Categoria"), a lista de
+referência que o cliente entregou. TX-P2C0 confirmou 14 segmentos / 75 categorias folha contra essa
+fonte — a estimativa antiga de planejamento ("~15 × ~85") não foi usada. **"Outros" não existe na
+lista do cliente** e não foi inventado aqui; `test:tx-p2c` prova isso (item 21).
+
+**Fonte da verdade é `docs/taxonomia/catalogo-v1.json`, não esta migration.** O arquivo carrega os
+89 UUIDs (14 segmentos + 75 categorias), nome/slug/ordem/tema exatamente como saem do PDF, e é ele
+que `scripts/test-tx-p2c.ts` lê para comparar com o banco — a migration é gerada a partir do JSON,
+nunca o contrário. Divergir os dois é o que os testes 24-32 pegam.
+
+**UUIDs explícitos, gerados uma única vez — nunca `gen_random_uuid()`.** Local, QA e produção
+carregando o mesmo slug com IDs diferentes quebraria silenciosamente o de-para do cutover (TX-P2D):
+o vínculo `estabelecimento → categoria folha` é por UUID, não por slug. Reproduzir localmente é
+rodar esta migration de novo (mesmo `db:reset` de sempre), nunca regenerar os IDs.
+
+**Sem `ON CONFLICT`.** Um catálogo parcialmente aplicado tem de derrubar a migration, não seguir
+como se nada tivesse acontecido — silêncio aqui seria pior que a falha aparecer no `db:reset`.
+
+**Todas as 75 folhas herdam do segmento** (`icon_override` / `tema_override` NULL): a fonte não
+define overrides, e o contrato de herança já é da TX-P2B.
+
+**`esportes` existe em dois segmentos** (Fitness e Saúde, Educação) — não é bug nem duplicata
+acidental, é o próprio caso que `unique (segmento_id, slug)` da TX-P2B foi desenhado para permitir.
+`test:tx-p2c` prova que aparece exatamente duas vezes, nos dois segmentos certos (item 17).
+
+**De-para do cutover, versionado e ainda não aplicado a nada.** `docs/taxonomia/depara-v1.json`
+registra três mapeamentos que o TX-P2D vai precisar — nenhum deles foi escrito em
+`public.categorias`, `public.estabelecimentos`, `public.estabelecimento_categorias` ou
+`public.cupons` nesta migration:
+
+| de-para | conteúdo |
+|---|---|
+| `legado_para_segmento` | as 6 categorias legadas (`alimentacao`, `fitness`, `beleza`, `eletronicos`, `educacao`, `pet`) → **segmento**, nunca categoria folha — o legado só tinha um nível, e esse nível corresponde ao segmento do modelo novo |
+| `estabelecimentos` | os 6 estabelecimentos demo do seed → categoria principal + folhas, incluindo a remoção do vínculo decorativo `e1 → fitness` (seed.sql:38) — não há evidência de negócio para um restaurante em Fitness e Saúde |
+| `cupons` | os 14 cupons demo do seed (`c01`–`c12`, `p-campanha-esgotada`, `p-campanha-expirada`) → categoria folha |
+
+`test:tx-p2c` valida a consistência interna do de-para (itens 38-51): toda referência resolve dentro
+do catálogo, e os invariantes cupom↔estabelecimento e principal↔categorias fecham 14/14 e 6/6.
+
+**`test:tx-p2c` é somente leitura sobre o catálogo real** — os únicos INSERTs tentados (RLS negativa)
+são recusados por ausência de grant antes de qualquer validação de conteúdo, então nunca criam
+linha. Não há fixture para limpar.
+
+✅ **Aplicada no hospedado (TX-P2CD, banco-antes-código) e IMUTÁVEL.** `20260830130000` está no
+Supabase de produção desde então — não editar este arquivo nunca mais. Os 14 segmentos e as 75
+categorias folha estão presentes lá, com paridade EXATA contra `docs/taxonomia/catalogo-v1.json`
+(89 UUIDs, todo campo) — provado por leitura direta antes do PR, sem `test:tx-p2c --hosted` (essa
+suíte tenta DML negativo, incompatível com produção). O runtime publicado continua **legado**: as
+três views da TX-P2A seguem lendo `public.categorias` de sempre, e `catalogo_filtros` /
+`catalogo_categorias` continuam com as mesmas 6 linhas de antes desta migration. O de-para
+(`docs/taxonomia/depara-v1.json`) segue apenas registrado — nenhuma linha de
+`estabelecimentos`/`estabelecimento_categorias`/`cupons` foi tocada. **O cutover é migration NOVA**,
+não uma edição deste arquivo.
