@@ -251,37 +251,37 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           criado_em: string
-          icon_override: string | null
+          icone: string | null
           id: string
           nome: string
           ordem: number
           segmento_id: string
           slug: string
-          tema_override: string | null
+          tema: string | null
         }
         Insert: {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon_override?: string | null
+          icone?: string | null
           id?: string
           nome: string
           ordem: number
           segmento_id: string
           slug: string
-          tema_override?: string | null
+          tema?: string | null
         }
         Update: {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon_override?: string | null
+          icone?: string | null
           id?: string
           nome?: string
           ordem?: number
           segmento_id?: string
           slug?: string
-          tema_override?: string | null
+          tema?: string | null
         }
         Relationships: [
           {
@@ -878,7 +878,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           criado_em: string
-          icon: string
+          icone: string
           id: string
           nome: string
           ordem: number
@@ -889,7 +889,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon: string
+          icone: string
           id?: string
           nome: string
           ordem: number
@@ -900,7 +900,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon?: string
+          icone?: string
           id?: string
           nome?: string
           ordem?: number

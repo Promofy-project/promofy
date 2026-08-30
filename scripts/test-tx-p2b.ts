@@ -11,6 +11,18 @@
  * negada por grant e inserção negada por CHECK são coisas diferentes, e
  * o teste distingue as duas.
  *
+ * TX-P2D1E canonicalizou o staging: `icon`/`icon_override`/`tema_override`
+ * viraram `icone`/`icone`/`tema` (NULL continua significando "herdar do
+ * segmento"), e `public.tema_visual` deixou de ser whitelist fechada nos
+ * 14 tokens do seed — agora valida FORMATO (slug minúsculo, sem CSS).
+ * Os testes que antes provavam "fora do vocabulário é NEGADO" com um
+ * token sintaticamente válido (`turquesa`, `alimentacao`, `neon`) foram
+ * INVERTIDOS para "é ACEITO" — não são mais casos negativos, são a prova
+ * de que o domain não é mais uma lista fechada de produto. Isto não é
+ * enfraquecer o teste: é seguir o contrato novo, que só rejeita FORMATO
+ * inválido (vazio, CSS, maiúscula, espaço, hífen malformado, underscore),
+ * nunca um token desconhecido mas bem formado.
+ *
  * Fixtures usam prefixo `p2b-` e são removidos no `finally`. `encerrar()`
  * devolve o código e quem chama decide — `process.exit()` no meio pularia
  * o cleanup (armadilha já paga neste repo).
@@ -36,10 +48,12 @@ function negado(r: { error: unknown }): boolean {
 const PREFIXO = "p2b-";
 
 /**
- * Vocabulário FECHADO de public.tema_visual — um token por segmento do
- * catálogo definitivo (§5.1, 14 segmentos / 75 folhas). Esta lista é a
- * contraprova do domain: se a migration e este array divergirem, o loop
- * 20c/21c fica vermelho. São DESIGN TOKENS, nunca CSS.
+ * Vocabulário INICIAL de public.tema_visual — um token por segmento do
+ * catálogo definitivo (§5.1, 14 segmentos / 75 folhas). NÃO é whitelist
+ * do domain desde a TX-P2D1E — o domain valida FORMATO, não uma lista
+ * fechada. Esta lista prova que os 14 tokens que o catálogo usa
+ * continuam válidos pelo novo formato (contraprova de regressão), não
+ * que o domain aceita SÓ estes 14.
  */
 const TEMAS = [
   "laranja",   // Alimentação
@@ -81,7 +95,7 @@ async function main(): Promise<number> {
 
     const segA = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}alfa`, nome: "Alfa", icon: "Star", tema: "azul", ordem: 1 })
+      .insert({ slug: `${PREFIXO}alfa`, nome: "Alfa", icone: "Star", tema: "azul", ordem: 1 })
       .select("id, slug, ativo, criado_em, atualizado_em")
       .single();
     check("1. insere segmento válido", !segA.error, segA.error?.message);
@@ -92,7 +106,7 @@ async function main(): Promise<number> {
 
     const dupSlug = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}alfa`, nome: "Alfa 2", icon: "Star", tema: "azul", ordem: 2 });
+      .insert({ slug: `${PREFIXO}alfa`, nome: "Alfa 2", icone: "Star", tema: "azul", ordem: 2 });
     check("3. slug de segmento duplicado é NEGADO (unique global)", negado(dupSlug));
 
     for (const [rotulo, slug] of [
@@ -107,7 +121,7 @@ async function main(): Promise<number> {
     ] as const) {
       const r = await svc
         .from("segmentos")
-        .insert({ slug, nome: "X", icon: "Star", tema: "azul", ordem: 1 });
+        .insert({ slug, nome: "X", icone: "Star", tema: "azul", ordem: 1 });
       check(`4. slug inválido (${rotulo}) é NEGADO`, negado(r), `slug=${JSON.stringify(slug)}`);
     }
 
@@ -118,102 +132,148 @@ async function main(): Promise<number> {
     ] as const) {
       const r = await svc
         .from("segmentos")
-        .insert({ slug: valido, nome: "Válido", icon: "Star", tema: "verde", ordem: 3 });
+        .insert({ slug: valido, nome: "Válido", icone: "Star", tema: "verde", ordem: 3 });
       check(`4b. slug VÁLIDO (${rotulo}) é aceito`, !r.error, r.error?.message);
     }
 
     const nomeVazio = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}nome-vazio`, nome: "   ", icon: "Star", tema: "azul", ordem: 1 });
+      .insert({ slug: `${PREFIXO}nome-vazio`, nome: "   ", icone: "Star", tema: "azul", ordem: 1 });
     check("5. nome vazio/só espaço é NEGADO", negado(nomeVazio));
 
     const iconVazio = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}icon-vazio`, nome: "X", icon: "  ", tema: "azul", ordem: 1 });
-    check("5b. icon vazio é NEGADO", negado(iconVazio));
+      .insert({ slug: `${PREFIXO}icone-vazio`, nome: "X", icone: "  ", tema: "azul", ordem: 1 });
+    check("5b. icone vazio é NEGADO", negado(iconVazio));
 
     const ordemNeg = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}ordem-neg`, nome: "X", icon: "Star", tema: "azul", ordem: -1 });
+      .insert({ slug: `${PREFIXO}ordem-neg`, nome: "X", icone: "Star", tema: "azul", ordem: -1 });
     check("6. ordem negativa é NEGADA", negado(ordemNeg));
 
-    console.log("\n=== TX-P2B/B — VISUAL: token de tema, nunca CSS ===\n");
+    console.log("\n=== TX-P2B/B — VISUAL: token de tema, formato validado, NUNCA CSS (TX-P2D1E) ===\n");
 
     const temaCss = await svc.from("segmentos").insert({
       slug: `${PREFIXO}tema-css`,
       nome: "X",
-      icon: "Star",
+      icone: "Star",
       tema: "linear-gradient(135deg, #FF8A3D 0%, #FF5A5F 100%)",
       ordem: 1,
     });
     check("20. tema com CSS cru é NEGADO (é token, não gradiente)", negado(temaCss));
 
+    // ANTES (TX-P2B): "fora do vocabulário fechado" era negado. DEPOIS (TX-P2D1E): o domain só
+    // valida FORMATO — um slug bem formado mas fora do seed inicial é ACEITO. Isto é a prova de
+    // que o domain não é mais uma whitelist de produto, e não uma regressão de rigor: CSS, hex,
+    // rgb, maiúscula, espaço e hífen malformado continuam negados nos testes abaixo.
     const temaLivre = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}tema-livre`, nome: "X", icon: "Star", tema: "turquesa", ordem: 1 });
-    check("20b. tema fora do vocabulário é NEGADO", negado(temaLivre));
+      .insert({ slug: `${PREFIXO}tema-livre`, nome: "X", icone: "Star", tema: "turquesa", ordem: 1 });
+    check(
+      "20b. tema sintaticamente válido fora do vocabulário inicial ('turquesa') é ACEITO — domain não é whitelist fechada",
+      !temaLivre.error,
+      temaLivre.error?.message,
+    );
 
-    // O vocabulário é fechado: TODOS os 14 têm de entrar. Um token que o
-    // catálogo 14x75 precisa e o domain recusa só apareceria no TX-P2C,
-    // com o seed já escrito — aqui aparece agora.
+    // O vocabulário inicial dos 14 continua válido pelo novo formato — contraprova de regressão,
+    // não prova de que o domain aceita SÓ estes 14 (ver comentário do array TEMAS).
     for (let i = 0; i < TEMAS.length; i++) {
       const tema = TEMAS[i];
       const r = await svc.from("segmentos").insert({
         slug: `${PREFIXO}tema-${tema}`,
         nome: `Tema ${tema}`,
-        icon: "Star",
+        icone: "Star",
         tema,
         ordem: 100 + i,
       });
-      check(`20c. token válido '${tema}' é ACEITO`, !r.error, r.error?.message);
+      check(`20c. token do vocabulário inicial '${tema}' é ACEITO`, !r.error, r.error?.message);
     }
+
+    const temaFuturo = await svc.from("segmentos").insert({
+      slug: `${PREFIXO}tema-futuro`,
+      nome: "X",
+      icone: "Star",
+      tema: "tema-futuro",
+      ordem: 1,
+    });
+    check(
+      "20c2. token NOVO fora do seed inicial ('tema-futuro') é ACEITO — domain extensível sem migration de DDL",
+      !temaFuturo.error,
+      temaFuturo.error?.message,
+    );
 
     const temaVazio = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}tema-vazio`, nome: "X", icon: "Star", tema: "", ordem: 1 });
+      .insert({ slug: `${PREFIXO}tema-vazio`, nome: "X", icone: "Star", tema: "", ordem: 1 });
     check("20d. tema string vazia é NEGADO", negado(temaVazio));
 
     const temaHex = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}tema-hex`, nome: "X", icon: "Star", tema: "#FF8A3D", ordem: 1 });
+      .insert({ slug: `${PREFIXO}tema-hex`, nome: "X", icone: "Star", tema: "#FF8A3D", ordem: 1 });
     check("20e. tema com hex cru é NEGADO", negado(temaHex));
 
     const temaRgb = await svc.from("segmentos").insert({
       slug: `${PREFIXO}tema-rgb`,
       nome: "X",
-      icon: "Star",
+      icone: "Star",
       tema: "rgb(255, 138, 61)",
       ordem: 1,
     });
     check("20f. tema com rgb() cru é NEGADO", negado(temaRgb));
 
-    // Tema é token de APRESENTAÇÃO, não identidade do segmento: o slug do
-    // segmento não é tema, senão o vocabulário viraria a taxonomia.
+    // ANTES: "nome de segmento como tema" era negado por não estar no vocabulário fechado. O
+    // domain de formato não distingue significado — 'alimentacao' é um slug válido como qualquer
+    // outro. A distinção tema≠identidade-do-segmento agora é convenção de produto/documentação,
+    // não mais uma regra que o schema force.
     const temaNomeSegmento = await svc.from("segmentos").insert({
       slug: `${PREFIXO}tema-segmento`,
       nome: "X",
-      icon: "Star",
+      icone: "Star",
       tema: "alimentacao",
       ordem: 1,
     });
-    check("20g. nome de segmento como tema é NEGADO ('alimentacao' não é token)", negado(temaNomeSegmento));
+    check(
+      "20g. nome de segmento como tema ('alimentacao') é ACEITO — domain valida formato, não significado (TX-P2D1E)",
+      !temaNomeSegmento.error,
+      temaNomeSegmento.error?.message,
+    );
 
     const temaCaixa = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}tema-caixa`, nome: "X", icon: "Star", tema: "Azul", ordem: 1 });
+      .insert({ slug: `${PREFIXO}tema-caixa`, nome: "X", icone: "Star", tema: "Azul", ordem: 1 });
     check("20h. token com caixa errada é NEGADO ('Azul')", negado(temaCaixa));
 
-    const temaEspaco = await svc
+    const temaEspacoFim = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}tema-espaco`, nome: "X", icon: "Star", tema: "azul ", ordem: 1 });
-    check("20i. token com espaço sobrando é NEGADO ('azul ')", negado(temaEspaco));
+      .insert({ slug: `${PREFIXO}tema-espaco-fim`, nome: "X", icone: "Star", tema: "azul ", ordem: 1 });
+    check("20i. token com espaço no FIM é NEGADO ('azul ')", negado(temaEspacoFim));
+
+    const temaEspacoInicio = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}tema-espaco-inicio`, nome: "X", icone: "Star", tema: " azul", ordem: 1 });
+    check("20j. token com espaço no INÍCIO é NEGADO (' azul')", negado(temaEspacoInicio));
+
+    const temaUnderscore = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}tema-underscore`, nome: "X", icone: "Star", tema: "tema_foo", ordem: 1 });
+    check("20k. token com underscore é NEGADO ('tema_foo')", negado(temaUnderscore));
+
+    const temaHifenInicio = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}tema-hifen-inicio`, nome: "X", icone: "Star", tema: "-tema", ordem: 1 });
+    check("20l. token começando com hífen é NEGADO ('-tema')", negado(temaHifenInicio));
+
+    const temaHifenFim = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}tema-hifen-fim`, nome: "X", icone: "Star", tema: "tema-", ordem: 1 });
+    check("20m. token terminando em hífen é NEGADO ('tema-')", negado(temaHifenFim));
 
     console.log("\n=== TX-P2B/C — CATEGORIAS FOLHA ===\n");
 
     const segAId = segA.data?.id as string;
     const segB = await svc
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}beta`, nome: "Beta", icon: "Heart", tema: "rosa", ordem: 2 })
+      .insert({ slug: `${PREFIXO}beta`, nome: "Beta", icone: "Heart", tema: "rosa", ordem: 2 })
       .select("id")
       .single();
     const segBId = segB.data?.id as string;
@@ -221,11 +281,11 @@ async function main(): Promise<number> {
     const catA = await svc
       .from("categorias_novas")
       .insert({ segmento_id: segAId, slug: "pizzarias", nome: "Pizzarias", ordem: 1 })
-      .select("id, ativo, icon_override, tema_override")
+      .select("id, ativo, icone, tema")
       .single();
     check("8. insere categoria folha válida", !catA.error, catA.error?.message);
     check("9. id UUID gerado pelo banco", UUID_RE.test(catA.data?.id ?? ""), catA.data?.id);
-    check("19. override null é permitido (herda do segmento)", catA.data?.icon_override === null && catA.data?.tema_override === null);
+    check("19. icone/tema null é permitido (herda do segmento)", catA.data?.icone === null && catA.data?.tema === null);
 
     const fkFantasma = await svc.from("categorias_novas").insert({
       segmento_id: "00000000-0000-0000-0000-000000000000",
@@ -277,36 +337,42 @@ async function main(): Promise<number> {
       .insert({ segmento_id: segAId, slug: "ordem-neg", nome: "X", ordem: -5 });
     check("15. ordem negativa em categoria é NEGADA", negado(catOrdemNeg));
 
+    // ANTES: "fora do vocabulário" era negado. DEPOIS (TX-P2D1E): 'neon' é um slug bem formado,
+    // então é ACEITO — mesma lógica de 20b/20g, agora para o campo `tema` de categorias_novas.
     const overrideInvalido = await svc.from("categorias_novas").insert({
       segmento_id: segAId,
-      slug: "tema-ruim",
+      slug: "tema-neon",
       nome: "X",
       ordem: 1,
-      tema_override: "neon",
+      tema: "neon",
     });
-    check("21. tema_override fora do vocabulário é NEGADO", negado(overrideInvalido));
+    check(
+      "21. tema de categoria fora do vocabulário inicial ('neon') é ACEITO — mesmo domain extensível herdado do segmento",
+      !overrideInvalido.error,
+      overrideInvalido.error?.message,
+    );
 
     const overrideVazio = await svc.from("categorias_novas").insert({
       segmento_id: segAId,
-      slug: "icon-vazio",
+      slug: "icone-vazio",
       nome: "X",
       ordem: 1,
-      icon_override: "   ",
+      icone: "   ",
     });
-    check("21b. icon_override vazio é NEGADO (string vazia não é override)", negado(overrideVazio));
+    check("21b. icone vazio é NEGADO (string vazia não é override)", negado(overrideVazio));
 
     const overrideValido = await svc.from("categorias_novas").insert({
       segmento_id: segAId,
       slug: "com-override",
       nome: "Com override",
       ordem: 5,
-      icon_override: "Pizza",
-      tema_override: "ambar",
+      icone: "Pizza",
+      tema: "ambar",
     });
-    check("19b. override VÁLIDO é aceito", !overrideValido.error, overrideValido.error?.message);
+    check("19b. override VÁLIDO (icone/tema) é aceito", !overrideValido.error, overrideValido.error?.message);
 
-    // tema_override usa o MESMO domain — a folha tem de poder assumir
-    // qualquer um dos 14, não só o do próprio segmento.
+    // tema em categoria usa o MESMO domain — a folha tem de poder assumir qualquer um dos 14 do
+    // vocabulário inicial, não só o do próprio segmento (contraprova de regressão).
     for (let i = 0; i < TEMAS.length; i++) {
       const tema = TEMAS[i];
       const r = await svc.from("categorias_novas").insert({
@@ -314,9 +380,9 @@ async function main(): Promise<number> {
         slug: `ov-${tema}`,
         nome: `Override ${tema}`,
         ordem: 200 + i,
-        tema_override: tema,
+        tema,
       });
-      check(`21c. tema_override '${tema}' é ACEITO`, !r.error, r.error?.message);
+      check(`21c. tema '${tema}' em categoria é ACEITO`, !r.error, r.error?.message);
     }
 
     const overrideStringVazia = await svc.from("categorias_novas").insert({
@@ -324,18 +390,27 @@ async function main(): Promise<number> {
       slug: "ov-vazio",
       nome: "X",
       ordem: 1,
-      tema_override: "",
+      tema: "",
     });
-    check("21d. tema_override string vazia é NEGADO ('' não é herdar — herdar é NULL)", negado(overrideStringVazia));
+    check("21d. tema string vazia em categoria é NEGADO ('' não é herdar — herdar é NULL)", negado(overrideStringVazia));
 
     const overrideCss = await svc.from("categorias_novas").insert({
       segmento_id: segAId,
       slug: "ov-css",
       nome: "X",
       ordem: 1,
-      tema_override: "linear-gradient(135deg, #FF8A3D 0%, #FF5A5F 100%)",
+      tema: "linear-gradient(135deg, #FF8A3D 0%, #FF5A5F 100%)",
     });
-    check("21e. tema_override com CSS cru é NEGADO", negado(overrideCss));
+    check("21e. tema com CSS cru em categoria é NEGADO", negado(overrideCss));
+
+    const overrideMalformado = await svc.from("categorias_novas").insert({
+      segmento_id: segAId,
+      slug: "ov-malformado",
+      nome: "X",
+      ordem: 1,
+      tema: "TEMA_RUIM",
+    });
+    check("21f. tema malformado em categoria é NEGADO ('TEMA_RUIM' — maiúscula + underscore)", negado(overrideMalformado));
 
     console.log("\n=== TX-P2B/D — DELETE e desativação ===\n");
 
@@ -412,7 +487,7 @@ async function main(): Promise<number> {
 
     const anonInsSeg = await anon
       .from("segmentos")
-      .insert({ slug: `${PREFIXO}hack`, nome: "H", icon: "Star", tema: "azul", ordem: 1 });
+      .insert({ slug: `${PREFIXO}hack`, nome: "H", icone: "Star", tema: "azul", ordem: 1 });
     check("24. anon INSERT segmentos é NEGADO", negado(anonInsSeg), "insert passou!");
 
     const anonInsCat = await anon
@@ -436,7 +511,7 @@ async function main(): Promise<number> {
     if (temSessao) {
       const authIns = await usuario
         .from("segmentos")
-        .insert({ slug: `${PREFIXO}hack2`, nome: "H", icon: "Star", tema: "azul", ordem: 1 });
+        .insert({ slug: `${PREFIXO}hack2`, nome: "H", icone: "Star", tema: "azul", ordem: 1 });
       check("27. authenticated comum INSERT é NEGADO", negado(authIns), "insert passou!");
       const authInsCat = await usuario
         .from("categorias_novas")
@@ -478,6 +553,90 @@ async function main(): Promise<number> {
       "32. cupons.categoria_id continua sendo o slug legado (text), não UUID",
       typeof cupomLegado.data?.categoria_id === "string" && !UUID_RE.test(cupomLegado.data.categoria_id),
       String(cupomLegado.data?.categoria_id),
+    );
+
+    console.log("\n=== TX-P2B/G — REPARENTING: segmento_id incondicionalmente imutável (TX-P2D1E) ===\n");
+
+    const segC = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}reparent-c`, nome: "Reparent C", icone: "Star", tema: "azul", ordem: 300 })
+      .select("id")
+      .single();
+    const segD = await svc
+      .from("segmentos")
+      .insert({ slug: `${PREFIXO}reparent-d`, nome: "Reparent D", icone: "Star", tema: "verde", ordem: 301 })
+      .select("id")
+      .single();
+    check("35. cria segmentos C e D para o teste de reparenting", !segC.error && !segD.error, segC.error?.message ?? segD.error?.message);
+    const segCId = segC.data?.id as string;
+    const segDId = segD.data?.id as string;
+
+    const folhaReparent = await svc
+      .from("categorias_novas")
+      .insert({ segmento_id: segCId, slug: "folha-reparent", nome: "Folha Reparent", ordem: 1 })
+      .select("id, segmento_id")
+      .single();
+    check("36. cria folha em C", !folhaReparent.error, folhaReparent.error?.message);
+    const folhaReparentId = folhaReparent.data?.id as string;
+
+    // service_role — não é anon, não é authenticated comum, é o papel mais privilegiado que o
+    // PostgREST expõe. Se o trigger bloqueia até para ele, bloqueia para qualquer um.
+    const tentativaReparent = await svc
+      .from("categorias_novas")
+      .update({ segmento_id: segDId })
+      .eq("id", folhaReparentId);
+    check(
+      "37. service_role tenta trocar segmento_id C→D — UPDATE FALHA incondicionalmente",
+      negado(tentativaReparent),
+      "update passou! reparenting não deveria ser possível para NINGUÉM",
+    );
+
+    const posReparent = await svc
+      .from("categorias_novas")
+      .select("segmento_id")
+      .eq("id", folhaReparentId)
+      .single();
+    check(
+      "38. segmento_id permanece C após a tentativa negada (nenhuma mutação vazou)",
+      posReparent.data?.segmento_id === segCId,
+      posReparent.data?.segmento_id,
+    );
+
+    const updateNormal = await svc
+      .from("categorias_novas")
+      .update({ nome: "Folha Reparent Renomeada", ativo: false })
+      .eq("id", folhaReparentId)
+      .select("id, nome, ativo, segmento_id, criado_em, atualizado_em")
+      .single();
+    check(
+      "39. UPDATE de nome/ativo SEM tocar segmento_id FUNCIONA normalmente",
+      !updateNormal.error &&
+        updateNormal.data?.nome === "Folha Reparent Renomeada" &&
+        updateNormal.data?.ativo === false &&
+        updateNormal.data?.segmento_id === segCId,
+      updateNormal.error?.message,
+    );
+    check(
+      "40. atualizado_em avança no update normal (trigger de auditoria não foi afetado pelo novo trigger)",
+      !!updateNormal.data &&
+        new Date(updateNormal.data.atualizado_em as string) > new Date(updateNormal.data.criado_em as string),
+      JSON.stringify(updateNormal.data),
+    );
+
+    // Contraprova fina: um UPDATE que INCLUI segmento_id no SET mas com o MESMO valor não deve
+    // disparar a exceção — a trigger function usa `is distinct from`, reage a MUDANÇA de valor,
+    // não à mera presença da coluna na cláusula SET (`before update of segmento_id` dispara nos
+    // dois casos; quem decide bloquear ou não é o corpo da função).
+    const updateSegmentoIgualNaoMuda = await svc
+      .from("categorias_novas")
+      .update({ segmento_id: segCId, nome: "Folha Reparent Reafirmada" })
+      .eq("id", folhaReparentId)
+      .select("id, segmento_id, nome")
+      .single();
+    check(
+      "41. UPDATE que reafirma o MESMO segmento_id (sem mudar o valor) NÃO é bloqueado",
+      !updateSegmentoIgualNaoMuda.error && updateSegmentoIgualNaoMuda.data?.segmento_id === segCId,
+      updateSegmentoIgualNaoMuda.error?.message,
     );
   } finally {
     // Cleanup: categorias antes de segmentos (o RESTRICT é justamente

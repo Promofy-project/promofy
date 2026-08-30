@@ -708,9 +708,16 @@ migrations 5 e 8); estender um domain é `alter domain` numa migration comum. **
 CHECKs iguais:** a mesma verdade em dois lugares vira duas verdades no primeiro dia em que alguém
 edita uma só.
 
-**O vocabulário está FECHADO no catálogo definitivo (§5.1 — 14 segmentos / 75 categorias folhas):**
-um token por segmento, nomeado pelo matiz. TX-P2C carrega o catálogo **dentro** deste vocabulário e
-não precisa estendê-lo.
+**O vocabulário inicial é o catálogo definitivo (§5.1 — 14 segmentos / 75 categorias folhas):** um
+token por segmento, nomeado pelo matiz. TX-P2C carrega o catálogo **dentro** deste vocabulário.
+
+> ⚠️ **Nota (TX-P2D1E): o domain deixou de ser whitelist fechada.** Este parágrafo, como escrito
+> originalmente, dizia que o vocabulário era fechado nestes 14 valores — **isso mudou**. A migration
+> `20260830150000` trocou a constraint do domain de uma lista fixa (`value = any (array[...])`) para
+> validação de FORMATO (`value ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and length(value) <= 50`). Os 14
+> valores abaixo continuam sendo o que o catálogo usa — são o **vocabulário inicial do seed**, não
+> mais o teto do que o schema aceita. Produto pode introduzir um token novo por dado, sem migration
+> de DDL. Ver a seção TX-P2D1E, mais abaixo, para o porquê.
 
 | segmento | tema | segmento | tema |
 |---|---|---|---|
@@ -727,9 +734,10 @@ São **design tokens**, não CSS: nada de hex, `rgb` ou `gradient` no domain, e 
 também não é tema (`alimentacao` não é um token válido). Se um dia o vocabulário precisar mudar,
 isso é migration nova com `alter domain` — nunca texto livre.
 
-**Visual das folhas é herdado.** `icon_override`/`tema_override` `NULL` = "use o do segmento".
-Copiar ícone/tema para ~75 linhas criaria 75 cópias para manter sincronizadas, e a primeira que
-divergisse seria um bug de UI sem causa aparente.
+**Visual das folhas é herdado.** `NULL` em `icone`/`tema` (colunas renomeadas na TX-P2D1E — nasceram
+como `icon_override`/`tema_override`) = "use o do segmento". Copiar ícone/tema para ~75 linhas
+criaria 75 cópias para manter sincronizadas, e a primeira que divergisse seria um bug de UI sem
+causa aparente.
 
 **Slug de segmento é único global; slug de folha é único DENTRO do segmento** (`unique (segmento_id,
 slug)`). O modelo precisa suportar `outros` em mais de um segmento — a decisão de produto sobre
@@ -760,10 +768,16 @@ desativação. CASCADE apagaria silenciosamente as folhas e, no futuro, órfãos
 
 **Catálogo é somente leitura para todo mundo**, inclusive admin: neste estágio o catálogo muda por
 migration, não por DML de aplicação. Não há CRUD de taxonomia neste WP, então não há grant de
-escrita para sustentar — e é justamente isso que hoje torna o **reparenting** de `segmento_id`
-impossível na prática. No cutover, quando `cupons.categoria_id` passar a apontar para cá, entra o
-trigger defensivo que recusa mudar `segmento_id` de categoria em uso; construí-lo agora seria
-escrever regra sobre um contrato que ainda não existe.
+escrita para sustentar.
+
+> ⚠️ **Nota (TX-P2D1E): reparenting não depende mais de ausência de grant.** Este parágrafo dizia
+> originalmente que a ausência de grant de escrita era o que tornava o reparenting de `segmento_id`
+> "impossível na prática", e que um trigger defensivo entraria só no cutover. A migration
+> `20260830150000` adiantou esse trigger para antes dos shadows — `segmento_id` agora é
+> **incondicionalmente** imutável por `trg_categorias_novas_impedir_reparent`, independente de
+> grant, de a categoria já ter cupom, de estar ativa, ou de quem executa o UPDATE (inclusive
+> `service_role`). O motivo do adiantamento: os shadows do TX-P2D2+ vão começar a escrever nessa
+> tabela, e a garantia não podia continuar dependendo só de ninguém ter grant de UPDATE.
 
 **`atualizado_em` reusa `public.set_atualizado_em()`** (migration 3) — não se duplica função global
 por estética.
@@ -937,3 +951,69 @@ nem um a mais, nem um a menos. Nenhuma conta, nenhum estabelecimento e nenhuma l
 14×75 foi tocada; `segmentos`/`categorias_novas`/`categorias` legado/`estabelecimentos`/
 `estabelecimento_categorias` e as três views da TX-P2A saíram do apply com as mesmas contagens de
 sempre. O snapshot read-only pré-delete (fora do Git) foi preservado durante toda a validação.
+
+## TX-P2D1E — canonicaliza o staging antes dos shadows do cutover
+
+`20260830150000_tx_p2d1e_canonicaliza_staging_taxonomia.sql`
+
+**Corrige três dívidas do contrato de staging por forward migration, antes do TX-P2D2 (shadows)
+começar a escrever em `segmentos`/`categorias_novas`.** Não toca `20260829120000` / `20260830120000`
+/ `20260830130000` / `20260830140000` — todas continuam hospedadas, imutáveis, e seus arquivos
+`.sql` não foram editados. Onde o texto delas ficou desatualizado por essa migration (o vocabulário
+do domain, o mecanismo de reparenting), a correção está em notas ⚠️ nas seções acima — o `.sql`
+histórico permanece intocado, só a prosa deste arquivo (editável) foi atualizada.
+
+**1. Rename físico:** `segmentos.icon` → `icone`; `categorias_novas.icon_override` → `icone`;
+`categorias_novas.tema_override` → `tema`. `NULL` continua significando "herdar do segmento" — só o
+NOME mudou. `ALTER TABLE ... RENAME COLUMN` preserva dado, `NULL`s, UUIDs e as expressões das
+`CHECK` constraints automaticamente (Postgres rastreia por posição de coluna, não por texto); só os
+NOMES das constraints (`segmentos_icon_nao_vazio` → `segmentos_icone_nao_vazio`, etc.) precisaram de
+`RENAME CONSTRAINT` explícito, para não ficarem enganosos.
+
+**2. `public.tema_visual`: de whitelist fechada para validação de formato.** A constraint original
+(`tema_visual_check`, nome auto-gerado — confirmado no catálogo antes de escrever a migration, não
+hardcodado às cegas) comparava `value` contra um array fixo de 14 strings. A nova
+(`tema_visual_formato`) exige `value ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and length(value) <= 50` — slug
+minúsculo, sem CSS, até 50 caracteres. Os 14 valores do seed continuam válidos pelo novo formato, e o
+`drop constraint` + `add constraint` roda na mesma transação: o Postgres valida TODO uso atual do
+domain (as 14 linhas de `segmentos.tema` e as ~10 de `categorias_novas.tema` com override) antes de
+confirmar — se algum valor existente não batesse com o novo formato, a migration teria abortado
+sozinha. Sem `ALTER TYPE ... ADD VALUE` (armadilha das migrations 5/8: não dá para usar o valor novo
+na mesma transação em que nasce) — aqui nem se aplica, porque não é mais enum, é regra de formato.
+
+**3. `categorias_novas.segmento_id` ganha trigger de imutabilidade incondicional.**
+`trg_categorias_novas_impedir_reparent` (`BEFORE UPDATE OF segmento_id`) chama
+`impedir_reparent_categoria_nova()`, que recusa qualquer `UPDATE` onde `new.segmento_id is distinct
+from old.segmento_id` — **independente de grant, de a categoria já ter cupom, de estar ativa, ou de
+quem executa**. Provado localmente inclusive como `service_role` via PostgREST (o papel mais
+privilegiado que a API expõe) e como `postgres` superuser via `psql` direto (mais privilegiado que
+`service_role`): os dois têm o `UPDATE` negado do mesmo jeito. O `revoke execute ... from public,
+anon, authenticated` na função não é o que bloqueia o reparenting — triggers `BEFORE` disparam
+independente de grant de `EXECUTE` na função (isso só importaria para alguém chamar a função como
+RPC direta, o que não faz sentido fora de contexto de trigger). Um `UPDATE` que reafirma o *mesmo*
+`segmento_id` (sem mudar o valor) não é bloqueado — a função usa `is distinct from`, reage a mudança
+de valor, não à presença da coluna na cláusula `SET`. Mover uma folha de segmento continua sendo:
+desativar a categoria antiga + criar uma nova.
+
+**Testes atualizados, não enfraquecidos.** `scripts/test-tx-p2b.ts` tinha três casos que provavam
+"fora do vocabulário fechado é NEGADO" com um valor sintaticamente válido (`turquesa`,
+`alimentacao`, `neon`) — sob o novo domain de formato, esses valores **são aceitos**, e os testes
+foram invertidos para provar exatamente isso (a extensibilidade), não removidos. Os casos que
+continuam negados (vazio, CSS, hex, `rgb()`, maiúscula, espaço em qualquer ponta, underscore, hífen
+malformado em qualquer ponta) ganharam cobertura nova onde faltava (espaço no início, underscore,
+hífen no início) — o rigor sobre FORMATO aumentou; só o rigor sobre um vocabulário fechado de
+produto, que nunca deveria ter sido responsabilidade do schema, foi removido. `test:tx-p2b`: 96 → 109
+testes (13 novos: `20c2`, `20j`, `20k`, `20l`, `20m`, `21f`, e os 7 de reparenting `35`–`41`).
+`test:tx-p2c` permanece 71 (mesmos testes, campos renomeados para `icone`/`tema`).
+
+**`docs/taxonomia/catalogo-v1.json` também foi renomeado** (`icon`→`icone`,
+`icon_override`/`tema_override`→`icone`/`tema`, valores `null` preservados) — não é migration
+hospedada, pode ser editado livremente. A migration `20260830130000` (que gerou os dados a partir
+dele) permanece intocada e imutável; o JSON é a fonte versionada, não o `.sql` já aplicado.
+
+**Runtime segue incólume.** Nenhuma tela lê `segmentos`/`categorias_novas` hoje — confirmado antes e
+depois desta migration. As três views da TX-P2A continuam lendo `public.categorias` legado e
+devolvendo 6/6/6. `database.types.ts` regenerado (`icone` presente, `icon_override`/`tema_override`
+zerados).
+
+⏳ **Local apenas.** Não aplicada no hospedado ainda.
