@@ -1,6 +1,7 @@
 import { Store, MapPin, Tag } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
 import { BotaoSair } from "@/components/botao-sair";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +28,8 @@ export default async function PerfilPage() {
     if (data) {
       est = { nome: data.nome, cidade: data.cidade, status: data.status };
       if (data.categoria_id) {
-        const { data: cat } = await supabase
-          .from("categorias")
-          .select("label")
-          .eq("id", data.categoria_id)
-          .maybeSingle();
-        categoriaLabel = cat?.label ?? null;
+        const catalogo = await buscarCatalogoCategorias();
+        categoriaLabel = catalogo.find((c) => c.id === data.categoria_id)?.label ?? null;
       }
     }
   }

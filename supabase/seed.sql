@@ -188,3 +188,18 @@ cross join lateral generate_series(1, v.qtd);
 update public.cupons
    set publicado_em = criado_em
  where status not in ('pendente', 'rejeitado');
+
+-- MARCO 1 (migration 20260830160000/170000) — backfill dos shadows UUID
+-- e dos snapshots de taxonomia. As linhas que essas migrations
+-- referenciam (estabelecimentos e1-e6, cupons canônicos) só existem no
+-- HOSPEDADO no momento em que as migrations rodam; localmente elas só
+-- passam a existir agora, com este seed. As duas migrations fizeram o
+-- backfill NO-OP nesse momento (0 de 6 / 0 de 14) — chamar as mesmas
+-- funções aqui, depois que os dados existem, é o que aplica o backfill
+-- de verdade em ambiente local. Mesma fonte de verdade dos dois lados,
+-- nunca uma segunda cópia da lógica de mapeamento.
+--
+-- HARDENING FINAL: as duas funções vivem em `private` (não `public`) —
+-- não são API de produto, só ferramenta de migration/seed.
+select private.aplicar_backfill_m1_taxonomia();
+select private.aplicar_backfill_m1_snapshots();
