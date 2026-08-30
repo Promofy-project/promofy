@@ -1,4 +1,4 @@
-import { buscarCategorias, categoriaValida } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos, categoriaValida } from "@/lib/data/categorias";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
 import { FiltrosClient } from "./filtros-client";
 
@@ -28,7 +28,7 @@ export default async function FiltrosPage({
 }: {
   searchParams?: { cat?: string; dia?: string };
 }) {
-  const categorias = await buscarCategorias();
+  const categorias = await buscarFiltrosPublicos();
   const dias = DIAS_SEMANA as readonly string[];
   return (
     <FiltrosClient

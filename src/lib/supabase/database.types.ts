@@ -402,6 +402,41 @@ export type Database = {
             foreignKeyName: "cupons_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_filtros"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["filtro_slug"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
             referencedRelation: "categorias"
             referencedColumns: ["id"]
           },
@@ -486,6 +521,41 @@ export type Database = {
             foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_filtros"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["filtro_slug"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
             referencedRelation: "categorias"
             referencedColumns: ["id"]
           },
@@ -536,6 +606,41 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_estabelecimento"]
         }
         Relationships: [
+          {
+            foreignKeyName: "estabelecimentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_categorias"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "catalogo_filtros"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categoria_para_filtro"
+            referencedColumns: ["filtro_slug"]
+          },
           {
             foreignKeyName: "estabelecimentos_categoria_id_fkey"
             columns: ["categoria_id"]
@@ -723,6 +828,72 @@ export type Database = {
       }
     }
     Views: {
+      catalogo_categorias: {
+        Row: {
+          categoria_id: string | null
+          gradiente: string | null
+          icon: string | null
+          label: string | null
+          ordem: number | null
+          slug: string | null
+        }
+        Insert: {
+          categoria_id?: string | null
+          gradiente?: string | null
+          icon?: string | null
+          label?: string | null
+          ordem?: number | null
+          slug?: string | null
+        }
+        Update: {
+          categoria_id?: string | null
+          gradiente?: string | null
+          icon?: string | null
+          label?: string | null
+          ordem?: number | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
+      catalogo_filtros: {
+        Row: {
+          gradiente: string | null
+          icon: string | null
+          label: string | null
+          ordem: number | null
+          slug: string | null
+        }
+        Insert: {
+          gradiente?: string | null
+          icon?: string | null
+          label?: string | null
+          ordem?: number | null
+          slug?: string | null
+        }
+        Update: {
+          gradiente?: string | null
+          icon?: string | null
+          label?: string | null
+          ordem?: number | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
+      categoria_para_filtro: {
+        Row: {
+          categoria_id: string | null
+          filtro_slug: string | null
+        }
+        Insert: {
+          categoria_id?: string | null
+          filtro_slug?: string | null
+        }
+        Update: {
+          categoria_id?: string | null
+          filtro_slug?: string | null
+        }
+        Relationships: []
+      }
       cupom_metricas: {
         Row: {
           ativacoes: number | null

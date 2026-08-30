@@ -8,7 +8,7 @@ import {
   linhaParaCupom,
   type CupomParaEdicao,
 } from "@/lib/data/cupons";
-import { buscarCategorias } from "@/lib/data/categorias";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import { statusPortalDe } from "@/lib/ciclo-cupom";
 import {
   PRAZO_ATIVACAO_MIN_HORAS,
@@ -395,9 +395,9 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       .single();
     if (error || !row) return { ok: false, erro: "Não foi possível salvar o cupom." };
 
-    const catalogo = await buscarCategorias();
+    const filtro = await buscarFiltrosTaxonomia();
     const item: ItemCupomPortal = {
-      cupom: linhaParaCupom(row, est.nome, catalogo),
+      cupom: linhaParaCupom(row, est.nome, filtro),
       statusPortal: "pendente",
       metricas: { visualizacoes: 0, cliques: 0, ativacoes: 0, resgates: 0 },
       limiteTotal: row.limite_total ?? 1000,
@@ -557,9 +557,9 @@ export async function editarCupomAction(
     // 0 linhas = a policy filtrou (cupom de outro estabelecimento).
     if (!row) return { ok: false, erro: "Cupom não encontrado no seu estabelecimento." };
 
-    const catalogo = await buscarCategorias();
+    const filtro = await buscarFiltrosTaxonomia();
     const item: ItemCupomPortal = {
-      cupom: linhaParaCupom(row, est.nome, catalogo),
+      cupom: linhaParaCupom(row, est.nome, filtro),
       // Fase 9/D1: mesma tradução da listagem — inclusive o 'ativo' vencido,
       // que a edição precisa devolver como expirado para o card não voltar
       // ao estado errado logo depois de salvar.

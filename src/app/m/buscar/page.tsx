@@ -1,5 +1,5 @@
 import { buscarCuponsBusca } from "@/lib/data/cupons";
-import { buscarCategorias, categoriaValida } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos, categoriaValida } from "@/lib/data/categorias";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
 import { BuscarClient } from "./buscar-client";
 
@@ -20,7 +20,7 @@ export default async function BuscarPage({
 }) {
   const [cupons, categorias] = await Promise.all([
     buscarCuponsBusca(),
-    buscarCategorias(),
+    buscarFiltrosPublicos(),
   ]);
   const dias = DIAS_SEMANA as readonly string[];
   return (

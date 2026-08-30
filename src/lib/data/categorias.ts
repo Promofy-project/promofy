@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
 
 /** Categoria como as telas do consumidor precisam dela (rótulo + id). */
@@ -10,37 +10,35 @@ export interface CategoriaFiltro {
 }
 
 /**
- * As categorias REAIS do catálogo (tabela `categorias`), na ordem definida
- * pelo produto — já com o visual (icon/gradiente) usado pelos cards e
- * avatares (TX-P1: fonte única, nada de `src/lib/mock-data.ts` para dado
- * operacional).
+ * O catálogo de FILTROS de descoberta — o que a UI oferece para filtrar
+ * a busca (chips da home, /m/buscar, /m/filtros), na ordem de produto,
+ * já com o visual (icon/gradiente) usado pelos cards e avatares (TX-P1:
+ * fonte única, nada de `src/lib/mock-data.ts` para dado operacional).
+ *
+ * TX-P2AF: NÃO é o catálogo de categorias operacionais do admin/portal
+ * (vínculo estabelecimento↔categoria, seleção no form de cupom) — para
+ * isso é `buscarCatalogoCategorias()` em `src/lib/data/taxonomia.ts`.
+ * As duas coincidem hoje porque os dois catálogos leem a mesma tabela
+ * legado; depois do cutover este vira 14 segmentos e o operacional vira
+ * as categorias folha — não são mais a mesma lista. Um nome genérico
+ * `buscarCategorias()` já escondeu essa colisão uma vez; não reintroduzir.
  *
  * Existe porque os chips da home listavam
  * ["alimentação","lazer","compras","serviços","saúde","beleza"] — e QUATRO
  * desses seis não existem no banco (backlog 12.3). Um chip de "lazer" não
  * pode filtrar nada: não há cupom de lazer.
  *
- * Leitura pública (a policy de `categorias` libera anon), então serve a
- * visitante e a logado igual. Banco fora do ar → lista vazia: a home
- * simplesmente não mostra a faixa de chips, em vez de quebrar.
+ * Lê a FRONTEIRA `catalogo_filtros`, nunca a tabela física — ver
+ * src/lib/data/taxonomia.ts. Leitura pública, então serve a visitante e a
+ * logado igual. Banco fora do ar → lista vazia: a home simplesmente não
+ * mostra a faixa de chips, em vez de quebrar.
  */
-export async function buscarCategorias(): Promise<CategoriaVisual[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("categorias")
-    .select("id, label, icon, gradiente")
-    .order("ordem", { ascending: true });
-  if (error) return [];
-  return (data ?? []).map((c) => ({
-    id: c.id,
-    label: c.label,
-    icon: c.icon,
-    gradiente: c.gradiente,
-  }));
+export async function buscarFiltrosPublicos(): Promise<CategoriaVisual[]> {
+  return (await buscarFiltrosTaxonomia()).catalogo;
 }
 
 /**
- * Sanea o `?cat=` da URL contra as categorias reais.
+ * Sanea o `?cat=` da URL contra os filtros reais.
  *
  * Query param é entrada de usuário: valor desconhecido vira "sem filtro", e
  * NUNCA chega a virar predicado de consulta. Sem isto, um `?cat=xpto`

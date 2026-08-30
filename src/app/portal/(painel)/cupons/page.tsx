@@ -1,6 +1,6 @@
 import { buscarCuponsPortal } from "@/lib/data/cupons";
 import { buscarCategoriasEstab } from "@/lib/data/estab";
-import { buscarCategorias } from "@/lib/data/categorias";
+import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
 import { CuponsClient } from "./cupons-client";
 
 /**
@@ -16,7 +16,7 @@ export default async function PortalCupons({
 }) {
   const [{ estabelecimento, itens }, catalogoVisual] = await Promise.all([
     buscarCuponsPortal(),
-    buscarCategorias(),
+    buscarCatalogoCategorias(),
   ]);
   const categorias = estabelecimento
     ? await buscarCategoriasEstab(estabelecimento.id, estabelecimento.categoriaId)

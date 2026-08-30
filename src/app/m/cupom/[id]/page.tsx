@@ -11,7 +11,7 @@ import {
 
 import { getCupom } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
-import { buscarCategorias } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos } from "@/lib/data/categorias";
 import { resolverCategoriaVisual } from "@/lib/categoria-visual";
 import { janelaAlcancavel } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
@@ -46,7 +46,7 @@ export default async function CupomDetalhe({
   // fallback dos ids que existem apenas no protótipo — nenhuma rota some.
   const [doBanco, catalogo] = await Promise.all([
     buscarCupomPorId(params.id),
-    buscarCategorias(),
+    buscarFiltrosPublicos(),
   ]);
   const doMock = getCupom(params.id);
   const cupom = doBanco ?? doMock;
