@@ -1,0 +1,835 @@
+{
+  "versao": 1,
+  "fonte": "docs/taxonomia/Promofy_Anotacoes_Devs.pdf §5.1 (Segmento e Categoria)",
+  "segmentos": [
+    {
+      "id": "406c31ec-182a-4e06-bf54-89abce35f133",
+      "slug": "alimentacao",
+      "nome": "Alimentação",
+      "icon": "UtensilsCrossed",
+      "tema": "laranja",
+      "ordem": 1,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "07fd0832-1987-4645-a5f9-7815a94eb378",
+          "slug": "restaurante",
+          "nome": "Restaurante",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "2677d35c-b604-4f58-be4c-6877c573c648",
+          "slug": "bar-petiscaria",
+          "nome": "Bar e Petiscaria",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "b8d0a98f-90a1-48e6-bcf4-e85141468b8c",
+          "slug": "hamburgueria-lanchonete",
+          "nome": "Hamburgueria/Lanchonete",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "acfb22ac-3dba-44f1-93d1-0dd0b7a05b7c",
+          "slug": "cafeteria",
+          "nome": "Cafeteria",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "1aa12224-d0ee-408e-9b6f-52a542a4f13e",
+          "slug": "padaria",
+          "nome": "Padaria",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "d046bef8-0b6d-4236-8c5b-7b1f3b9b9e47",
+          "slug": "confeitaria",
+          "nome": "Confeitaria",
+          "ordem": 6,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "af3aa2b7-8f63-4c00-8b5f-0edaa16a702b",
+          "slug": "pizzaria",
+          "nome": "Pizzaria",
+          "ordem": 7,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "c9943597-135f-4628-8158-b9561327e856",
+          "slug": "sorveteria",
+          "nome": "Sorveteria",
+          "ordem": 8,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "e1f0f2c8-d98a-4df0-8759-d577ee3f3338",
+          "slug": "acai",
+          "nome": "Açaí",
+          "ordem": 9,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "a6c8478d-c2ed-4d55-9e43-1de95f83e08c",
+          "slug": "espetinho",
+          "nome": "Espetinho",
+          "ordem": 10,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "2cbb2b1e-ab64-45ce-94ab-544f30cceffc",
+      "slug": "fitness",
+      "nome": "Fitness e Saúde",
+      "icon": "Dumbbell",
+      "tema": "verde",
+      "ordem": 2,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "77e90339-6903-4f0e-a880-9fc949f25e1a",
+          "slug": "academia",
+          "nome": "Academia",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "db7dc060-f18b-4351-8613-106f0bc17c18",
+          "slug": "alimentacao-fitness",
+          "nome": "Alimentação Fitness",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "72c8be9e-3386-491d-843c-abfd731d49dd",
+          "slug": "suplementos",
+          "nome": "Suplementos",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "ada74a26-03ff-4520-97be-feed5eab73ab",
+          "slug": "produtos-naturais",
+          "nome": "Produtos Naturais",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "30697c44-af83-45b2-989b-dfbf55940bd6",
+          "slug": "personal-trainer",
+          "nome": "Personal Trainer",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "ace554d7-0091-4e3e-b1b3-238abca9c334",
+          "slug": "esportes",
+          "nome": "Esportes",
+          "ordem": 6,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "c8ce0334-0ea8-41ff-bcee-fcb32239c379",
+      "slug": "automotivo",
+      "nome": "Automotivo",
+      "icon": "Car",
+      "tema": "grafite",
+      "ordem": 3,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "4dceebf4-1152-45e8-b863-2b095917818a",
+          "slug": "autopecas",
+          "nome": "Autopeças",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "bc85a6b2-9e4a-477f-95b4-0aac76ad2f7b",
+          "slug": "manutencao",
+          "nome": "Manutenção",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "7bc83b64-e843-470a-a556-eae75be52188",
+          "slug": "estetica-automotiva",
+          "nome": "Estética Automotiva",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "5d6ead34-eba8-49ee-9262-4d15e2df2140",
+          "slug": "servicos-guincho",
+          "nome": "Serviços de Guincho",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "7efccd51-937d-4ec3-b254-cf0aaed3f36f",
+      "slug": "beleza",
+      "nome": "Beleza e Bem Estar",
+      "icon": "Scissors",
+      "tema": "rosa",
+      "ordem": 4,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "600a46ea-8d8f-4a24-8864-5c8bf329feed",
+          "slug": "salao-de-beleza",
+          "nome": "Salão de Beleza",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "e20779fe-5dca-4415-90bd-32492eaa9b45",
+          "slug": "barbearia",
+          "nome": "Barbearia",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "dd2af35d-62ce-45de-8fa1-b2073ef9215b",
+          "slug": "clinica-estetica",
+          "nome": "Clínica de Estética",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "391180b1-2296-4e78-b092-de58e45ba46a",
+          "slug": "spa",
+          "nome": "Spa",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "af4c9d7e-05d1-4c8b-9ff3-5a2497bbe128",
+          "slug": "perfumaria-cosmeticos",
+          "nome": "Perfumaria e Cosméticos",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "cc65d3a3-a4f2-4993-b1d4-30a18401a4cc",
+      "slug": "entretenimento",
+      "nome": "Entretenimento",
+      "icon": "Clapperboard",
+      "tema": "roxo",
+      "ordem": 5,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "0c5d4ffd-acbd-4dd1-a5f7-e29ad05a6d0e",
+          "slug": "cinema",
+          "nome": "Cinema",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "1933cc91-e29d-42c8-94a6-62385502f2e2",
+          "slug": "casas-shows-eventos",
+          "nome": "Casas de Shows e Eventos",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "bb14b6e0-79e2-4f7e-9661-0935272b7dd3",
+          "slug": "parques-atracoes",
+          "nome": "Parques/Atrações",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "26df6b16-bb95-46a6-8b9d-52c7d8a5f2e0",
+          "slug": "jogos-diversoes",
+          "nome": "Jogos e Diversões",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "984ecc3d-ce9a-46d5-9751-31ac73f569fc",
+      "slug": "turismo-hotelaria",
+      "nome": "Turismo e Hotelaria",
+      "icon": "Plane",
+      "tema": "ciano",
+      "ordem": 6,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "c01c4e14-697e-4a75-8586-97993205a88b",
+          "slug": "hotel",
+          "nome": "Hotel",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "c376309b-cd31-4fd2-93f0-c1f2aa52cfb2",
+          "slug": "pousada",
+          "nome": "Pousada",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "dde28e4c-151c-4a52-b4a2-0afad7adc97c",
+          "slug": "agencia-turismo",
+          "nome": "Agência de Turismo",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "e6f1c5d5-6569-4a58-9432-37d2e7f251d8",
+          "slug": "passeios-excursoes",
+          "nome": "Passeios e Excursões",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "2a0b81ba-a61f-45b1-b462-d5b106cc8770",
+          "slug": "locais-eventos",
+          "nome": "Locais para Eventos",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "df938169-d414-4e7f-945e-b1c1bc73cc33",
+      "slug": "moda",
+      "nome": "Moda",
+      "icon": "Shirt",
+      "tema": "violeta",
+      "ordem": 7,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "41f09f68-900c-44ba-bef5-88dc3758d73e",
+          "slug": "roupas-femininas",
+          "nome": "Roupas Femininas",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "168e9ce7-17df-47d2-b329-9a398ccee1f0",
+          "slug": "roupas-masculinas",
+          "nome": "Roupas Masculinas",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "ac59b1fb-e120-4aec-bb5a-50e8b83ef131",
+          "slug": "calcados-masculinos",
+          "nome": "Calçados Masculinos",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "4dac008b-5b12-4d7d-8d32-566b1ae28b21",
+          "slug": "calcados-femininos",
+          "nome": "Calçados Femininos",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "bf01084b-0ec6-4e9b-ada5-036f3932964e",
+          "slug": "moda-infantil",
+          "nome": "Moda Infantil",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "31a816b1-acf4-48b0-b79d-ceba81873d4e",
+      "slug": "eletronicos",
+      "nome": "Eletrônicos",
+      "icon": "Smartphone",
+      "tema": "azul",
+      "ordem": 8,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "f47d139d-176c-462b-a17a-f998172badbe",
+          "slug": "celulares-acessorios",
+          "nome": "Celulares e Acessórios",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "d0ffafbb-b7d6-40e0-81af-59c229217045",
+          "slug": "eletroeletronicos",
+          "nome": "Eletroeletrônicos",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "aa160aa6-ebe7-44e7-98fb-6fc9b95d8b50",
+          "slug": "computadores-notebooks",
+          "nome": "Computadores e Notebooks",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "43048eac-9129-42e3-898e-799441136c20",
+          "slug": "assistencia-tecnica",
+          "nome": "Assistência Técnica",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "e244c379-9dda-4075-a8bc-84f68ff67574",
+          "slug": "jogos-consoles",
+          "nome": "Jogos e Consoles",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "72a596ad-f780-4531-9dfc-df47f3a1a1b4",
+          "slug": "servicos-ti",
+          "nome": "Serviços de TI",
+          "ordem": 6,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "c90f05b8-c112-456e-a3f1-a33b7c460373",
+      "slug": "educacao",
+      "nome": "Educação",
+      "icon": "GraduationCap",
+      "tema": "indigo",
+      "ordem": 9,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "6efe677a-106d-4a41-8747-56eb630fe846",
+          "slug": "infantil",
+          "nome": "Infantil",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "6e534645-4eaa-43ce-a920-7a790c50ae79",
+          "slug": "idiomas",
+          "nome": "Idiomas",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "b3c87dfc-4f33-417c-bea2-a55da396635f",
+          "slug": "brinquedoteca",
+          "nome": "Brinquedoteca",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "f4880f5c-e619-4879-b370-d202f37d4e6a",
+          "slug": "livraria",
+          "nome": "Livraria",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "7b195441-1e05-407f-865b-90a308d7785b",
+          "slug": "esportes",
+          "nome": "Esportes",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "aab94c17-3b8a-41c2-a442-7efa159dcb6f",
+          "slug": "cursos-profissionalizantes",
+          "nome": "Cursos Profissionalizantes",
+          "ordem": 6,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "cee52f40-89a0-4717-8b01-d5fef1202f3b",
+          "slug": "reforco-escolar",
+          "nome": "Reforço Escolar",
+          "ordem": 7,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "d73483cf-62a8-4f70-84fb-b23d8263c417",
+          "slug": "papelaria",
+          "nome": "Papelaria",
+          "ordem": 8,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "a91b9906-3095-4ccb-ae8b-37d7dcfbdfcb",
+      "slug": "pet",
+      "nome": "Pet",
+      "icon": "PawPrint",
+      "tema": "ambar",
+      "ordem": 10,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "de832ede-429a-40e5-9ac3-26620677ff00",
+          "slug": "petshop",
+          "nome": "Petshop",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "08f0ba43-c86c-4281-8603-9473947afd28",
+          "slug": "banho-tosa",
+          "nome": "Banho e Tosa",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "869127c8-1814-4923-a2a9-63af8767f9f7",
+          "slug": "racao-acessorios",
+          "nome": "Ração e Acessórios",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "cab16f1f-ecd0-4bd2-9539-b1e734e41e7a",
+          "slug": "clinica-veterinaria",
+          "nome": "Clínica Veterinária",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "aed625b0-7819-413f-b5a5-1a6848b224c6",
+          "slug": "hotel-animais",
+          "nome": "Hotel para Animais",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "39bf8fd4-7b58-4172-9e73-29b7850d9687",
+          "slug": "servicos-cuidador",
+          "nome": "Serviços de Cuidador",
+          "ordem": 6,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "b0cd77f4-8158-41b4-8c1f-7fcf62f14adb",
+      "slug": "servicos",
+      "nome": "Serviços",
+      "icon": "Wrench",
+      "tema": "cinza",
+      "ordem": 11,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "fbfa6ebc-a6bc-4726-a2c0-5a40bf069048",
+          "slug": "lavanderia",
+          "nome": "Lavanderia",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "0f82246b-4f8c-46f3-8835-95c531c9513f",
+          "slug": "chaveiro",
+          "nome": "Chaveiro",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "eaff9738-8995-44b4-ab5f-1ab85236c493",
+          "slug": "assistencia-residencial",
+          "nome": "Assistência Residencial",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "e88f9f13-c969-472f-89dc-83bf2a203fc2",
+          "slug": "motorista-particular",
+          "nome": "Motorista Particular",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "a5efd568-3934-4f12-8b03-a08a8019b245",
+      "slug": "saude",
+      "nome": "Saúde",
+      "icon": "Stethoscope",
+      "tema": "vermelho",
+      "ordem": 12,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "d0c49823-1310-4a09-a5c2-b55f2773ea23",
+          "slug": "farmacias",
+          "nome": "Farmácias",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "2e2cbc12-2020-4e6b-b9bb-c49ea3625b66",
+          "slug": "clinicas-medicas",
+          "nome": "Clínicas Médicas",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "dc27e88d-8f6a-488c-a391-b2c8badceabe",
+          "slug": "clinicas-odontologicas",
+          "nome": "Clínicas Odontológicas",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "49a814a5-9894-470f-95de-4d811c184467",
+          "slug": "fisioterapia",
+          "nome": "Fisioterapia",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "a167e3c1-424a-456e-910a-eb55a0364508",
+          "slug": "terapias-alternativas",
+          "nome": "Terapias Alternativas",
+          "ordem": 5,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "9a256cd1-4419-436d-8d63-6fc6dc5829dc",
+      "slug": "casa-decoracao",
+      "nome": "Casa e Decoração",
+      "icon": "Sofa",
+      "tema": "terra",
+      "ordem": 13,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "a9e9d0a1-be6a-41f6-829f-d41daed5dd7a",
+          "slug": "moveis-eletrodomesticos",
+          "nome": "Móveis e Eletrodomésticos",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "aff1e25f-ad2a-4593-9d3b-aa7829e48bf1",
+          "slug": "loja-decoracao",
+          "nome": "Loja de Decoração",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "90064962-36f2-43ef-b340-ba74116f15a2",
+          "slug": "iluminacao",
+          "nome": "Iluminação",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "95260920-53f5-4c1b-98af-bcf6e87a16d7",
+          "slug": "tapecaria",
+          "nome": "Tapeçaria",
+          "ordem": 4,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    },
+    {
+      "id": "bec1d450-c6e6-4b90-9e5d-c76e0f7d13bc",
+      "slug": "infantil-maternidade",
+      "nome": "Infantil e Maternidade",
+      "icon": "Baby",
+      "tema": "amarelo",
+      "ordem": 14,
+      "ativo": true,
+      "categorias": [
+        {
+          "id": "f748cb82-b673-43ad-9382-ca6596d13d1d",
+          "slug": "roupas-infantis",
+          "nome": "Roupas Infantis",
+          "ordem": 1,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "d540279a-5208-42c3-995c-2947cc2ae6ae",
+          "slug": "brinquedos-jogos",
+          "nome": "Brinquedos e Jogos",
+          "ordem": 2,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        },
+        {
+          "id": "38baa52e-6e23-4ca4-8bbb-7be305a691a1",
+          "slug": "servicos-bebes",
+          "nome": "Serviços para Bebês",
+          "ordem": 3,
+          "ativo": true,
+          "icon_override": null,
+          "tema_override": null
+        }
+      ]
+    }
+  ]
+}

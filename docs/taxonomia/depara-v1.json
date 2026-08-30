@@ -1,0 +1,265 @@
+{
+  "versao": 1,
+  "nota": "Registro do de-para para o FUTURO cutover (TX-P2D). Este arquivo não é lido por nenhum código nem migration ainda — é a fonte que scripts/test-tx-p2c.ts valida e que orienta o cutover quando ele acontecer. Nenhum destes vínculos foi aplicado a public.categorias, public.estabelecimentos, public.estabelecimento_categorias ou public.cupons — todos continuam no legado.",
+  "legado_para_segmento": [
+    {
+      "categoria_legada": "alimentacao",
+      "segmento_slug": "alimentacao"
+    },
+    {
+      "categoria_legada": "fitness",
+      "segmento_slug": "fitness"
+    },
+    {
+      "categoria_legada": "beleza",
+      "segmento_slug": "beleza"
+    },
+    {
+      "categoria_legada": "eletronicos",
+      "segmento_slug": "eletronicos"
+    },
+    {
+      "categoria_legada": "educacao",
+      "segmento_slug": "educacao"
+    },
+    {
+      "categoria_legada": "pet",
+      "segmento_slug": "pet"
+    }
+  ],
+  "estabelecimentos": [
+    {
+      "id": "e1",
+      "nome": "Sabor & Cia",
+      "principal": {
+        "segmento_slug": "alimentacao",
+        "categoria_slug": "restaurante"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "alimentacao",
+          "categoria_slug": "restaurante"
+        },
+        {
+          "segmento_slug": "alimentacao",
+          "categoria_slug": "pizzaria"
+        }
+      ],
+      "remover_vinculo_legado_decorativo": [
+        {
+          "categoria_legada": "fitness"
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "nome": "PowerFit Academia",
+      "principal": {
+        "segmento_slug": "fitness",
+        "categoria_slug": "academia"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "fitness",
+          "categoria_slug": "academia"
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "nome": "Studio Bella",
+      "principal": {
+        "segmento_slug": "beleza",
+        "categoria_slug": "salao-de-beleza"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "beleza",
+          "categoria_slug": "salao-de-beleza"
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "nome": "TechMais Eletrônicos",
+      "principal": {
+        "segmento_slug": "eletronicos",
+        "categoria_slug": "celulares-acessorios"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "eletronicos",
+          "categoria_slug": "celulares-acessorios"
+        },
+        {
+          "segmento_slug": "eletronicos",
+          "categoria_slug": "eletroeletronicos"
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "nome": "Saber+ Cursos",
+      "principal": {
+        "segmento_slug": "educacao",
+        "categoria_slug": "idiomas"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "educacao",
+          "categoria_slug": "idiomas"
+        },
+        {
+          "segmento_slug": "educacao",
+          "categoria_slug": "cursos-profissionalizantes"
+        }
+      ]
+    },
+    {
+      "id": "e6",
+      "nome": "Mundo Pet",
+      "principal": {
+        "segmento_slug": "pet",
+        "categoria_slug": "banho-tosa"
+      },
+      "categorias": [
+        {
+          "segmento_slug": "pet",
+          "categoria_slug": "banho-tosa"
+        },
+        {
+          "segmento_slug": "pet",
+          "categoria_slug": "racao-acessorios"
+        }
+      ]
+    }
+  ],
+  "cupons": [
+    {
+      "id": "c01",
+      "titulo": "Rodízio de pizza em dobro",
+      "estabelecimento_id": "e1",
+      "folha": {
+        "segmento_slug": "alimentacao",
+        "categoria_slug": "pizzaria"
+      }
+    },
+    {
+      "id": "c02",
+      "titulo": "20% off no almoço executivo",
+      "estabelecimento_id": "e1",
+      "folha": {
+        "segmento_slug": "alimentacao",
+        "categoria_slug": "restaurante"
+      }
+    },
+    {
+      "id": "c03",
+      "titulo": "1 mês grátis na matrícula",
+      "estabelecimento_id": "e2",
+      "folha": {
+        "segmento_slug": "fitness",
+        "categoria_slug": "academia"
+      }
+    },
+    {
+      "id": "c04",
+      "titulo": "Aula de spinning 2x1",
+      "estabelecimento_id": "e2",
+      "folha": {
+        "segmento_slug": "fitness",
+        "categoria_slug": "academia"
+      }
+    },
+    {
+      "id": "c05",
+      "titulo": "Corte + escova com 40% off",
+      "estabelecimento_id": "e3",
+      "folha": {
+        "segmento_slug": "beleza",
+        "categoria_slug": "salao-de-beleza"
+      }
+    },
+    {
+      "id": "c06",
+      "titulo": "Dia de noiva com brinde",
+      "estabelecimento_id": "e3",
+      "folha": {
+        "segmento_slug": "beleza",
+        "categoria_slug": "salao-de-beleza"
+      }
+    },
+    {
+      "id": "c07",
+      "titulo": "Fone bluetooth com 35% off",
+      "estabelecimento_id": "e4",
+      "folha": {
+        "segmento_slug": "eletronicos",
+        "categoria_slug": "eletroeletronicos"
+      }
+    },
+    {
+      "id": "c08",
+      "titulo": "Película + capa grátis na compra",
+      "estabelecimento_id": "e4",
+      "folha": {
+        "segmento_slug": "eletronicos",
+        "categoria_slug": "celulares-acessorios"
+      }
+    },
+    {
+      "id": "c09",
+      "titulo": "Curso de inglês — 3 meses grátis",
+      "estabelecimento_id": "e5",
+      "folha": {
+        "segmento_slug": "educacao",
+        "categoria_slug": "idiomas"
+      }
+    },
+    {
+      "id": "c10",
+      "titulo": "Mentoria de carreira 50% off",
+      "estabelecimento_id": "e5",
+      "folha": {
+        "segmento_slug": "educacao",
+        "categoria_slug": "cursos-profissionalizantes"
+      }
+    },
+    {
+      "id": "c11",
+      "titulo": "Banho & tosa leve 2x1",
+      "estabelecimento_id": "e6",
+      "folha": {
+        "segmento_slug": "pet",
+        "categoria_slug": "banho-tosa"
+      }
+    },
+    {
+      "id": "c12",
+      "titulo": "Ração premium 25% off",
+      "estabelecimento_id": "e6",
+      "folha": {
+        "segmento_slug": "pet",
+        "categoria_slug": "racao-acessorios"
+      }
+    },
+    {
+      "id": "p-campanha-esgotada",
+      "titulo": "Combo casal + 2 sobremesas",
+      "estabelecimento_id": "e1",
+      "folha": {
+        "segmento_slug": "alimentacao",
+        "categoria_slug": "restaurante"
+      }
+    },
+    {
+      "id": "p-campanha-expirada",
+      "titulo": "Rodízio com 30% off (almoço)",
+      "estabelecimento_id": "e1",
+      "folha": {
+        "segmento_slug": "alimentacao",
+        "categoria_slug": "restaurante"
+      }
+    }
+  ]
+}
