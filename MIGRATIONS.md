@@ -838,3 +838,102 @@ três views da TX-P2A seguem lendo `public.categorias` de sempre, e `catalogo_fi
 (`docs/taxonomia/depara-v1.json`) segue apenas registrado — nenhuma linha de
 `estabelecimentos`/`estabelecimento_categorias`/`cupons` foi tocada. **O cutover é migration NOVA**,
 não uma edição deste arquivo.
+
+## TX-P2D1 — limpeza dos cupons extra (QA/dev) do hospedado
+
+`20260830140000_tx_p2d1_cleanup_cupons_extras.sql`
+
+**DATA cleanup, não DDL estrutural.** A auditoria TX-P2D0 encontrou 34 cupons no hospedado onde só
+14 são esperados (`docs/taxonomia/depara-v1.json`). Os 20 a mais são artefatos de QA/dev — todos sob
+`e1` (o estabelecimento de teste), criados entre 22/07 e 10/08 durante testes de fases anteriores
+contra o hospedado, nunca limpos. Um deles (`84e451a7`, "Café do dia") é literalmente o cupom citado
+em `docs/taxonomia/relatorio-v2-transcricao.md` §3.3 — não é ruído aleatório, é resíduo de
+investigação de bug real.
+
+**Decisão do líder técnico (TX-P2D1A): remover os 20, sem mapear para a taxonomia nova e sem
+expandir o conjunto de categorias de `e1` para preservá-los.** Não é cutover — os 20 cupons
+continuam com `categoria_id` legado (texto) até serem apagados; a taxonomia 14×75 não é tocada por
+esta migration.
+
+**Contas de teste/demo não são apagadas.** Só os 20 cupons e os fatos que dependem EXCLUSIVAMENTE
+deles: `cupom_eventos` (78 linhas) e `cupons_usuario` (21 linhas), via `ON DELETE CASCADE` já
+existente nas duas FKs — a migration não faz `delete` explícito nessas duas tabelas de propósito,
+para que o próprio apply prove que o contrato de FK está correto. Boa parte dessas 21 ativações
+pertence a `consumidor@`/`convidado@` (as contas com atividade real do cliente, ver §1 deste
+documento) — a decisão foi tomada sabendo disso, não por trás dela.
+
+**Portabilidade local/QA/hospedado.** Os 20 IDs só existem no hospedado. Em `db:reset` local,
+`public.cupons` está vazio quando esta migration roda (`seed.sql` roda DEPOIS das migrations), então
+o `target_count` é 0 e a migration é **NO-OP** — não é um caminho de teste hipotético, é o que
+acontece em todo `db:reset` local, comprovado por `test:tx-p2d1`. `target_count` só pode ser 0 (nada
+a fazer) ou 20 (o estado exato auditado); qualquer coisa entre 1 e 19 é estado parcial e a migration
+**aborta alto** — nunca faz limpeza parcial.
+
+**Asserts fail-high antes de qualquer `delete`:** os 20 existem exatamente, nenhum coincide com um
+ID canônico, os 14 canônicos continuam presentes, todos os 20 têm `estabelecimento_id='e1'` e
+`categoria_id='alimentacao'`, e as dependências batem **exatamente** com os números que a auditoria
+mediu (78 `cupom_eventos`, 21 `cupons_usuario`) — se o hospedado tiver mudado entre a auditoria e o
+apply, a migration recusa seguir em vez de presumir que nada mudou.
+
+> ⚠️ **A auditoria original (TX-P2D0) errou o soft reference de `pontos_transacoes` — e o preflight
+> hospedado (TX-P2D1D0) pegou isso antes do apply, exatamente para o que preflight read-only serve.**
+> A checagem original comparava `pontos_transacoes.referencia_id` direto contra IDs de cupom, o que é
+> **trivialmente sempre zero** — `referencia_id` guarda `cupons_usuario.id::text` (confirmado no corpo
+> de `public.validar_cupom`), nunca um ID de cupom. Rodando a checagem CORRETA
+> (`referencia_id = cupons_usuario.id::text` para os `cupons_usuario` ligados aos 20 extras) pela
+> primeira vez contra o hospedado, o resultado real é **26 linhas** — 17 `resgate` + 9 `nps`, somando
+> **1120 pontos** — geradas exclusivamente pelos usos/NPS desses cupons de QA/dev.
+>
+> **Decisão do líder técnico (TX-P2D1B): remover essas 26 linhas junto do cleanup.**
+> `public.pontos_transacoes` é o ledger **fonte de verdade** — o saldo do usuário é `SUM(pontos)`,
+> sem saldo persistido separado para sincronizar — e preservar esses 26 fatos depois de apagar os
+> cupons/ativações que os geraram deixaria pontos órfãos semanticamente. **Isto só é aceitável porque
+> os dados atuais são de desenvolvimento/teste/demo — não é precedente para dado real de cliente**,
+> onde ledger histórico pediria estratégia de auditoria/compensação, nunca simplesmente apagar.
+
+**Ledger de pontos: capturado antes, apagado por `referencia_id`, nunca por `usuario_id`.** Os IDs
+dos 21 `cupons_usuario` alvo são capturados em variável ANTES de qualquer `delete` — o `CASCADE`
+apaga essas linhas junto com os cupons, e sem os IDs guardados não haveria como localizar os pontos
+depois. O `delete` em `pontos_transacoes` é restrito a `referencia_id = ANY(...)` desses 21 IDs
+exatos — nunca por `usuario_id`, que apagaria bônus/visita/indicação e pontos de cupons canônicos da
+mesma conta. Antes de apagar, a migration prova 26/17/9/1120 exatos (e que resgate+nps esgota o
+total — nenhuma outra ação no conjunto); `GET DIAGNOSTICS` confere que o `delete` removeu exatamente
+26 linhas, abortando (com rollback de tudo, inclusive esse `delete`) se não bater.
+
+**Asserts depois do `delete`:** zero dos 20 restam em `cupons`/`cupom_eventos`/`cupons_usuario`/
+`pontos_transacoes` (via os 21 IDs capturados), exatamente os 14 canônicos restam em `cupons`, os
+totais gerais de `cupom_eventos`/`cupons_usuario` caem exatamente 78/21 (valor absoluto quando o
+total geral também batia com a auditoria), o ledger geral de pontos cai em **DELTA** exato de −26
+linhas / −1120 pontos (não em valor absoluto — o total geral varia por ambiente/atividade orgânica,
+o que não pode variar é a queda causada por esta limpeza), e `segmentos`/`categorias_novas`/
+`categorias` legado/`estabelecimentos`/`estabelecimento_categorias` continuam com as mesmas
+contagens de sempre.
+
+**`test:tx-p2d1` (19 testes) prova o estado CONVERGIDO**, não o delete em si (impossível localmente,
+já que os 20 nunca existem fora do hospedado): a migration é posterior às três hospedadas, o de-para
+continua com exatamente os 14 canônicos, o conjunto de `cupons` do banco é exatamente esses 14, e
+nenhum `pontos_transacoes` local referencia um `cupons_usuario` ligado a qualquer um dos 20
+removidos.
+
+**Simulação destrutiva local (TX-P2D1AF / TX-P2D1B) provou o arquivo SQL real** — via
+`docker exec ... psql`, nunca uma migration de teste separada — em quatro caminhos: sucesso completo
+(34→14 cupons, −78 eventos, −21 ativações, −26/−1120 no ledger, por-usuário confirmado sem tocar
+bônus/visita/indicação); estado parcial 19/20 (aborta, zero mutação); drift do ledger (25 em vez de
+26 pontos, aborta, zero mutação); e um cenário de atomicidade com um 35º cupom não auditado, onde a
+falha acontece **depois** dos dois `delete`s já terem executado dentro da transação — provando que o
+bloco `DO $$ ... $$` desfaz mutação real já feita, não só aborta antes de mexer em algo.
+
+✅ **Aplicada no hospedado (TX-P2D1D) e IMUTÁVEL.** `20260830140000` está no Supabase de produção
+desde então, com o mesmo hash validado em todo o ciclo de preflight (`4cf2f9dc2b64214691881693e3306e11bcf975f3`)
+— não editar este arquivo nunca mais, pelo mesmo motivo das três anteriores da cadeia.
+
+Estado final confirmado por leitura direta pós-apply: os 20 cupons QA/dev saíram de `public.cupons`;
+os 78 `cupom_eventos` e as 21 `cupons_usuario` associados saíram via `ON DELETE CASCADE`; os 26
+`pontos_transacoes` derivados desses usos (17 `resgate` + 9 `nps`, 1120 pontos) saíram pelo `delete`
+explícito restrito por `referencia_id`. Os quatro deltas globais bateram exatos com a previsão feita
+antes do apply: `cupom_eventos` −78, `cupons_usuario` −21, `pontos_transacoes` −26 linhas / −1120
+pontos. `public.cupons` convergiu para **exatamente** os 14 IDs de `docs/taxonomia/depara-v1.json` —
+nem um a mais, nem um a menos. Nenhuma conta, nenhum estabelecimento e nenhuma linha da taxonomia
+14×75 foi tocada; `segmentos`/`categorias_novas`/`categorias` legado/`estabelecimentos`/
+`estabelecimento_categorias` e as três views da TX-P2A saíram do apply com as mesmas contagens de
+sempre. O snapshot read-only pré-delete (fora do Git) foi preservado durante toda a validação.
