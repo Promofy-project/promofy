@@ -149,12 +149,15 @@ async function main(): Promise<number> {
   let qa: ContaQa | null = null;
 
   const { data: e1 } = await svc
-    .from("estabelecimentos").select("categoria_id").eq("id", "e1").maybeSingle();
+    .from("estabelecimentos").select("categoria_id, categoria_principal_id").eq("id", "e1").maybeSingle();
   const catE1 = e1!.categoria_id as string;
+  // MARCO 2B (CONTRACT): categoria_nova_id agora é NOT NULL.
+  const catNovaE1 = e1!.categoria_principal_id as string;
 
   const base = {
     estabelecimento_id: "e1",
     categoria_id: catE1,
+    categoria_nova_id: catNovaE1,
     economia: 10,
     validade_fim: "2035-12-31",
     status: "ativo" as const,

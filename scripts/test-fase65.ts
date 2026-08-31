@@ -105,9 +105,17 @@ async function main(): Promise<number> {
     inicio: "18:00",
     fim: "23:00",
   };
+  // MARCO 2B (CONTRACT): categoria_nova_id agora é NOT NULL.
+  const { data: e1Principal } = await svc
+    .from("estabelecimentos")
+    .select("categoria_principal_id")
+    .eq("id", "e1")
+    .single();
+  const catNovaE1 = e1Principal!.categoria_principal_id as string;
   const baseCupom = {
     estabelecimento_id: "e1",
     categoria_id: "alimentacao",
+    categoria_nova_id: catNovaE1,
     validade_fim: "2030-12-31",
     status: "ativo" as const,
   };

@@ -1491,3 +1491,245 @@ A prova de que uma migration versionada não mudou é `git rev-parse <commit>:<p
 daria falso positivo de alteração. Para migration ainda não commitada, validar o arquivo que o CLI
 de fato lê, antes do apply. **Não normalizar as migrations existentes** — isso reescreveria blobs de
 arquivos hospedados e imutáveis.
+
+---
+
+## `20260831130000_m2_contract_taxonomia.sql` — MARCO 2B · CONTRACT da taxonomia (LOCAL, NÃO HOSPEDADA)
+
+**Status: aplicada e provada LOCAL. NÃO hospedada.** Nenhuma escrita foi executada no Supabase
+`bpeqpxvxgdyjjdcoycgp` neste trabalho — as únicas interações com o projeto hospedado (via MCP)
+foram leituras (`execute_sql`/`query_logs` com `select`, `show log_statement`), nenhum
+insert/update/delete/DDL. `20260831120000` continua imutável: blob
+**`8d1d5b3a8cbaafb3c7031caac1d03648182d1eef`**, confirmado idêntico (`git rev-parse
+HEAD:<path>` == `git hash-object <path>`) antes e depois deste trabalho. Nenhuma migration anterior a
+`20260831130000` foi editada.
+
+### MARCO 2A — fechamento formal
+
+**PASS.** `20260831120000_m2_bridge_taxonomia.sql` hospedada; runtime 14×75 em produção. PR #8
+merged (merge SHA `038fac47cc2ace7f471c6de6b5658382d391e41b`), deployment
+`dpl_8mhXYvQhQPUTR2PGmmeGMSG2LGt3` READY. Write-freeze do bridge encerrado. Smoke real de produção
+provou: `authenticated` QA → INSERT `categoria_nova_id` UUID com `categoria_id` legado NULL → PASS;
+recategorização Restaurante→Pizzaria → PASS; `moderacao_historico` registrando `editado_material` →
+PASS.
+
+### Anomalia da fixture QA no smoke de produção — investigada, classificação B
+
+Durante o smoke, uma fixture criada/recategorizada/excluída via `excluir_cupom` deixou de existir
+fisicamente minutos depois, sem DELETE explícito no relatório do smoke. Investigação READ-ONLY, sem
+nenhuma operação destrutiva:
+
+- **`excluir_cupom`** (migration `20260818130000`) é exclusivamente soft-delete —
+  `update ... set status = 'excluido'`, nenhum `delete` — confirmado lendo a função linha a linha.
+- **Nenhum trigger, rule, event trigger ou FK em `public.cupons`** executa DELETE físico. Auditado via
+  busca estrutural em todas as migrations: os únicos `on delete cascade` apontam DE
+  `cupom_eventos`/`cupons_usuario` PARA `cupons` (o inverso do que causaria isto); as FKs de categoria
+  são `on delete restrict`.
+- **Nenhuma Edge Function** existe no repositório (`supabase/functions` não existe).
+- **`postgrest_logs` e `edge_logs`** (últimas 24h, via Supabase MCP) não mostram nenhuma requisição
+  DELETE contra `cupons` no período.
+- **`postgres_logs`** não é conclusivo: `log_statement = ddl` no projeto (confirmado via
+  `show log_statement`), então DML comum (INSERT/UPDATE/DELETE, inclusive via psql/service_role) nunca
+  é logado ali, só DDL. Ausência de evidência aqui não é evidência de ausência.
+- **Contagens hospedadas no momento da auditoria:** `cupons` = 14 linhas (exatamente o baseline
+  canônico), 0 órfãos em `categorias_novas`, 0 fora da junção do próprio estabelecimento — nenhum sinal
+  de impacto em registro preexistente/real.
+
+**Classificação: B — causa não determinada.** Nenhum mecanismo de hard-delete foi encontrado no
+banco/runtime auditado, e não houve evidência de impacto nos dados preexistentes. Uma ação externa ao
+runtime auditado (por exemplo, cleanup manual fora da API REST) é possível, mas **não foi comprovada**
+— não há log, rastro ou confissão que sustente essa hipótese especificamente sobre qualquer outra.
+Não é C: não há mecanismo desconhecido capaz de apagar cupons reais.
+
+### Decisões NOT NULL — coluna a coluna, com a prova
+
+| Coluna | Decisão | Prova (hospedado, no momento da auditoria) |
+|---|---|---|
+| `cupons.categoria_nova_id` | **SET NOT NULL** | 14/14 preenchidos, 0 órfão, 0 fora da junção |
+| `cupom_eventos.categoria_id` | **SET NOT NULL** | 20508/20508 preenchidos, 0 órfão; trigger sempre deriva de `cupons.categoria_nova_id`, que passa a ser sempre não-nulo nesta mesma migration — fecha a única origem legítima de NULL |
+| `cupons_usuario.categoria_id` | **SET NOT NULL** | 7/7 preenchidos, 0 órfão; mesmo raciocínio |
+| `estabelecimentos.categoria_principal_id` | **continua NULLABLE** | Busca estrutural por `.from("estabelecimentos").insert` em `src/` não encontrou NENHUM caminho de criação de estabelecimento — só `supabase/seed.sql` (roda como `postgres`, fora de grant/RLS). NOT NULL protegeria um fluxo que não existe no runtime |
+
+As duas linhas de snapshot **superam, não contradizem**, a decisão registrada na seção do Marco 2A
+acima ("`cupom_eventos.categoria_id` continua NULL... um NOT NULL não adicionaria garantia, só um modo
+de falha novo"). Aquele texto foi escrito quando `categoria_nova_id` AINDA era nullable, e o risco que
+citava — evento/ativação falhando porque o cupom-fonte não tinha folha ainda — é exatamente o risco
+que a linha `cupons.categoria_nova_id` elimina na origem, nesta mesma migration. A premissa mudou; a
+conclusão muda com ela.
+
+### Blast radius de fixtures — inventário e migração
+
+Toda fixture POSITIVA de cupom (`.from("cupons").insert(...)`) que ainda fabricava cupom só com
+`categoria_id` legado ganhou `categoria_nova_id`, resolvida DINAMICAMENTE contra
+`estabelecimentos.categoria_principal_id` (ou o de-para exato do catálogo, no caso do seed) — nunca um
+UUID hardcoded solto. Intenção de cada suíte preservada; só o fixture ganhou o campo:
+
+- `scripts/test-fase3.ts` — 2 fixtures (`PEND`, `PEND_REJ`).
+- `scripts/test-fase4.ts` — 4 fixtures (`BUG1`, `BUG1-exp`, `NOVO`, `ANTIGO`); "fitness (dentro)" já
+  vinha migrada do Marco 2A.
+- `scripts/test-fase5.ts` — `base` compartilhado (5 fixtures: `LEGADO`, `DENTRO`, `FORA_DIA`,
+  `FORA_HORA`, `LIMITE2`).
+- `scripts/test-fase6.ts` — `base` compartilhado (`FIXO`, `VARIAVEL`, `ILIMITADO`, `LIMITADO`,
+  `NOVO`); `AUTO` já vinha migrada do Marco 2A.
+- `scripts/test-fase65.ts` — `baseCupom` compartilhado (`BASE`, `CICLO`, `LEGADO`).
+- `scripts/test-fase9.ts` — 4 fixtures (`CUPOM_F9`, `CUPOM_RECUSA`, fila A/B, janela controlada A-E).
+- `scripts/test-fase9c.ts` — `base` compartilhado (`CUPOM_IMG`, `CUPOM_JAN`, `CUPOM_EXCL`,
+  `CUPOM_VIVO`).
+- `supabase/seed.sql` — os 14 cupons canônicos: `categoria_nova_id` resolvida por slug (os mesmos
+  pares `(segmento_slug, categoria_slug)` de `docs/taxonomia/depara-v1.json` / da CTE
+  `depara_cupons` em `20260830160000`) DENTRO do próprio INSERT, porque o padrão antigo (nasce NULL,
+  backfill via UPDATE depois) deixou de funcionar sob NOT NULL — o UPDATE de
+  `aplicar_backfill_m1_taxonomia()` só toca `where categoria_id is null`, e não dá mais para nascer
+  NULL. A chamada que faz efeito real foi antecipada para ANTES do INSERT de cupons (a junção nova
+  precisa existir primeiro, por causa do trigger `checar_categoria_nova_cupom`); as duas chamadas no
+  fim do arquivo viraram verificação idempotente, não o mecanismo que preenche. É uma TERCEIRA
+  expressão do mesmo mapeamento de 14 linhas (a segunda é a CTE em `160000`) — migrations anteriores
+  são imutáveis, então não havia como evitar; se `depara-v1` mudar, as três precisam mudar juntas.
+
+**8 arquivos de teste + o seed migrados — 22 fixtures de cupom.** Fixtures NEGATIVAS (testam rejeição
+por outro motivo — `test-fase4.ts` "pet fora do conjunto", `test-rls.ts` "anon não insere",
+`test-m2-cutover.ts` item A "old-shaped") não precisaram de `categoria_nova_id`: continuam sendo
+rejeitadas pelo TRIGGER, que dispara antes da constraint física ser avaliada — comportamento
+inalterado, intenção preservada.
+
+**Dois itens mudaram de PROPÓSITO** (reescritos, não acomodados — mesma doutrina dos itens 34/37 do
+Marco 2A):
+
+- `test-m2-cutover.ts` item **40b**: provava que `service_role` continuava isento por design. Agora
+  prova que a isenção do TRIGGER não sobrevive à constraint FÍSICA — `service_role` também é recusado
+  (`23502 not_null_violation`). Item **40c**: a guarda que falhava se `20260831130000` existisse antes
+  do smoke de produção passar foi invertida — agora confirma que o arquivo existe.
+- `test-m1-taxonomia.ts` itens **29/30**: provavam que o fluxo legado sobrevivia com shadow NULL
+  (write-freeze transitório). Agora provam que esse caminho está fechado (`23502`) e que shadow NULL
+  não existe mais em lugar nenhum.
+
+### Preconditions/postconditions — mesma doutrina estrutural da 120000
+
+Fail-high, `count(*) = count(coluna)` / zero-órfão, nunca contagem fotografada (`cupons=14` etc. entra
+só como `raise notice`). **Corrigido em iteração (auditoria local):** a primeira versão da
+postcondition checava `count(*) from public.categorias/estabelecimento_categorias` esperando >0 —
+errado, porque essas tabelas são populadas por `supabase/seed.sql`, não por migration, e estão
+legitimamente vazias no momento em que a migration roda dentro de `db reset` (mesmo raciocínio do
+"vazio satisfaz condição universal" que a 120000 já aplicava a `cupons`). Corrigida para checar
+EXISTÊNCIA da tabela (`information_schema.tables`), não contagem de linhas — o erro só apareceu
+porque `db reset` de verdade rodou e falhou alto, exatamente o que uma precondition/postcondition
+fail-high deve fazer.
+
+**Corrigido em iteração (preflight de hospedagem):** a postcondition original só verificava, via
+`information_schema`, as três colunas que a migration ALTERA (`cupons.categoria_nova_id`,
+`cupom_eventos.categoria_id`, `cupons_usuario.categoria_id`) mais `cupons.categoria_id` legado. Não
+afirmava estruturalmente que `estabelecimentos.categoria_principal_id` continua `YES` (nullable), nem
+que `categorias_novas`/`estabelecimento_categorias_novas` continuam existindo — invariantes que a
+migration DELIBERADAMENTE não toca, mas que só estavam provados por leitura externa (`psql` fora da
+migration), não pelo próprio artefato que será hospedado. Adicionadas as verificações que faltavam:
+`estabelecimentos.categoria_principal_id` = `YES` e `exists()` para as duas tabelas novas — mesmo
+padrão já usado para `categorias`/`estabelecimento_categorias` legado. `db:reset` + `verify` completo
+rodados de novo depois da adição: mesmo resultado (1152 PASS / 0 FAIL), confirmando que a checagem
+nova não altera nenhum comportamento, só fecha uma lacuna de prova.
+
+### DDL — `NOT VALID` + `VALIDATE` + `SET NOT NULL`
+
+Mesmo padrão de duas etapas já usado em `20260802120000` (`cupons_prazo_ativacao_min`):
+`add constraint ... check (col is not null) not valid` → `validate constraint` (varre e falha alto se
+houver violação) → `alter column ... set not null` → `drop constraint` (a CHECK temporária vira
+redundante; NOT NULL já é a garantia definitiva). Com a CHECK já validada cobrindo a coluna, o
+Postgres 12+ **pula o scan completo da tabela** na etapa `SET NOT NULL` — mas essa etapa **ainda
+exige um lock breve de alteração de schema** (a definição da coluna muda no catálogo); isto não é
+"lock zero", é trabalho de scan evitado. Relevante sobretudo para `cupom_eventos`, que já tem 20508
+linhas hoje e só cresce: sem CHECK validada antes, um `SET NOT NULL` direto faria um scan bloqueante
+proporcional ao tamanho da tabela, além do lock de catálogo que ocorre de qualquer forma. Com ~20 mil
+linhas o risco operacional esperado é baixo, mas a janela de lock existe e não deve ser documentada
+como inexistente.
+
+### Comentários atualizados via `comment on` (não edita migrations anteriores)
+
+`cupons.categoria_nova_id`, `cupom_eventos.categoria_id`, `cupons_usuario.categoria_id` e a função
+`checar_categoria_nova_cupom()` ganharam `comment on` novos nesta migration — o texto "shadow,
+STAGING"/"continua NULL" da `160000`/`170000`/`120000` deixou de descrever o estado real. Isto não
+edita o arquivo daquelas migrations (que continuam imutáveis, blobs intactos): é uma instrução `comment
+on` nova, como de costume neste repositório.
+
+### O que continua igual
+
+Sem DROP, sem RENAME, sem cleanup físico. `public.categorias` (6 linhas), `estabelecimento_categorias`
+(7 linhas), `cupons.categoria_id` (legado, nullable, congelado desde o Marco 2A) — todos intocados.
+`checar_categoria_nova_cupom` não foi simplificado nem removido: continua a autoridade de NEGÓCIO
+(membership no conjunto do estabelecimento, folha ativa, proibição de limpar shadow UUID→NULL via
+API); a constraint física é defesa em profundidade sobre um invariante mais estreito (a coluna não
+pode estar vazia), não substituição do trigger.
+
+### Testes e verify
+
+`test:m2-cutover` 75 PASS · `test:m1-taxonomia` 65 PASS · `test:tx-p2a` 63 · `test:tx-p2b` 109 ·
+`test:tx-p2c` 71 · `test:tx-p2d1` 19 · `test:fase3` 22 · `test:fase4` 42 · `test:fase5` 64 ·
+`test:fase6` 177 · `test:fase65` 44 · `test:fase9` 57 · `test:fase9c` 72 · `test:fase9d1` 87 —
+contagens inalteradas em toda suíte à exceção dos dois itens reescritos acima (que trocaram de
+propósito, não de contagem). **`npm run verify` (sem pipe, exit code capturado direto): 0.**
+`db:reset` + 21 comandos de suíte (1152 PASS, 0 FAIL no total) + `next build` — build completo, sem erro.
+`database.types.ts`: 1413 → **1414 linhas**, sentinelas presentes
+(`profiles`/`estabelecimentos`/`cupons`/`cupons_usuario`), não truncado; `cupons.categoria_nova_id`,
+`cupom_eventos.categoria_id` e `cupons_usuario.categoria_id` saem sem `| null` no tipo `Row` gerado —
+`cupons.categoria_id` (legado) mantém `| null`.
+
+### Blob/hash
+
+`20260831120000`: **`8d1d5b3a8cbaafb3c7031caac1d03648182d1eef`** — inalterado (ver confirmação no
+topo desta seção).
+
+`20260831130000` (local, ainda não hospedada): **`6e58d532b41401cd4561dec995743b8ca3f2e2c6`** —
+arquivo real que o CLI aplicaria, conferido via `git hash-object` (hash recalculado depois da adição
+das checagens de `estabelecimentos.categoria_principal_id`/`categorias_novas`/
+`estabelecimento_categorias_novas` na postcondition, descrita acima).
+
+### Consequência do rollback, depois de hospedar
+
+Registrado explicitamente antes de qualquer decisão de hospedar: **depois que `20260831130000` for
+aplicada no hospedado, não será mais seguro fazer rollback (Instant Rollback ou deploy de código
+antigo) para um runtime pré-Marco-2 que cria cupom sem `categoria_nova_id`.** Isto é **intencional** —
+é o próprio propósito do contract: transformar o UUID de requisito "esperado pelo runtime novo" em
+requisito estrutural permanente do banco, que nenhum código, papel ou via de escrita pode contornar.
+
+Na prática:
+- Rollback de **código** continua possível, mas só para versões que já preenchem
+  `categoria_nova_id` no INSERT (o runtime atual, pós-Marco-2A, já preenche — ver "MARCO 2A" acima).
+  Um rollback para antes do Marco 2A (código que só manda `categoria_id` legado) passaria a falhar
+  toda criação de cupom com `23502 not_null_violation`, para qualquer papel, service_role incluído.
+- **Legado físico permanece no banco** (`categorias`, `estabelecimento_categorias`,
+  `cupons.categoria_id`) para investigação ou cleanup futuro (Marco 3) — mas sua presença NÃO
+  significa que o banco volta a aceitar escrita no formato pré-cutover. O contract é sobre ESCRITA
+  NOVA, não sobre leitura do histórico.
+- O caminho de reversão seguro, se necessário depois de hospedar, é **rollback de schema** (nova
+  migration que reverte `SET NOT NULL` para nullable) — não Instant Rollback de deployment, que reverte
+  só o código, nunca o banco.
+
+### GATE 19 — nada foi hospedado
+
+Nenhum `supabase db push --linked`, nenhuma escrita SQL contra o hospedado, nenhum push, PR, merge ou
+deploy neste trabalho. Confirmações:
+
+- **`20260831120000` NÃO FOI ALTERADA.**
+- **`20260831130000` EXISTE APENAS LOCALMENTE e NÃO FOI HOSPEDADA.**
+- **NENHUMA ESCRITA FOI EXECUTADA NO SUPABASE HOSPEDADO NESTE TRABALHO** — as únicas interações com o
+  projeto hospedado, via Supabase MCP, foram leituras (`execute_sql`/`query_logs` com `select`,
+  `show log_statement`); nenhum insert/update/delete/DDL.
+- **O CONTRACT FINAL NÃO REMOVEU NENHUMA ESTRUTURA LEGADA.**
+
+### Preflight de hospedagem — read-only, aguardando autorização
+
+Rodado depois das duas correções documentais acima e da adição da postcondition do Gate 8. Tudo
+read-only contra o hospedado; nada aplicado.
+
+- **Ledger** (`npx supabase migration list --linked`): `local == remote` para toda migration até
+  `20260831120000` inclusive. Única pendência: `20260831130000` (`remote` vazio).
+- **Dry-run** (`npx supabase db push --linked --dry-run`, exit 0): lista **exclusivamente**
+  `20260831130000_m2_contract_taxonomia.sql`. Nenhuma outra migration pendente.
+- **Baseline hospedado imediato:** `cupons` 14 total / 0 NULL em `categoria_nova_id`; `cupom_eventos`
+  20508 total / 0 NULL em `categoria_id`; `cupons_usuario` 7 total / 0 NULL em `categoria_id`; 0
+  órfãos nas três relações; 0 cupom fora da junção do próprio estabelecimento — idêntico ao medido na
+  auditoria anterior (nenhuma escrita ocorreu no meio tempo).
+- **Schema hospedado pré-contract** (`information_schema.columns`): as três colunas-alvo ainda
+  `is_nullable = YES` (nenhum apply parcial/externo); `estabelecimentos.categoria_principal_id` e
+  `cupons.categoria_id` também `YES`, como esperado.
+- **Runtime em produção:** `dpl_8mhXYvQhQPUTR2PGmmeGMSG2LGt3` continua `READY`, `production`, commit
+  `038fac4`/`main` — sem novo deployment desde o Marco 2A. Não foi feito novo smoke de escrita (só
+  confirmação de saúde/identidade do deployment).

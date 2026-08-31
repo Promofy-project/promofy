@@ -328,13 +328,14 @@ async function main(): Promise<number> {
     .eq("id", "e1")
     .single();
   const cat = e1!.categoria_id as string;
-  // MARCO 2A (HARDENING): o insert via lojista mais abaixo (auto-publish)
-  // precisa de categoria_nova_id -- INSERT de authenticated sem ela e
-  // recusado desde o bridge (categoria_nova_obrigatoria_no_runtime).
+  // MARCO 2A (HARDENING) + MARCO 2B (CONTRACT): categoria_nova_id agora é
+  // exigida no INSERT de authenticated (desde o bridge) e é fisicamente
+  // NOT NULL na tabela (desde o contract) — inclusive para service_role.
   const catNova = e1!.categoria_principal_id as string;
   const base = {
     estabelecimento_id: "e1",
     categoria_id: cat,
+    categoria_nova_id: catNova,
     validade_fim: "2030-12-31",
     status: "ativo" as const,
     horarios: { descricao: "Todos os dias" }, // sem janela: ativável a qualquer hora

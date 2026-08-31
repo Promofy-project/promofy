@@ -93,16 +93,19 @@ async function main(): Promise<number> {
   // categoria de e1 (para o cupom de teste respeitar a FK)
   const { data: e1 } = await svc
     .from("estabelecimentos")
-    .select("categoria_id")
+    .select("categoria_id, categoria_principal_id")
     .eq("id", "e1")
     .single();
   const catE1 = e1!.categoria_id as string;
+  // MARCO 2B (CONTRACT): categoria_nova_id agora é NOT NULL — todo INSERT
+  // válido de cupom precisa da folha nova, mesmo via service_role.
+  const catNovaE1 = e1!.categoria_principal_id as string;
 
   // cria (idempotente) dois cupons 'pendente' em e1
   await svc.from("cupons").delete().in("id", [PEND, PEND_REJ]);
   await svc.from("cupons").insert([
-    { id: PEND, estabelecimento_id: "e1", titulo: "F3 Pendente Aprovar", categoria_id: catE1, economia: 25, validade_fim: "2030-12-31", status: "pendente" },
-    { id: PEND_REJ, estabelecimento_id: "e1", titulo: "F3 Pendente Rejeitar", categoria_id: catE1, economia: 30, validade_fim: "2030-12-31", status: "pendente" },
+    { id: PEND, estabelecimento_id: "e1", titulo: "F3 Pendente Aprovar", categoria_id: catE1, categoria_nova_id: catNovaE1, economia: 25, validade_fim: "2030-12-31", status: "pendente" },
+    { id: PEND_REJ, estabelecimento_id: "e1", titulo: "F3 Pendente Rejeitar", categoria_id: catE1, categoria_nova_id: catNovaE1, economia: 30, validade_fim: "2030-12-31", status: "pendente" },
   ]);
 
   try {

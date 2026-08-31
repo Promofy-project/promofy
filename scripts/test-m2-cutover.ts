@@ -411,29 +411,25 @@ async function main(): Promise<number> {
       "update passou!",
     );
 
-    // A prova de que categoria_nova_id CONTINUA fisicamente nullable já
-    // rodou — e melhor: rodou no lugar certo. A própria migration
-    // 20260831120000 reafirma `is_nullable = 'YES'` no bloco de
-    // POSTCONDITIONS (SQL direto, contexto administrativo), como parte de
-    // `npm run db:reset`; duplicar essa checagem aqui via PostgREST não é
-    // possível (information_schema não é schema exposto pelo PostgREST —
-    // `svc.from("information_schema.columns")` falharia com "relation
-    // not found", nunca testando nada de verdade) nem necessário.
-    //
-    // O que ESTE teste prova é outra coisa, e só dá para provar com dado
-    // real: que a EXCEÇÃO do item 1 para service_role é um DESIGN
-    // deliberado (decisão tomada com o responsável do projeto: nesta casa
-    // service_role nunca é o canal da aplicação — CLAUDE.md, "só
-    // scripts/, que rodam no Node local"), não uma lacuna esquecida. Sem
-    // este teste, um "consertar" futuro do hardening que apertasse
-    // também o service_role quebraria em silêncio — nenhuma asserção
-    // aqui hoje diria por quê.
+    // MARCO 2B (CONTRACT, 20260831130000): item 40b MUDOU DE PROPÓSITO
+    // (reescrito, não acomodado) — mesma doutrina do 29/30 em
+    // test-m1-taxonomia e do 34/37 do próprio MARCO 2A. Até o contract, a
+    // isenção de service_role no INSERT (item 1, trigger) era a ÚNICA
+    // barreira, e este teste provava que ela era design deliberado, não
+    // lacuna. O contract fechou essa isenção pela raiz: categoria_nova_id
+    // é agora fisicamente NOT NULL, e uma constraint de coluna NÃO
+    // distingue papel — nem o trigger tenta mais isentar service_role no
+    // INSERT (ver checar_categoria_nova_cupom, inalterada; quem fecha o
+    // gap é a própria constraint, verificada depois do trigger rodar).
+    // "service_role nunca é canal da aplicação" (CLAUDE.md) continua
+    // verdade, mas deixou de ser o MOTIVO da proteção — agora é a
+    // constraint, para qualquer role, sem exceção.
     const semFolha = await svc
       .from("cupons")
       .insert({
         id: `${PREFIXO}sem-folha`,
         estabelecimento_id: "e1",
-        titulo: "M2 service_role isento (design)",
+        titulo: "M2B service_role também é recusado (contract)",
         beneficio: "fixture",
         economia: 1,
         validade_fim: "2030-12-31",
@@ -441,16 +437,15 @@ async function main(): Promise<number> {
       .select("id, categoria_nova_id")
       .single();
     check(
-      "40b. service_role AINDA cria cupom sem folha — exceção intencional do item 1, não lacuna (categoria_nova_id continua nullable)",
-      !semFolha.error && semFolha.data?.categoria_nova_id === null,
-      semFolha.error?.message ?? JSON.stringify(semFolha.data),
+      "40b. service_role AGORA é recusado ao criar cupom sem folha — a isenção do item 1 não sobrevive à constraint física (23502 not_null_violation)",
+      semFolha.error?.code === "23502",
+      semFolha.error?.code ?? JSON.stringify(semFolha.data),
     );
-    await svc.from("cupons").delete().eq("id", `${PREFIXO}sem-folha`);
 
     const migrations = fs.readdirSync(path.join(process.cwd(), "supabase/migrations"));
     check(
-      "40c. a migration de CONTRACT (20260831130000) NÃO existe no diretório",
-      !migrations.some((f) => f.startsWith("20260831130000")),
+      "40c. a migration de CONTRACT (20260831130000) agora EXISTE no diretório — guarda cumpriu seu papel (impedir aplicação prematura), fase seguinte é hospedar",
+      migrations.some((f) => f.startsWith("20260831130000")),
       migrations.filter((f) => f.startsWith("2026083113")).join(", "),
     );
 

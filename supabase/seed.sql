@@ -43,70 +43,113 @@ insert into public.estabelecimento_categorias (estabelecimento_id, categoria_id)
   ('e6', 'pet')
 on conflict do nothing; -- a migration 12 já faz backfill da principal
 
+-- MARCO 1 (migration 20260830160000) — backfill da junção nova
+-- (estabelecimento_categorias_novas) e de estabelecimentos.categoria_principal_id,
+-- ANTECIPADO para ANTES do INSERT de cupons. MARCO 2B (CONTRACT,
+-- 20260831130000) tornou cupons.categoria_nova_id fisicamente NOT NULL,
+-- o que quebra o desenho original (INSERT primeiro com o shadow NULL,
+-- backfill DEPOIS via UPDATE) — o INSERT abaixo já precisa de uma
+-- categoria_nova_id válida, e o trigger checar_categoria_nova_cupom exige
+-- que ela já esteja na junção do estabelecimento. Chamar a função aqui é
+-- NO-OP para a parte de cupons (0 dos 14 existe ainda — mesmo comportamento
+-- documentado na própria função) e efeito real para a parte de
+-- estabelecimentos, que é o que este INSERT de cupons precisa. A chamada
+-- original no fim do arquivo continua e agora é redundante-porém-inofensiva
+-- para a parte de cupons (nenhuma linha estará NULL para o UPDATE pegar).
+select private.aplicar_backfill_m1_taxonomia();
+
 -- CUPONS (12 do catálogo + 2 campanhas portal-only do e1) -----
+-- categoria_nova_id: MARCO 2B (CONTRACT) tornou a coluna NOT NULL, então
+-- o valor tem de existir já neste INSERT — não dá mais para nascer NULL e
+-- ser preenchido pelo backfill (que só atualiza onde IS NULL). Os pares
+-- (segmento_slug, categoria_slug) abaixo são EXATAMENTE
+-- docs/taxonomia/depara-v1.json → cupons[], a MESMA fonte que
+-- private.aplicar_backfill_m1_taxonomia() (migration 20260830160000, cte
+-- depara_cupons) e scripts/test-m1-taxonomia.ts (item 9) usam — resolvidos
+-- por slug contra o catálogo (nunca um UUID hardcoded). Migrations
+-- anteriores são imutáveis, então esta é uma TERCEIRA expressão da mesma
+-- tabela de 14 linhas (a segunda é a cte em 160000); se depara-v1 mudar,
+-- as três precisam mudar juntas.
 -- ordem = índice do array do mock (home = order by ordem limit 6).
 -- rating/avaliacoes = POR CUPOM (protótipo; difere do estabelecimento).
 -- limite_total = 1000 nos cupons do e1 (paridade com cupons-seed.ts).
+with folha as (
+  select s.slug as segmento_slug, cn.slug as categoria_slug, cn.id
+    from public.segmentos s
+    join public.categorias_novas cn on cn.segmento_id = s.id
+)
 insert into public.cupons
-  (id, estabelecimento_id, titulo, categoria_id, beneficio, economia,
+  (id, estabelecimento_id, titulo, categoria_id, categoria_nova_id, beneficio, economia,
    preco_de, preco_por, validade_fim, limite_total, regras, horarios,
    status, destaque, distancia_km, imagem, ordem, rating, avaliacoes) values
   ('c01', 'e1', 'Rodízio de pizza em dobro', 'alimentacao',
+   (select id from folha where segmento_slug = 'alimentacao' and categoria_slug = 'pizzaria'),
    '2 rodízios pelo preço de 1', 45, 89.9, 44.9, current_date + 45, 1000,
    '["Válido para consumo no local, jantar.","Não cumulativo com outras promoções.","Necessário apresentar o cupom no caixa."]'::jsonb,
    '{"descricao":"Ter a Dom, 18h às 23h","dias":["Ter","Qua","Qui","Sex","Sáb","Dom"],"inicio":"18:00","fim":"23:00"}'::jsonb,
    'ativo', true, 1.2, '/img/cupons/c01.jpg', 1, 4.8, 1240),
   ('c02', 'e1', '20% off no almoço executivo', 'alimentacao',
+   (select id from folha where segmento_slug = 'alimentacao' and categoria_slug = 'restaurante'),
    'Prato + bebida + sobremesa', 18, null, null, current_date + 30, 1000,
    '["Válido de segunda a sexta.","Limite de 1 cupom por pessoa."]'::jsonb,
    '{"descricao":"Seg a Sex, 11h às 15h","dias":["Seg","Ter","Qua","Qui","Sex"],"inicio":"11:00","fim":"15:00"}'::jsonb,
    'ativo', false, 2.4, '/img/cupons/c02.jpg', 2, 4.5, 1240),
   ('c03', 'e2', '1 mês grátis na matrícula', 'fitness',
+   (select id from folha where segmento_slug = 'fitness' and categoria_slug = 'academia'),
    'Plano anual com 1 mês cortesia', 99, 199, 99, current_date + 60, null,
    '["Válido para novos alunos.","Fidelidade mínima de 12 meses.","Avaliação física inclusa."]'::jsonb,
    '{"descricao":"Seg a Sáb, 6h às 22h","dias":["Seg","Ter","Qua","Qui","Sex","Sáb"],"inicio":"06:00","fim":"22:00"}'::jsonb,
    'ativo', true, 0.8, '/img/cupons/c03.jpg', 3, 4.7, 890),
   ('c04', 'e2', 'Aula de spinning 2x1', 'fitness',
+   (select id from folha where segmento_slug = 'fitness' and categoria_slug = 'academia'),
    'Traga um amigo sem custo', 30, null, null, current_date + 30, null,
    '["Sujeito à lotação da turma.","Agendamento prévio obrigatório."]'::jsonb,
    '{"descricao":"Seg, Qua e Sex, 19h"}'::jsonb,
    'indisponivel', false, 3.1, '/img/cupons/c04.jpg', 4, 4.3, 890),
   ('c05', 'e3', 'Corte + escova com 40% off', 'beleza',
+   (select id from folha where segmento_slug = 'beleza' and categoria_slug = 'salao-de-beleza'),
    'Inclui hidratação expressa', 50, 125, 75, current_date + 40, null,
    '["Mediante agendamento.","Válido de terça a quinta."]'::jsonb,
    '{"descricao":"Ter a Sáb, 9h às 19h","dias":["Ter","Qua","Qui","Sex","Sáb"],"inicio":"09:00","fim":"19:00"}'::jsonb,
    'ativo', true, 1.6, '/img/cupons/c05.jpg', 5, 4.9, 654),
   ('c06', 'e3', 'Dia de noiva com brinde', 'beleza',
+   (select id from folha where segmento_slug = 'beleza' and categoria_slug = 'salao-de-beleza'),
    'Pacote completo + acompanhante', 120, null, null, current_date + 75, null,
    '["Reserva com 30 dias de antecedência.","Sinal de 30%."]'::jsonb,
    '{"descricao":"Sob agendamento"}'::jsonb,
    'ativo', false, 4.2, '/img/cupons/c06.jpg', 6, 4.6, 654),
   ('c07', 'e4', 'Fone bluetooth com 35% off', 'eletronicos',
+   (select id from folha where segmento_slug = 'eletronicos' and categoria_slug = 'eletroeletronicos'),
    'Modelos selecionados', 140, 399, 259, current_date + 35, null,
    '["Enquanto durarem os estoques.","Garantia de 12 meses."]'::jsonb,
    '{"descricao":"Seg a Sáb, 10h às 22h"}'::jsonb,
    'ativo', false, 2.0, '/img/cupons/c07.jpg', 7, 4.4, 2130),
   ('c08', 'e4', 'Película + capa grátis na compra', 'eletronicos',
+   (select id from folha where segmento_slug = 'eletronicos' and categoria_slug = 'celulares-acessorios'),
    'Na compra de qualquer smartphone', 60, null, null, current_date + 30, null,
    '["Instalação inclusa.","1 brinde por aparelho."]'::jsonb,
    '{"descricao":"Seg a Sáb, 10h às 22h"}'::jsonb,
    'indisponivel', false, 5.0, '/img/cupons/c08.jpg', 8, 4.2, 2130),
   ('c09', 'e5', 'Curso de inglês — 3 meses grátis', 'educacao',
+   (select id from folha where segmento_slug = 'educacao' and categoria_slug = 'idiomas'),
    'Plano semestral com 3 meses extra', 290, 580, 290, current_date + 90, null,
    '["Para novas matrículas.","Material didático à parte."]'::jsonb,
    '{"descricao":"Acesso 24h (online)"}'::jsonb,
    'ativo', true, 1.1, '/img/cupons/c09.jpg', 9, 4.8, 412),
   ('c10', 'e5', 'Mentoria de carreira 50% off', 'educacao',
+   (select id from folha where segmento_slug = 'educacao' and categoria_slug = 'cursos-profissionalizantes'),
    'Sessão individual de 1h', 75, 150, 75, current_date + 50, null,
    '["Agendamento conforme disponibilidade.","Online via vídeo."]'::jsonb,
    '{"descricao":"Seg a Sex, 9h às 18h"}'::jsonb,
    'ativo', false, 6.3, '/img/cupons/c10.jpg', 10, 4.5, 412),
   ('c11', 'e6', 'Banho & tosa leve 2x1', 'pet',
+   (select id from folha where segmento_slug = 'pet' and categoria_slug = 'banho-tosa'),
    'Para cães de pequeno porte', 40, null, null, current_date + 40, null,
    '["Mediante agendamento.","Válido de segunda a quinta."]'::jsonb,
    '{"descricao":"Seg a Sáb, 8h às 18h"}'::jsonb,
    'ativo', true, 0.9, '/img/cupons/c11.jpg', 11, 4.7, 738),
   ('c12', 'e6', 'Ração premium 25% off', 'pet',
+   (select id from folha where segmento_slug = 'pet' and categoria_slug = 'racao-acessorios'),
    'Sacos de 15kg selecionados', 55, 220, 165, current_date + 55, null,
    '["Limite de 2 unidades por cliente.","Enquanto durar o estoque."]'::jsonb,
    '{"descricao":"Seg a Sáb, 8h às 18h"}'::jsonb,
@@ -123,11 +166,13 @@ insert into public.cupons
   -- quem prova esgotamento e vencimento de verdade é `test-fase9d1`, que
   -- monta cupom com limite 1 e valida no balcão.
   ('p-campanha-esgotada', 'e1', 'Combo casal + 2 sobremesas', 'alimentacao',
+   (select id from folha where segmento_slug = 'alimentacao' and categoria_slug = 'restaurante'),
    'Para 2 pessoas, no jantar', 60, null, null, current_date + 28, 500,
    '["Válido no jantar, mediante reserva.","Limite de 1 por mesa."]'::jsonb,
    '{"descricao":"Ter a Dom, 18h às 23h"}'::jsonb,
    'esgotado', false, 1.2, '', 100, 4.7, 320),
   ('p-campanha-expirada', 'e1', 'Rodízio com 30% off (almoço)', 'alimentacao',
+   (select id from folha where segmento_slug = 'alimentacao' and categoria_slug = 'restaurante'),
    'Almoço de segunda a sexta', 28, null, null, current_date - 43, 800,
    '["Válido no almoço, dias úteis."]'::jsonb,
    '{"descricao":"Seg a Sex, 11h às 15h"}'::jsonb,
@@ -190,14 +235,18 @@ update public.cupons
  where status not in ('pendente', 'rejeitado');
 
 -- MARCO 1 (migration 20260830160000/170000) — backfill dos shadows UUID
--- e dos snapshots de taxonomia. As linhas que essas migrations
--- referenciam (estabelecimentos e1-e6, cupons canônicos) só existem no
--- HOSPEDADO no momento em que as migrations rodam; localmente elas só
--- passam a existir agora, com este seed. As duas migrations fizeram o
--- backfill NO-OP nesse momento (0 de 6 / 0 de 14) — chamar as mesmas
--- funções aqui, depois que os dados existem, é o que aplica o backfill
--- de verdade em ambiente local. Mesma fonte de verdade dos dois lados,
--- nunca uma segunda cópia da lógica de mapeamento.
+-- e dos snapshots de taxonomia.
+--
+-- MARCO 2B (CONTRACT): desde que cupons.categoria_nova_id ficou NOT NULL,
+-- as duas chamadas abaixo já não têm trabalho real a fazer neste ponto do
+-- arquivo — o INSERT de cupons (acima) já nasce com categoria_nova_id
+-- preenchida (a chamada de aplicar_backfill_m1_taxonomia() que faz efeito
+-- real foi ANTECIPADA para antes do INSERT de cupons, ver comentário lá),
+-- e o INSERT de cupom_eventos (acima) já nasce com categoria_id
+-- preenchido pelo trigger trg_cupom_eventos_capturar_categoria (deriva
+-- sempre de cupons.categoria_nova_id, que já existe). Mantidas aqui como
+-- verificação idempotente de defense-in-depth (fail-high se alguma linha
+-- escapar preenchida) — não como o mecanismo que preenche.
 --
 -- HARDENING FINAL: as duas funções vivem em `private` (não `public`) —
 -- não são API de produto, só ferramenta de migration/seed.
