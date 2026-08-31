@@ -1016,7 +1016,7 @@ depois desta migration. As três views da TX-P2A continuam lendo `public.categor
 devolvendo 6/6/6. `database.types.ts` regenerado (`icone` presente, `icon_override`/`tema_override`
 zerados).
 
-⏳ **Local apenas.** Não aplicada no hospedado ainda.
+✅ **Aplicada no hospedado e IMUTÁVEL.** `20260830150000` foi ao ar no Supabase de produção (`bpeqpxvxgdyjjdcoycgp`) junto com `20260830160000`/`20260830170000` — mesmo apply, mesma janela. Hash SHA-256 do arquivo validado antes e depois do apply: `e0fced8603e30a533afdbf0c1cfde85fe97a2633a5511f3197ae72c2620cf266`. Não editar este arquivo nunca mais, pelo mesmo motivo das anteriores da cadeia. Ver seção «PUBLICAÇÃO» ao final do capítulo MARCO 1 para o estado hospedado completo.
 
 ## MARCO 1 — shadows UUID, relações novas e snapshots imutáveis
 
@@ -1222,7 +1222,42 @@ duas funções de backfill via RPC para `anon`/`authenticated`/`service_role`. C
 provado no próprio teste (nenhuma linha residual, `c01` de volta à categoria original, relação
 `e1`/pizzaria de volta ao join).
 
-⏳ **`20260830160000` e `20260830170000`: local apenas. Não aplicadas no hospedado.**
+✅ **`20260830160000` e `20260830170000`: aplicadas no hospedado e IMUTÁVEIS**, no mesmo apply que
+`20260830150000`. Hashes SHA-256 validados antes e depois do apply:
+`10282c0868b7d67bdd1730ee5f907444f1fee3dab9326047c58f42198c6469bb` (160000) e
+`552f01ea4fa382cb6c66475964e02b675da8e6314aaab5b747f631f7cfc87727` (170000).
 **CUTOVER (runtime lendo os campos-sombra em vez do legado) AINDA NÃO ACONTECEU** — views da TX-P2A
 continuam 6/6/6, nenhuma tela lê `categoria_nova_id`/`categoria_principal_id`/
-`estabelecimento_categorias_novas`.
+`estabelecimento_categorias_novas`. Publicar o schema não publicou o comportamento.
+
+### PUBLICAÇÃO — apply hospedado (Supabase `bpeqpxvxgdyjjdcoycgp`, sa-east-1)
+
+Autorizado explicitamente pelo responsável do projeto. Preflight completo (28 gates, read-only +
+dry-run) rodou antes, sem nenhuma escrita; o apply real (`npx supabase db push --linked`) rodou uma
+única vez, aplicando as três migrations em ordem (150000 → 160000 → 170000), exit code 0. Ledger
+confirmado `local == remote` para as três logo em seguida.
+
+**Estado hospedado confirmado pós-apply** (todas as contagens lidas do próprio banco de produção,
+nenhuma assumida):
+
+- `segmentos` = 14, `categorias_novas` = 75 (inalterados).
+- `cupons` = 14, `categoria_nova_id` preenchido em **14/14**, 0 NULL, mapping **14/14** exatamente
+  igual a `docs/taxonomia/depara-v1.json`.
+- `estabelecimentos` = 6, `categoria_principal_id` preenchido em **6/6**, mapping **6/6** exato.
+- `estabelecimento_categorias_novas` = **10** relações, conjunto idêntico ao de-para (zero extra,
+  zero faltando), `e1 → fitness` confirmadamente ausente.
+- `cupom_eventos` = 20508, `categoria_id` preenchido em **20508/20508**, 0 NULL, 0 referência órfã.
+- `cupons_usuario` = 7, `categoria_id` preenchido em **7/7**, 0 NULL, 0 referência órfã.
+- `pontos_transacoes`: COUNT = 11, SUM(pontos) = 2870 — **idênticos ao pré-apply**. Nenhuma das três
+  migrations menciona essa tabela; confirmado tanto por leitura do texto quanto por leitura do banco.
+- Legado intocado: `categorias` = 6, `estabelecimento_categorias` = 7. Views TX-P2A = **6/6/6**.
+- Os 8 triggers do Marco 1 (reparent, cupom↔join, principal↔join, join→cupom reverso, captura +
+  imutabilidade dos dois snapshots) confirmados instalados com a definição exata já testada local.
+- `private.aplicar_backfill_m1_taxonomia` / `private.aplicar_backfill_m1_snapshots`: confirmadas
+  **só** em `private` (zero cópia em `public`), `SECURITY DEFINER = false`, inalcançáveis via API —
+  prova estrutural, nenhuma RPC foi chamada no hospedado.
+
+**Nenhuma linha foi deletada.** Zero `DELETE` nos três arquivos, confirmado por leitura e por
+resultado (nenhuma contagem caiu). `git push`/PR/merge tratados como GATE separado, registrados na
+seção de Git deste repositório quando acontecerem — a publicação do SCHEMA não implica cutover de
+runtime nem deploy de código.
