@@ -1,7 +1,7 @@
 import { Store, MapPin, Tag } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
-import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
+import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { BotaoSair } from "@/components/botao-sair";
 
 export const dynamic = "force-dynamic";
@@ -22,14 +22,17 @@ export default async function PerfilPage() {
   if (uid) {
     const { data } = await supabase
       .from("estabelecimentos")
-      .select("nome, cidade, status, categoria_id")
+      .select("nome, cidade, status, categoria_principal_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (data) {
       est = { nome: data.nome, cidade: data.cidade, status: data.status };
-      if (data.categoria_id) {
-        const catalogo = await buscarCatalogoCategorias();
-        categoriaLabel = catalogo.find((c) => c.id === data.categoria_id)?.label ?? null;
+      if (data.categoria_principal_id) {
+        // Resolução, não oferta: o rótulo tem de aparecer mesmo se a folha
+        // tiver saído do catálogo depois de o estabelecimento ser criado.
+        const catalogo = await buscarCatalogoResolucao();
+        categoriaLabel =
+          catalogo.find((c) => c.id === data.categoria_principal_id)?.label ?? null;
       }
     }
   }

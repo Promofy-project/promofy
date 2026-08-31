@@ -100,7 +100,10 @@ export async function buscarCuponsAdmin(): Promise<AdminCupom[]> {
     beneficio: row.beneficio,
     economia: Number(row.economia),
     status: row.status,
-    categoriaId: row.categoria_id,
+    // MARCO 2A: a folha (uuid). Resolvida contra buscarCatalogoResolucao()
+    // — que inclui folha desativada — para o moderador nunca ver
+    // "Categoria" cinza no lugar do nome real.
+    categoriaId: row.categoria_nova_id ?? "",
     imagem: row.imagem ?? "",
     estabelecimentoId: row.estabelecimento_id,
     estabelecimentoNome: row.estabelecimentos?.nome ?? "—",
@@ -126,8 +129,8 @@ export interface AdminEstabelecimento {
   nome: string;
   cidade: string;
   status: string;
-  categoriaId: string; // principal (avatar/gradiente e pré-seleção)
-  categorias: string[]; // conjunto completo (junção, Fase 4)
+  categoriaId: string; // folha principal (avatar/gradiente e pré-seleção)
+  categorias: string[]; // conjunto completo de folhas (junção nova, Marco 2A)
   cuponsAtivos: number;
   cuponsTotal: number;
 }
@@ -137,7 +140,7 @@ export async function buscarEstabelecimentosAdmin(): Promise<AdminEstabeleciment
   const supabase = createClient();
   const { data: ests, error } = await supabase
     .from("estabelecimentos")
-    .select("id, nome, cidade, status, categoria_id")
+    .select("id, nome, cidade, status, categoria_principal_id")
     .order("nome", { ascending: true });
   if (error)
     throw new Error(`Falha ao buscar estabelecimentos (admin): ${error.message}`);
@@ -154,9 +157,10 @@ export async function buscarEstabelecimentosAdmin(): Promise<AdminEstabeleciment
     }
   });
 
-  // conjunto de categorias por estabelecimento (junção, Fase 4)
+  // Conjunto de folhas por estabelecimento (junção NOVA, Marco 2A). A
+  // junção legada continua no banco, mas deixou de ser fonte de runtime.
   const { data: juncao } = await supabase
-    .from("estabelecimento_categorias")
+    .from("estabelecimento_categorias_novas")
     .select("estabelecimento_id, categoria_id");
   const catsPor = new Map<string, string[]>();
   (juncao ?? []).forEach((j) => {
@@ -170,8 +174,14 @@ export async function buscarEstabelecimentosAdmin(): Promise<AdminEstabeleciment
     nome: e.nome,
     cidade: e.cidade,
     status: e.status,
-    categoriaId: e.categoria_id,
-    categorias: catsPor.get(e.id) ?? [e.categoria_id],
+    categoriaId: e.categoria_principal_id ?? "",
+    // A principal é o fallback histórico de "conjunto vazio" — mas só
+    // quando ela existe. `categoria_principal_id` segue nullable (não há
+    // fluxo de criação de estabelecimento no código; ver a decisão de
+    // NOT NULL do Marco 2), então um conjunto vazio é uma lista vazia.
+    categorias:
+      catsPor.get(e.id) ??
+      (e.categoria_principal_id ? [e.categoria_principal_id] : []),
     cuponsAtivos: ativos.get(e.id) ?? 0,
     cuponsTotal: total.get(e.id) ?? 0,
   }));

@@ -1,5 +1,5 @@
 import { buscarCuponsAdmin } from "@/lib/data/admin";
-import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
+import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminCuponsPage() {
   const [cupons, catalogo] = await Promise.all([
     buscarCuponsAdmin(),
-    buscarCatalogoCategorias(),
+    buscarCatalogoResolucao(),
   ]);
   const pendentes = cupons.filter((c) => c.status === "pendente").length;
   const ativos = cupons.filter((c) => c.status === "ativo").length;

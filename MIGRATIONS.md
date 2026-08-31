@@ -1261,3 +1261,233 @@ nenhuma assumida):
 resultado (nenhuma contagem caiu). `git push`/PR/merge tratados como GATE separado, registrados na
 seção de Git deste repositório quando acontecerem — a publicação do SCHEMA não implica cutover de
 runtime nem deploy de código.
+
+---
+
+## `20260831120000_m2_bridge_taxonomia.sql` — MARCO 2A · BRIDGE do cutover de runtime
+
+**Status: aplicada e provada LOCAL. NÃO hospedada.** Nenhuma escrita foi executada no Supabase
+`bpeqpxvxgdyjjdcoycgp` neste trabalho. As sete migrations anteriores da cadeia de taxonomia continuam
+imutáveis; nenhum arquivo até `20260830170000` foi tocado.
+
+Esta é a metade de BANCO do cutover: o Marco 1 publicou o schema novo em modo sombra, e o runtime
+continuava 100% no legado. Aqui o banco passa a oferecer tudo de que o código novo precisa — o
+contrato exato com o código antigo (o que continua funcionando e o que fica deliberadamente
+congelado) está na seção seguinte.
+
+### O contrato real da janela (corrigido no HARDENING FINAL)
+
+A primeira versão deste documento dizia "o código antigo sobrevive integralmente" a esta migration.
+**Isso nunca foi verdade** para CRIAÇÃO e RECATEGORIZAÇÃO de cupom, e a auditoria do HARDENING FINAL
+(mesmo commit, migration ainda local) fechou o gap em vez de deixá-lo como uma lacuna silenciosa:
+
+**Funciona sem mudança nenhuma**, entre esta migration hospedada e o runtime novo em produção:
+leitura, discovery, navegação (views P2A/legado intocadas); resgate/ativação de cupom existente;
+edição de cupom que **não muda a categoria**.
+
+**Fica temporariamente bloqueado, de propósito**, só nesta janela:
+- **CRIAR** cupom pelo runtime antigo — todo INSERT de `anon`/`authenticated` agora exige
+  `categoria_nova_id`; o código antigo nunca a preenche.
+- **MUDAR** a categoria legada de um cupom via API — qualquer UPDATE que troque `categoria_id`
+  de valor (inclusive para NULL) é recusado para `anon`/`authenticated`/`service_role`.
+
+Motivo: não existe informação suficiente no modelo antigo para escolher, com segurança, uma das 75
+folhas novas — inventar essa escolha (de-para arbitrário) é proibido (ver seção "categoria_id
+legado" acima). Isto é um **write-freeze deliberado e curto**, não um bug.
+
+**Exceção documentada:** o requisito de `categoria_nova_id` no INSERT é aplicado só a
+`anon`/`authenticated` — não a `service_role`. Neste projeto `service_role` nunca é o canal da
+aplicação publicada (ver §"A `service_role` NUNCA é provisionada em plataforma de build" no
+CLAUDE.md); é o papel usado por ~30 fixtures de regressão em suítes **anteriores ao Marco 1**
+(`test-rls`, `fase3`, `fase4`, `fase5`, `fase6`, `fase6.5`, `fase9`, `fase9c`, `fase9d1` — nada
+de taxonomia) que criam cupom só com `categoria_id`. Bloquear também `service_role` fecharia zero
+caminho real e quebraria essas suítes sem necessidade. Já a limpeza de um shadow já definido
+(UUID → NULL) **não tem essa exceção**: nenhum papel via API pode fazer isso, `service_role`
+incluído — ele é operador de teste/migração, não sinônimo de "pode desfazer o cutover".
+
+### Por que ela é aditiva, passo a passo
+
+A migration vai ao ar **antes** do deploy do runtime novo, e isso só é seguro porque cada passo é
+invisível ao código publicado hoje:
+
+1. **três views novas** — ninguém as lê ainda;
+2. **`cupons.categoria_id` vira nullable** — o código antigo sempre manda valor num INSERT (o caso
+   que a nulidade serve é o do runtime NOVO);
+3. **`checar_categoria_cupom`** ganha uma saída antecipada para NULL; o caminho de EDIÇÃO com valor
+   preenchido e sem mudança continua validado como sempre — só a MUDANÇA de valor via API passou a
+   ser recusada (hardening final);
+4. **`checar_edicao_cupom`** passa a olhar `categoria_nova_id` **sem** deixar de olhar
+   `categoria_id` — serve aos dois códigos ao mesmo tempo para o que continua permitido (edição
+   sem trocar categoria);
+5. **grants** são adição, nunca remoção;
+6. **policies novas** da junção nova espelham as que a junção legada já tem, numa tabela que o
+   código antigo não lê;
+7. **HARDENING FINAL** — `checar_categoria_nova_cupom` (redefinida aqui via `create or replace`;
+   nasceu na `20260830160000`, hospedada e imutável) passa a exigir `categoria_nova_id` em todo
+   INSERT de `anon`/`authenticated`, e a recusar qualquer limpeza de um shadow já definido (UUID
+   → NULL), em qualquer papel via API. Fecha o gap descrito no "contrato real" acima.
+
+A ordem inversa (código primeiro) é impossível: o runtime novo não roda sem as views e o grant.
+
+### Preconditions e postconditions — estruturais, não fotografadas
+
+`raise exception` em qualquer divergência, antes de qualquer DDL. As condições são universais
+("TODO cupom tem folha", "`count(*) = count(categoria_id)`"), não contagens do retrato de hoje:
+hardcodar `20508` ou `cupons = 14` faria a migration falhar em qualquer instante que não fosse
+aquele — inclusive no `db reset` local, onde no momento em que ela roda as tabelas de dado ainda
+estão **vazias** (o `seed.sql` só roda depois de todas as migrations). Vazio satisfaz toda condição
+universal, que é o comportamento correto. Os totais entram como `raise notice` — baseline
+observável, nunca contrato. As duas únicas contagens exatas são as do CATÁLOGO (14 segmentos /
+75 folhas), que vêm da TX-P2C e são idênticas em local e hospedado.
+
+### O que ela faz
+
+- **`catalogo_segmentos`** (14) — o que a descoberta pública OFERECE. Filtra `ativo`.
+- **`catalogo_folhas`** (75) — as folhas ATRIBUÍVEIS agora. Filtra `ativo` nos dois níveis (folha e
+  segmento). `icone`/`tema` já chegam resolvidos por `coalesce(folha, segmento)` — a herança é regra
+  de modelo e vive no banco, não em 75 cópias no TypeScript, e é o que faz o app React Native
+  receber a mesma resposta pelo mesmo PostgREST.
+- **`folha_para_segmento`** (75) — folha → segmento + visual. **NÃO filtra `ativo`**, de propósito:
+  é a view do HISTÓRICO. Carrega `ativo`/`segmento_ativo` para o form de edição distinguir
+  "categoria atual, mantenha" de "categoria selecionável".
+
+  As três views da TX-P2A ficam **intocadas** servindo o legado. São views NOVAS e não um
+  `create or replace` das antigas porque o modelo novo guarda `tema` (token) onde o antigo guarda
+  `gradiente` (CSS): a FORMA da relação muda, e mudar a forma exige DROP/CREATE, que derrubaria o
+  código publicado no meio da janela. Expandir, nunca contrair.
+
+- **`cupons.categoria_id` → nullable, escrita congelada.** A coluna é `text NOT NULL → categorias(id)`
+  e `categorias` tem SEIS linhas: as folhas dos OITO segmentos que nunca existiram no legado
+  (turismo-hotelaria, moda, automotivo, entretenimento, serviços, saúde, casa-decoração,
+  infantil-maternidade) **não têm valor legado possível**, e inventar um de-para é proibido. Os
+  cupons de hoje preservam o valor como rede de rollback; cupom novo nasce com NULL aqui e UUID em
+  `categoria_nova_id`. Sem rename e sem drop: os dois quebrariam o código publicado no ato.
+
+- **`checar_edicao_cupom` passa a enxergar `categoria_nova_id`** em `v_mudou_algo` **e** em
+  `v_material`. Esta é a mudança menos óbvia e a mais importante: sem ela, com o grant de UPDATE
+  concedido abaixo, trocar a categoria de um cupom seria um update "que não mudou nada" — retorno
+  antecipado, zero registro em `moderacao_historico` e zero rebaixamento para moderação. Um lojista
+  publicaria em "Restaurante", seria aprovado, e migraria para "Academia" sem nenhum moderador ver,
+  pelo form ou pelo PostgREST direto.
+
+- **`grant update (categoria_nova_id) on cupons to authenticated`** — uma coluna, só. O INSERT nessa
+  coluna já existia (herdado do grant de tabela; a migration `20260830160000` revogou UPDATE, nunca
+  INSERT). A barreira real não é o grant: é o par de triggers acima.
+
+- **Junção nova vira operável.** A policy `using (true)` que o Marco 1 criou para a tabela SHADOW é
+  substituída pelo trio que a junção LEGADA sempre teve — ao virar fonte de runtime ela passaria a
+  expor ao anônimo os ids de estabelecimentos pendentes/suspensos, que `public.estabelecimentos`
+  esconde. E "dono e admin leem" não é cosmético: é o que faz `/e/cupom/novo` listar categorias com
+  o estabelecimento ainda pendente. Escrita: `grant insert, delete` + policies **só admin**, mesma
+  decisão da Fase 4.
+
+- **Vínculo NOVO exige folha ativa** (`checar_categoria_nova_ativa_no_vinculo`) — a outra ponta de
+  `ativo`, que faltava. O cupom já tinha a regra; o estabelecimento não, e nada impedia criar um
+  vínculo para uma folha fora de catálogo, que só falharia depois, na hora de criar o cupom.
+  Não-retroativo, como todas as outras: só dispara em INSERT ou UPDATE que muda a chave.
+
+### `ativo` — onde é filtro e onde não é
+
+`ativo` governa **NOVA SELEÇÃO**, nunca o histórico.
+
+- **É filtro** em: `catalogo_segmentos`, `catalogo_folhas`, `checar_categoria_nova_cupom`,
+  `checar_categoria_nova_ativa_no_vinculo`, e no que os forms oferecem.
+- **NÃO é filtro** em: `folha_para_segmento`, no predicado de descoberta
+  (`idsFisicosDoFiltro` — cupom vivo numa folha desativada continua sob o chip do segmento), na RLS
+  de `segmentos`/`categorias_novas` (`using (true)` — a tabela é catálogo de referência), nos
+  snapshots, e na categoria ATUAL de um cupom em edição.
+
+### Snapshots — contrato documentado
+
+`cupom_eventos.categoria_id` e `cupons_usuario.categoria_id` são FATOS HISTÓRICOS. A pergunta "qual
+era a categoria quando o fato ocorreu?" se responde por eles, **nunca** por
+`cupons.categoria_nova_id` (que é a categoria *atual*). Nenhum relatório de hoje agrupa por
+categoria — verificado: `cupom_metricas` e as views de métrica não mencionam categoria — então nada
+precisou ser reescrito. O contrato fica registrado aqui e nos comentários das colunas.
+
+### Decisões NOT NULL — explícitas, coluna a coluna
+
+| Coluna | Decisão |
+|---|---|
+| `cupons.categoria_nova_id` | **NOT NULL fica para o CONTRACT**, migration separada, pós-deploy |
+| `cupons.categoria_id` (legado) | **DROP NOT NULL** — sem isso não há como criar cupom nas 8 famílias novas |
+| `cupom_eventos.categoria_id` | **continua NULL** — caminho de escrita mais quente do app; o trigger já garante o preenchimento, e um NOT NULL não adicionaria garantia, só um modo de falha novo (log de evento derrubando em produção) |
+| `cupons_usuario.categoria_id` | **continua NULL** — mesmo raciocínio; a falha cairia em `ativar_cupom` |
+| `estabelecimentos.categoria_principal_id` | **continua NULL** — não existe fluxo de criação de estabelecimento no código; `checar_principal_novo_no_conjunto` já garante o invariante. A precondition assere 6/6 hoje |
+| `estabelecimentos.categoria_id` (legado) | **inalterada** (NOT NULL) — ninguém cria estabelecimento por código |
+
+### ⚠️ A migration de CONTRACT (`20260831130000`) AINDA NÃO EXISTE — e não pode existir ainda
+
+`supabase db push --linked` aplica **todas** as migrations pendentes de uma vez. Deixar o contract
+pronto no diretório significaria aplicá-lo JUNTO com o bridge — e `categoria_nova_id SET NOT NULL`
+quebraria a criação de cupom pelo código que está em produção agora, que não preenche essa coluna.
+
+O contract só será escrito depois de, nesta ordem: (a) esta migration hospedada, (b) runtime novo em
+produção, (c) smoke de produção passando. `scripts/test-m2-cutover.ts` tem uma asserção (40c) que
+FALHA se um arquivo `20260831130000*` aparecer no diretório antes disso.
+
+### Estado local provado
+
+`npm run verify` **exit code 0** (capturado sem pipe — `| tail` devolveria o exit do `tail`), com
+`db:reset` + 21 suítes + `next build`. Zero FAIL no log inteiro — rodado de novo depois do
+HARDENING FINAL, mesmo commit.
+
+- **`npm run test:m2-cutover`**: **75 PASS, 0 FAIL** (67 do runtime cutover + 8 do hardening final:
+  A-G, mais E2). Cobre as três views (14/75/75), herança `coalesce` nas 75, não-escrita via view
+  pelas três, RLS da junção nova nas quatro pontas (anon/dono/lojista/admin), `ativo` nos dois lados
+  com folha desativada e reativada no cleanup, grant de UPDATE + rebaixamento para moderação com
+  `editado_material` no histórico, os 14 ícones e os 14 temas registrados, o legado intocado
+  (6 / 7 / views P2A 6/6/6) — **e agora também**: INSERT old-shaped de `authenticated` recusado
+  (A), INSERT new-shaped aceito (B), `authenticated` **e** `service_role` recusados ao limpar
+  `categoria_nova_id` para NULL (C/D — sem exceção de papel), `authenticated` recusado ao mudar
+  `categoria_id` legado de um valor válido para outro (E), o MESMO valor continua gravável (F), e
+  os 14 cupons canônicos do seed (via psql administrativo) saem com `categoria_nova_id` preenchida
+  (G) — provando que o caminho administrativo não foi afetado pelo freeze.
+- **Exceção testada, não presumida:** item 40b prova que `service_role` CONTINUA podendo criar
+  cupom sem folha — design deliberado (ver "contrato real da janela" acima), não lacuna. Substituiu
+  uma versão anterior deste teste que tentava provar nullability via `information_schema` através
+  do PostgREST — inviável (PostgREST só expõe `public`; a chamada nunca testaria nada de verdade).
+- **Regressões preservadas:** `test:tx-p2a` 63, `test:tx-p2b` 109, `test:tx-p2c` 71, `test:tx-p2d1`
+  19, `test:m1-taxonomia` 65 — todas verdes, sem uma linha tocada por causa do hardening final
+  (o freeze é invisível para quem já manda `categoria_nova_id` corretamente).
+- **Blast radius do hardening, medido e resolvido:** o requisito "INSERT sem categoria_nova_id é
+  recusado" tem, em tese, ~30 pontos de conflito em 10 suítes anteriores ao Marco 1
+  (`test-rls`, `fase3`, `fase4`, `fase5`, `fase6`, `fase6.5`, `fase7-storage`, `fase9`,
+  `fase9c`, `fase9d1`) que criam cupom via `service_role` só com `categoria_id`. Isento
+  `service_role` (ver "contrato real" acima), restaram exatamente **3** pontos reais — os únicos
+  que usam `authenticated`/`lojista`/`dono` para inserir cupom sem folha:
+  `test-fase4.ts` (fixture "fitness (dentro)"), `test-fase6.ts` (fixture de auto-publish) e
+  `test-fase9d1.ts` (`base` compartilhado da "nova campanha"). Os três ganharam
+  `categoria_nova_id` resolvido dinamicamente contra `estabelecimentos.categoria_principal_id` de
+  e1 — mudança mecânica de 1 campo, sem tocar a lógica ou as asserções de cada teste
+  (`test:fase4` 42 PASS, `test:fase6` 177 PASS, `test:fase9d1` 87 PASS, todas inalteradas).
+- **Contratos que mudaram de propósito** (reescritos, não acomodados): `test-m1-taxonomia` itens 34
+  (a `using (true)` da junção shadow deu lugar à policy de estabelecimento ativo) e 37 (o grant de
+  UPDATE em `categoria_nova_id` passou a existir; a garantia deixou de ser "não há grant" e passou a
+  ser o par de triggers). `test-tx-p2a` bloco H: a prova ESTRUTURAL continua a mesma ("estas telas
+  consomem a metade operacional da fronteira"), só o nome da função mudou, porque `ativo` separou o
+  catálogo operacional em `buscarCatalogoFolhas` (o que se pode escolher) e
+  `buscarCatalogoResolucao` (o que uma folha já atribuída é). O arquivo em si **não** ficou
+  intocado — só o SQL/views P2A hospedado é que continua imutável.
+- `database.types.ts` regenerado: 1293 → **1413 linhas**, sentinelas presentes, não truncado.
+
+### Zero consumer funcional do legado
+
+Busca ESTRUTURAL por `.from()` (e não `grep categoria_id`, que engana — `categoria_id` também é o
+nome da coluna em `estabelecimento_categorias_novas`, `catalogo_folhas` e `folha_para_segmento`):
+**nenhum** `.from("categorias")`, `.from("estabelecimento_categorias")`, `.from("catalogo_filtros")`,
+`.from("catalogo_categorias")` ou `.from("categoria_para_filtro")` em `src/`. Todo hit remanescente
+de `categoria_id` pertence a uma relação NOVA.
+
+### Line endings — prova canônica de imutabilidade
+
+`core.autocrlf = true` (global) e não existe `.gitattributes`. Medido nesta máquina: para as três
+migrations hospedadas, `sha256sum` do working tree **diverge** de `git show <commit>:<path> |
+sha256sum`, enquanto `git hash-object <path>` bate exatamente com o blob de
+`git rev-parse <commit>:<path>`.
+
+A prova de que uma migration versionada não mudou é `git rev-parse <commit>:<path>` (ou
+`git hash-object <path>`, que aplica o filtro `clean`). `sha256sum` do working tree **não serve** e
+daria falso positivo de alteração. Para migration ainda não commitada, validar o arquivo que o CLI
+de fato lê, antes do apply. **Não normalizar as migrations existentes** — isso reescreveria blobs de
+arquivos hospedados e imutáveis.

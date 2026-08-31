@@ -24,13 +24,19 @@ export default async function NovoCupomPage() {
   if (uid) {
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("id, categoria_id")
+      .select("id, categoria_principal_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (est) {
-      categoriaPrincipal = est.categoria_id;
+      categoriaPrincipal = est.categoria_principal_id;
       estabelecimentoId = est.id;
-      categorias = await buscarCategoriasEstab(est.id, est.categoria_id);
+      // CRIAÇÃO é NOVA SELEÇÃO: só folhas que ainda estão em catálogo.
+      // A Action revalida e o trigger checar_categoria_nova_cupom é a
+      // barreira dura — este filtro existe para o lojista não escolher
+      // uma opção que o servidor vai recusar.
+      categorias = (await buscarCategoriasEstab(est.id, est.categoria_principal_id)).filter(
+        (c) => c.ativo,
+      );
     }
   }
 

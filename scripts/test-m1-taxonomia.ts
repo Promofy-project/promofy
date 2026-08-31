@@ -483,11 +483,33 @@ async function main(): Promise<number> {
     // ============================================================
     console.log("\n=== M1/EXTRA — grants e RLS ===\n");
 
-    const anonSelectJoin = await anon.from("estabelecimento_categorias_novas").select("estabelecimento_id, categoria_id");
+    // MARCO 2A: a policy `using (true)` que o M1 criou para a tabela
+    // SHADOW não sobreviveu ao cutover, e não devia mesmo — ao virar fonte
+    // de runtime, a junção nova passou a expor ao anônimo os ids de
+    // estabelecimentos pendentes/suspensos, que `public.estabelecimentos`
+    // esconde. A migration 20260831120000 a trocou pelo trio que a junção
+    // LEGADA sempre teve. Este item mudou de contrato junto, e é por isso
+    // que ele agora compara com os estabelecimentos ATIVOS em vez de
+    // esperar os 10 vínculos do de-para.
+    const estabAtivos = await svc.from("estabelecimentos").select("id").eq("status", "ativo");
+    const idsAtivos = new Set((estabAtivos.data ?? []).map((e) => e.id as string));
+    const joinTodos = await svc
+      .from("estabelecimento_categorias_novas")
+      .select("estabelecimento_id");
+    const esperadoAnon = (joinTodos.data ?? []).filter((r) =>
+      idsAtivos.has(r.estabelecimento_id as string),
+    ).length;
+
+    const anonSelectJoin = await anon
+      .from("estabelecimento_categorias_novas")
+      .select("estabelecimento_id, categoria_id");
     check(
-      "34. anon LÊ estabelecimento_categorias_novas (leitura pública)",
-      !anonSelectJoin.error && (anonSelectJoin.data ?? []).length === 10,
-      anonSelectJoin.error?.message ?? String(anonSelectJoin.data?.length),
+      "34. anon LÊ estabelecimento_categorias_novas SÓ de estabelecimento ativo (Marco 2A)",
+      !anonSelectJoin.error &&
+        (anonSelectJoin.data ?? []).length === esperadoAnon &&
+        (anonSelectJoin.data ?? []).every((r) => idsAtivos.has(r.estabelecimento_id as string)),
+      anonSelectJoin.error?.message ??
+        `viu ${anonSelectJoin.data?.length}, esperado ${esperadoAnon}`,
     );
 
     const anonInsertJoin = await anon
@@ -500,13 +522,36 @@ async function main(): Promise<number> {
       .insert({ estabelecimento_id: "e1", categoria_id: pizzariaId });
     check("36. authenticated comum NÃO escreve em estabelecimento_categorias_novas", negado(lojistaInsertJoin), "insert passou!");
 
-    const lojistaUpdateShadow = await lojista
+    // MARCO 2A: o grant de UPDATE nesta coluna passou a EXISTIR — é ele
+    // que faz a edição de categoria funcionar depois do cutover. A garantia
+    // deixou de ser "não há grant" (que era o certo enquanto a coluna era
+    // shadow) e passou a ser o par de triggers: checar_categoria_nova_cupom
+    // exige folha no conjunto do estabelecimento E ativa, e
+    // checar_edicao_cupom trata a troca como MATERIAL, rebaixando cupom
+    // ativo para moderação. Reescrever este item é decisão do Marco 2A, não
+    // acomodação — a prova completa (incluindo a remoderação) está em
+    // test-m2-cutover.
+    //
+    // O update abaixo grava o MESMO valor que c01 já tem: prova o grant sem
+    // recategorizar um cupom canônico, que o de-para confere no fim.
+    const lojistaUpdateMesmoValor = await lojista
       .from("cupons")
       .update({ categoria_nova_id: pizzariaId })
       .eq("id", "c01");
     check(
-      "37. authenticated comum NÃO faz UPDATE de categoria_nova_id (sem grant de coluna pós-criação)",
-      negado(lojistaUpdateShadow),
+      "37. authenticated comum FAZ UPDATE de categoria_nova_id (grant por coluna do Marco 2A)",
+      !lojistaUpdateMesmoValor.error,
+      lojistaUpdateMesmoValor.error?.message,
+    );
+
+    const academiaId = await categoriaId("fitness", "academia"); // folha de e2, não de e1
+    const lojistaUpdateForaDoConjunto = await lojista
+      .from("cupons")
+      .update({ categoria_nova_id: academiaId })
+      .eq("id", "c01");
+    check(
+      "37b. ...mas NÃO para folha fora do conjunto do próprio estabelecimento",
+      negado(lojistaUpdateForaDoConjunto),
       "update passou!",
     );
 

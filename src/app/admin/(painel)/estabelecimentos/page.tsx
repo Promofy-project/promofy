@@ -1,5 +1,5 @@
 import { buscarEstabelecimentosAdmin } from "@/lib/data/admin";
-import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
+import { buscarCatalogoFolhas, buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 
@@ -8,9 +8,15 @@ import { EstabAdminClient } from "./estab-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminEstabelecimentosPage() {
-  const [estabelecimentos, catalogo] = await Promise.all([
+  // Dois catálogos, dois papéis — a distinção que a TX-P2AF comprou, agora
+  // no eixo do `ativo`. `catalogo` RESOLVE (todas as folhas, para o nome de
+  // um vínculo que já existe aparecer mesmo se saiu do catálogo);
+  // `atribuiveis` OFERECE (só as folhas ainda ativas, que são as únicas
+  // que o banco aceita num vínculo NOVO).
+  const [estabelecimentos, catalogo, atribuiveis] = await Promise.all([
     buscarEstabelecimentosAdmin(),
-    buscarCatalogoCategorias(),
+    buscarCatalogoResolucao(),
+    buscarCatalogoFolhas(),
   ]);
   const ativos = estabelecimentos.filter((e) => e.status === "ativo").length;
   const pendentes = estabelecimentos.filter((e) => e.status === "pendente").length;
@@ -30,7 +36,11 @@ export default async function AdminEstabelecimentosPage() {
       </div>
 
       <div className="mt-6">
-        <EstabAdminClient estabelecimentos={estabelecimentos} catalogo={catalogo} />
+        <EstabAdminClient
+          estabelecimentos={estabelecimentos}
+          catalogo={catalogo}
+          atribuiveis={atribuiveis}
+        />
       </div>
     </>
   );
