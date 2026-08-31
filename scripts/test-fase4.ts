@@ -258,7 +258,7 @@ async function main(): Promise<number> {
       // anon não lê → notFound() correto (cupom ainda não aprovado no admin).
       await svc.from("cupons").insert({
         id: BUG1, estabelecimento_id: "e1", titulo: "F4 Bug1 detalhe",
-        categoria_id: "alimentacao", economia: 20, validade_fim: "2030-12-31",
+        categoria_id: "alimentacao", categoria_nova_id: folhaNovaE1, economia: 20, validade_fim: "2030-12-31",
         status: "pendente",
       });
       const pend = await anonC
@@ -282,7 +282,7 @@ async function main(): Promise<number> {
       // (validade_fim >= hoje, BRT) reprova → buscarCupomPorId → null → 404 legítimo.
       await svc.from("cupons").insert({
         id: `${BUG1}-exp`, estabelecimento_id: "e1", titulo: "F4 Bug1 expirado",
-        categoria_id: "alimentacao", economia: 20, validade_fim: "2000-01-01",
+        categoria_id: "alimentacao", categoria_nova_id: folhaNovaE1, economia: 20, validade_fim: "2000-01-01",
         status: "ativo",
       });
       const exp = await anonC
@@ -324,7 +324,7 @@ async function main(): Promise<number> {
     // A já favoritou e1 acima (t0). Agora e1 publica um cupom novo (t1 > t0).
     await svc.from("cupons").insert({
       id: NOVO, estabelecimento_id: "e1", titulo: "F4 Novidade", categoria_id: "alimentacao",
-      economia: 15, validade_fim: "2030-12-31", status: "pendente",
+      categoria_nova_id: folhaNovaE1, economia: 15, validade_fim: "2030-12-31", status: "pendente",
     });
     {
       const r = (await admin.rpc("aprovar_cupom", { p_cupom_id: NOVO })).data as Jsonb;
@@ -355,7 +355,7 @@ async function main(): Promise<number> {
       // cupom publicado ANTES do favorito não conta: aprova, DEPOIS B favorita
       await svc.from("cupons").insert({
         id: ANTIGO, estabelecimento_id: "e1", titulo: "F4 Antigo", categoria_id: "alimentacao",
-        economia: 12, validade_fim: "2030-12-31", status: "pendente",
+        categoria_nova_id: folhaNovaE1, economia: 12, validade_fim: "2030-12-31", status: "pendente",
       });
       await admin.rpc("aprovar_cupom", { p_cupom_id: ANTIGO });
       const fav = (await convidado.rpc("favoritar_estabelecimento", { p_est_id: "e1" })).data as Jsonb;

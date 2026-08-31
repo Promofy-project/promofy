@@ -431,6 +431,14 @@ async function main(): Promise<number> {
     // ============================================================
     console.log("\n=== M1/TRANSIÇÃO ===\n");
 
+    // MARCO 2B (CONTRACT, 20260831130000): estes dois itens MUDARAM DE
+    // PROPÓSITO (reescritos, não acomodados) — mesma doutrina do 34/37
+    // registrada no MARCO 2A. Até o contract, esta suíte provava que o
+    // legado sobrevivia com shadow NULL (write-freeze transitório,
+    // documentado no MIGRATIONS.md). O contract fechou essa janela de
+    // propósito: categoria_nova_id é fisicamente NOT NULL agora, inclusive
+    // para service_role. O item 29 passa a provar a RECUSA, não mais o
+    // sucesso.
     const idScratchLegado = `${PREFIXO}teste-legado-sem-shadow`;
     const insertLegado = await svc
       .from("cupons")
@@ -446,15 +454,15 @@ async function main(): Promise<number> {
       .single();
     if (!insertLegado.error) idsCuponsScratch.push(idScratchLegado);
     check(
-      "29. fluxo legado ainda consegue operar sem erro (INSERT só com categoria_id legado, sem categoria_nova_id)",
-      !insertLegado.error && insertLegado.data?.categoria_nova_id === null,
-      insertLegado.error?.message,
+      "29. fluxo legado SEM categoria_nova_id agora É RECUSADO pelo contract (23502 not_null_violation, inclusive service_role)",
+      insertLegado.error?.code === "23502",
+      insertLegado.error?.code ?? insertLegado.error?.message ?? "sem erro",
     );
 
     const shadowNulo = await svc.from("cupons").select("id", { count: "exact", head: true }).is("categoria_nova_id", null);
     check(
-      "30. shadow NULL de uma nova escrita é detectável por query (exatamente o cupom-teste, os 14 canônicos continuam preenchidos)",
-      shadowNulo.count === 1,
+      "30. shadow NULL não existe mais em lugar nenhum — o contract fechou a janela de transição para sempre",
+      shadowNulo.count === 0,
       String(shadowNulo.count),
     );
 

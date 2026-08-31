@@ -310,7 +310,7 @@ export type Database = {
       }
       cupom_eventos: {
         Row: {
-          categoria_id: string | null
+          categoria_id: string
           criado_em: string
           cupom_id: string
           id: number
@@ -318,7 +318,7 @@ export type Database = {
           usuario_id: string | null
         }
         Insert: {
-          categoria_id?: string | null
+          categoria_id: string
           criado_em?: string
           cupom_id: string
           id?: never
@@ -326,7 +326,7 @@ export type Database = {
           usuario_id?: string | null
         }
         Update: {
-          categoria_id?: string | null
+          categoria_id?: string
           criado_em?: string
           cupom_id?: string
           id?: never
@@ -377,7 +377,7 @@ export type Database = {
           avaliacoes: number
           beneficio: string
           categoria_id: string | null
-          categoria_nova_id: string | null
+          categoria_nova_id: string
           criado_em: string
           destaque: boolean
           distancia_km: number | null
@@ -410,7 +410,7 @@ export type Database = {
           avaliacoes?: number
           beneficio?: string
           categoria_id?: string | null
-          categoria_nova_id?: string | null
+          categoria_nova_id: string
           criado_em?: string
           destaque?: boolean
           distancia_km?: number | null
@@ -443,7 +443,7 @@ export type Database = {
           avaliacoes?: number
           beneficio?: string
           categoria_id?: string | null
-          categoria_nova_id?: string | null
+          categoria_nova_id?: string
           criado_em?: string
           destaque?: boolean
           distancia_km?: number | null
@@ -547,7 +547,7 @@ export type Database = {
       cupons_usuario: {
         Row: {
           ativado_em: string
-          categoria_id: string | null
+          categoria_id: string
           codigo: string
           cupom_id: string
           expira_em: string | null
@@ -560,7 +560,7 @@ export type Database = {
         }
         Insert: {
           ativado_em?: string
-          categoria_id?: string | null
+          categoria_id: string
           codigo?: string
           cupom_id: string
           expira_em?: string | null
@@ -573,7 +573,7 @@ export type Database = {
         }
         Update: {
           ativado_em?: string
-          categoria_id?: string | null
+          categoria_id?: string
           codigo?: string
           cupom_id?: string
           expira_em?: string | null

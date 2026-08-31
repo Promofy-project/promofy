@@ -113,13 +113,16 @@ async function main(): Promise<number> {
     // a suíte dependente da HORA em que roda — flakiness que a casa não aceita.
     // A categoria tem de pertencer à junção do e1 (trigger da migration 12).
     const { data: e1 } = await svc
-      .from("estabelecimentos").select("categoria_id").eq("id", "e1").maybeSingle();
+      .from("estabelecimentos").select("categoria_id, categoria_principal_id").eq("id", "e1").maybeSingle();
+    // MARCO 2B (CONTRACT): categoria_nova_id agora é NOT NULL.
+    const catNovaE1 = e1!.categoria_principal_id as string;
     const cupom = { id: CUPOM_F9, titulo: "F9 nota pendente" };
     await svc.from("cupons").delete().eq("id", CUPOM_F9);
     const criado = await svc.from("cupons").insert({
       id: CUPOM_F9,
       estabelecimento_id: "e1",
       categoria_id: e1!.categoria_id as string,
+      categoria_nova_id: catNovaE1,
       titulo: cupom.titulo,
       beneficio: "Cupom da suíte da Fase 9",
       economia: 10,
@@ -186,6 +189,7 @@ async function main(): Promise<number> {
       id: CUPOM_RECUSA,
       estabelecimento_id: "e1",
       categoria_id: e1!.categoria_id as string,
+      categoria_nova_id: catNovaE1,
       titulo: "F9 nota recusada",
       beneficio: "Cupom da suíte do adendo 05/08",
       economia: 10,
@@ -322,6 +326,7 @@ async function main(): Promise<number> {
         id,
         estabelecimento_id: "e1",
         categoria_id: e1!.categoria_id as string,
+        categoria_nova_id: catNovaE1,
         titulo: `F9 fila ${id.slice(-1).toUpperCase()}`,
         beneficio: "Cupom da suíte do adendo 05/08 (fila)",
         economia: 10,
@@ -402,7 +407,9 @@ async function main(): Promise<number> {
       nulo?.alcancavel === true && nulo?.teto === null, JSON.stringify(nulo));
 
     const { data: e1cat } = await svc
-      .from("estabelecimentos").select("categoria_id").eq("id", "e1").maybeSingle();
+      .from("estabelecimentos").select("categoria_id, categoria_principal_id").eq("id", "e1").maybeSingle();
+    // MARCO 2B (CONTRACT): categoria_nova_id agora é NOT NULL.
+    const catNovaE1Janela = e1cat!.categoria_principal_id as string;
 
     /** Janela ancorada no relógio do BANCO, aberta de +ini a +fim horas. */
     const janela = (ini: number, fim: number) => ({
@@ -418,6 +425,7 @@ async function main(): Promise<number> {
         id,
         estabelecimento_id: "e1",
         categoria_id: e1cat!.categoria_id as string,
+        categoria_nova_id: catNovaE1Janela,
         titulo,
         beneficio: "Cupom da suíte da Fase 9 — janela controlada",
         economia: 10,
