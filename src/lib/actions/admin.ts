@@ -60,11 +60,21 @@ export async function rejeitarCupomAction(
 }
 
 /**
- * Admin define o conjunto de categorias de um estabelecimento (Fase 4).
- * Escrita direta na junção sob a RLS de admin (policies "admin insere/
- * remove"); um não-admin cai na policy (0 linhas/42501) e recebe erro.
- * Regras aqui (a RLS não codifica): a principal nunca sai do conjunto e
- * categoria com cupons existentes não pode ser removida.
+ * Admin define o conjunto de FOLHAS de um estabelecimento (Fase 4,
+ * cortada para o modelo novo no Marco 2A).
+ *
+ * Escrita direta em `estabelecimento_categorias_novas` sob a RLS de admin
+ * (policies "admin insere/remove", migration 20260831120000); um não-admin
+ * cai na policy (0 linhas/42501) e recebe erro.
+ *
+ * As invariantes NÃO vivem só aqui — e desde o Marco 1 são mais fortes do
+ * que eram no legado, onde "categoria em uso não sai" existia apenas nesta
+ * Action. Hoje o banco recusa por conta própria remover a principal
+ * vigente ou uma folha em uso por cupom (`impedir_remover_categoria_do_
+ * conjunto_em_uso`) e recusa vincular folha fora de catálogo
+ * (`checar_categoria_nova_ativa_no_vinculo`). O que sobra aqui é a
+ * MENSAGEM: o admin merece saber por que não deu, em vez de um erro cru
+ * do Postgres.
  */
 export async function definirCategoriasEstabelecimentoAction(
   estId: string,
@@ -88,16 +98,16 @@ export async function definirCategoriasEstabelecimentoAction(
 
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("categoria_id")
+      .select("categoria_principal_id")
       .eq("id", estId)
       .maybeSingle();
     if (!est) return { ok: false, motivo: "nao_encontrado" };
 
     const desejadas = new Set(categorias);
-    desejadas.add(est.categoria_id); // principal nunca sai
+    if (est.categoria_principal_id) desejadas.add(est.categoria_principal_id); // principal nunca sai
 
     const { data: atuais } = await supabase
-      .from("estabelecimento_categorias")
+      .from("estabelecimento_categorias_novas")
       .select("categoria_id")
       .eq("estabelecimento_id", estId);
     const atuaisSet = new Set((atuais ?? []).map((c) => c.categoria_id));
@@ -105,20 +115,35 @@ export async function definirCategoriasEstabelecimentoAction(
     const adicionar = Array.from(desejadas).filter((c) => !atuaisSet.has(c));
     const remover = Array.from(atuaisSet).filter((c) => !desejadas.has(c));
 
-    // categoria com cupons do estabelecimento não pode ser removida
-    // (o trigger de cupons não cobre DELETE na junção — a regra vive aqui)
+    // MARCO 2A: vínculo NOVO só com folha em catálogo. `ativo` governa
+    // nova seleção — um vínculo que já existe e cuja folha foi desativada
+    // depois continua valendo, e por isso a checagem é só sobre
+    // `adicionar`, nunca sobre `atuaisSet`.
+    if (adicionar.length > 0) {
+      const { data: atribuiveis } = await supabase
+        .from("catalogo_folhas")
+        .select("categoria_id")
+        .in("categoria_id", adicionar);
+      if ((atribuiveis ?? []).length !== adicionar.length) {
+        return { ok: false, motivo: "categoria_inativa" };
+      }
+    }
+
+    // Folha com cupons do estabelecimento não pode ser removida. O trigger
+    // do banco também recusa (Marco 1) — aqui a checagem existe para o
+    // admin receber "há cupons nessa categoria" em vez de um SQLSTATE.
     if (remover.length > 0) {
       const { data: emUso } = await supabase
         .from("cupons")
-        .select("categoria_id")
+        .select("categoria_nova_id")
         .eq("estabelecimento_id", estId)
-        .in("categoria_id", remover);
+        .in("categoria_nova_id", remover);
       if ((emUso ?? []).length > 0) return { ok: false, motivo: "categoria_em_uso" };
     }
 
     if (remover.length > 0) {
       const { error } = await supabase
-        .from("estabelecimento_categorias")
+        .from("estabelecimento_categorias_novas")
         .delete()
         .eq("estabelecimento_id", estId)
         .in("categoria_id", remover);
@@ -126,7 +151,7 @@ export async function definirCategoriasEstabelecimentoAction(
     }
     if (adicionar.length > 0) {
       const { error } = await supabase
-        .from("estabelecimento_categorias")
+        .from("estabelecimento_categorias_novas")
         .insert(adicionar.map((c) => ({ estabelecimento_id: estId, categoria_id: c })));
       if (error) return { ok: false, motivo: "erro" };
     }

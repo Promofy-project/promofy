@@ -123,6 +123,23 @@ async function main(): Promise<number> {
         (data?.length ?? 0) === 0, String(data?.length));
     }
 
+    // MARCO 2A (HARDENING): desde o bridge, INSERT de authenticated exige
+    // categoria_nova_id -- sem ela, checar_categoria_nova_cupom recusa com
+    // 'categoria_nova_obrigatoria_no_runtime' antes mesmo de checar_cate-
+    // goria_cupom entrar em jogo para o legado. O insert abaixo com
+    // "fitness" (dentro do conjunto LEGADO) precisa de uma folha NOVA
+    // qualquer valida para o estabelecimento so para satisfazer esse
+    // segundo trigger -- o valor nao precisa corresponder a "fitness" (que
+    // nem existe no modelo novo para e1: e vinculo legado decorativo, ver
+    // docs/taxonomia/depara-v1.json) porque os dois triggers validam
+    // colunas independentes.
+    const { data: e1Principal } = await svc
+      .from("estabelecimentos")
+      .select("categoria_principal_id")
+      .eq("id", "e1")
+      .single();
+    const folhaNovaE1 = e1Principal!.categoria_principal_id as string;
+
     console.log("\n[multi-categoria — cupom respeita o conjunto (PostgREST direto)]");
     {
       const ins = await lojista.from("cupons").insert({
@@ -136,7 +153,8 @@ async function main(): Promise<number> {
     {
       const ins = await lojista.from("cupons").insert({
         id: CAT_OK, estabelecimento_id: "e1", titulo: "F4 categoria fitness (dentro)",
-        categoria_id: "fitness", economia: 10, validade_fim: "2030-12-31", status: "pendente",
+        categoria_id: "fitness", categoria_nova_id: folhaNovaE1,
+        economia: 10, validade_fim: "2030-12-31", status: "pendente",
       }).select();
       check("lojista INSERT com a 2ª categoria do conjunto (fitness) → aceito",
         !ins.error && (ins.data?.length ?? 0) === 1, ins.error?.message);

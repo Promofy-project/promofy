@@ -35,9 +35,13 @@ const FILTRO_LABEL: Record<string, string> = {
 export function EstabAdminClient({
   estabelecimentos,
   catalogo,
+  atribuiveis,
 }: {
   estabelecimentos: AdminEstabelecimento[];
+  /** RESOLUÇÃO: todas as folhas, para nomear vínculo que já existe. */
   catalogo: CategoriaVisual[];
+  /** OFERTA: só as folhas ativas — as únicas vinculáveis (Marco 2A). */
+  atribuiveis: CategoriaVisual[];
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = React.useState<string>("todos");
@@ -201,6 +205,7 @@ export function EstabAdminClient({
         <CategoriasModal
           estabelecimento={editando}
           catalogo={catalogo}
+          atribuiveis={atribuiveis}
           onClose={() => setEditando(null)}
           onSalvo={() => {
             setEditando(null);
@@ -220,22 +225,44 @@ export function EstabAdminClient({
 function CategoriasModal({
   estabelecimento,
   catalogo,
+  atribuiveis,
   onClose,
   onSalvo,
 }: {
   estabelecimento: AdminEstabelecimento;
   catalogo: CategoriaVisual[];
+  atribuiveis: CategoriaVisual[];
   onClose: () => void;
   onSalvo: () => void;
 }) {
   const [selecao, setSelecao] = React.useState<Set<string>>(
     new Set(estabelecimento.categorias),
   );
+
+  // MARCO 2A: as opções são as folhas ATRIBUÍVEIS mais as que este
+  // estabelecimento JÁ tem — inclusive alguma que tenha saído do catálogo
+  // depois. Some-la da lista faria o admin achar que o vínculo não existe;
+  // pior, salvar removeria em silêncio um vínculo que ele nunca desmarcou.
+  // Ela aparece, marcada, e pode ser REMOVIDA — só não pode ser re-adicionada.
+  const atribuiveisIds = React.useMemo(
+    () => new Set(atribuiveis.map((c) => c.id)),
+    [atribuiveis],
+  );
+  const opcoes = React.useMemo(() => {
+    const vinculadas = new Set(estabelecimento.categorias);
+    const foraDeCatalogo = catalogo.filter(
+      (c) => vinculadas.has(c.id) && !atribuiveisIds.has(c.id),
+    );
+    return [...atribuiveis, ...foraDeCatalogo];
+  }, [atribuiveis, atribuiveisIds, catalogo, estabelecimento.categorias]);
   const [salvando, setSalvando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
 
   const toggle = (id: string) => {
     if (id === estabelecimento.categoriaId) return; // principal travada
+    // Fora de catálogo: pode desmarcar (remover), nunca remarcar (o banco
+    // recusaria o INSERT — checar_categoria_nova_ativa_no_vinculo).
+    if (!atribuiveisIds.has(id) && !selecao.has(id)) return;
     setSelecao((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -258,7 +285,9 @@ function CategoriasModal({
       setErro(
         r.motivo === "categoria_em_uso"
           ? "Há cupons nessa categoria — remova ou recategorize os cupons antes."
-          : "Não foi possível salvar. Tente novamente.",
+          : r.motivo === "categoria_inativa"
+            ? "Uma das categorias saiu do catálogo e não pode ser vinculada."
+            : "Não foi possível salvar. Tente novamente.",
       );
     }
   }
@@ -284,7 +313,7 @@ function CategoriasModal({
         </p>
 
         <div className="mt-4 flex flex-col gap-2">
-          {catalogo.map((c) => {
+          {opcoes.map((c) => {
             const principal = c.id === estabelecimento.categoriaId;
             return (
               <label

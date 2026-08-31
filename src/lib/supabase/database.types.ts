@@ -338,8 +338,22 @@ export type Database = {
             foreignKeyName: "cupom_eventos_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_folhas"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "cupom_eventos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
             referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cupom_eventos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "folha_para_segmento"
+            referencedColumns: ["categoria_id"]
           },
           {
             foreignKeyName: "cupom_eventos_cupom_id_fkey"
@@ -362,7 +376,7 @@ export type Database = {
           atualizado_em: string
           avaliacoes: number
           beneficio: string
-          categoria_id: string
+          categoria_id: string | null
           categoria_nova_id: string | null
           criado_em: string
           destaque: boolean
@@ -395,7 +409,7 @@ export type Database = {
           atualizado_em?: string
           avaliacoes?: number
           beneficio?: string
-          categoria_id: string
+          categoria_id?: string | null
           categoria_nova_id?: string | null
           criado_em?: string
           destaque?: boolean
@@ -428,7 +442,7 @@ export type Database = {
           atualizado_em?: string
           avaliacoes?: number
           beneficio?: string
-          categoria_id?: string
+          categoria_id?: string | null
           categoria_nova_id?: string | null
           criado_em?: string
           destaque?: boolean
@@ -504,8 +518,22 @@ export type Database = {
             foreignKeyName: "cupons_categoria_nova_id_fkey"
             columns: ["categoria_nova_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_folhas"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_nova_id_fkey"
+            columns: ["categoria_nova_id"]
+            isOneToOne: false
             referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cupons_categoria_nova_id_fkey"
+            columns: ["categoria_nova_id"]
+            isOneToOne: false
+            referencedRelation: "folha_para_segmento"
+            referencedColumns: ["categoria_id"]
           },
           {
             foreignKeyName: "cupons_estabelecimento_id_fkey"
@@ -561,8 +589,22 @@ export type Database = {
             foreignKeyName: "cupons_usuario_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_folhas"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "cupons_usuario_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
             referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cupons_usuario_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "folha_para_segmento"
+            referencedColumns: ["categoria_id"]
           },
           {
             foreignKeyName: "cupons_usuario_cupom_id_fkey"
@@ -666,8 +708,22 @@ export type Database = {
             foreignKeyName: "estabelecimento_categorias_novas_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_folhas"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_novas_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
             referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_novas_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "folha_para_segmento"
+            referencedColumns: ["categoria_id"]
           },
           {
             foreignKeyName: "estabelecimento_categorias_novas_estabelecimento_id_fkey"
@@ -765,8 +821,22 @@ export type Database = {
             foreignKeyName: "estabelecimentos_categoria_principal_id_fkey"
             columns: ["categoria_principal_id"]
             isOneToOne: false
+            referencedRelation: "catalogo_folhas"
+            referencedColumns: ["categoria_id"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_principal_id_fkey"
+            columns: ["categoria_principal_id"]
+            isOneToOne: false
             referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_principal_id_fkey"
+            columns: ["categoria_principal_id"]
+            isOneToOne: false
+            referencedRelation: "folha_para_segmento"
+            referencedColumns: ["categoria_id"]
           },
           {
             foreignKeyName: "estabelecimentos_owner_id_fkey"
@@ -1035,6 +1105,43 @@ export type Database = {
         }
         Relationships: []
       }
+      catalogo_folhas: {
+        Row: {
+          categoria_id: string | null
+          icone: string | null
+          nome: string | null
+          ordem: number | null
+          segmento_ordem: number | null
+          segmento_slug: string | null
+          slug: string | null
+          tema: string | null
+        }
+        Relationships: []
+      }
+      catalogo_segmentos: {
+        Row: {
+          icone: string | null
+          nome: string | null
+          ordem: number | null
+          slug: string | null
+          tema: string | null
+        }
+        Insert: {
+          icone?: string | null
+          nome?: string | null
+          ordem?: number | null
+          slug?: string | null
+          tema?: string | null
+        }
+        Update: {
+          icone?: string | null
+          nome?: string | null
+          ordem?: number | null
+          slug?: string | null
+          tema?: string | null
+        }
+        Relationships: []
+      }
       categoria_para_filtro: {
         Row: {
           categoria_id: string | null
@@ -1067,6 +1174,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      folha_para_segmento: {
+        Row: {
+          ativo: boolean | null
+          categoria_id: string | null
+          icone: string | null
+          nome: string | null
+          segmento_ativo: boolean | null
+          segmento_slug: string | null
+          slug: string | null
+          tema: string | null
+        }
+        Relationships: []
       }
     }
     Functions: {

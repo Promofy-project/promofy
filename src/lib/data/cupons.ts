@@ -73,19 +73,29 @@ export function linhaParaCupom(
   estabelecimentoNome: string,
   filtro: FiltroTaxonomia,
 ): Cupom {
-  // TX-P2A: a categoria FISICA da linha atravessa a fronteira e vira slug
-  // publico ANTES de virar visual. Sem esta traducao o cutover (folha uuid
-  // em cupons.categoria_id) faria TODO card cair no fallback cinza — em
-  // silencio, sem erro nenhum. `?? row.categoria_id` mantem a tolerancia:
-  // categoria fora do mapa nao quebra, so nao acha visual.
-  const slug = filtro.filtroSlugDe(row.categoria_id) ?? row.categoria_id;
+  // TX-P2A/MARCO 2A: a folha UUID da linha atravessa a fronteira e vira
+  // slug PUBLICO de segmento antes de virar visual. Era para este dia que
+  // a traducao existia — sem ela, trocar a coluna faria TODO card cair no
+  // fallback cinza, em silencio e sem erro nenhum.
+  //
+  // `?? ""` mantem a tolerancia de sempre: folha fora do mapa nao quebra a
+  // tela, so nao acha visual. `categoria_nova_id` segue nullable ate a
+  // migration de CONTRACT (pos-deploy), entao o null e um estado real do
+  // schema aqui, nao uma hipotese defensiva.
+  const folhaId = row.categoria_nova_id ?? "";
+  const slug = filtro.filtroSlugDe(folhaId) ?? "";
   return {
     id: row.id,
     titulo: row.titulo,
     estabelecimento: estabelecimentoNome,
     estabelecimentoId: row.estabelecimento_id,
     categoria: slug,
-    categoriaVisual: resolverCategoriaVisual(slug, filtro.catalogo),
+    // O visual e o da FOLHA, nao o do segmento: e o nome da categoria real
+    // que o consumidor le no card. `visualDe` resolve inclusive folha
+    // desativada depois — `filtro.catalogo` (segmentos ativos) fica como
+    // ultimo recurso para dado fora do mapa.
+    categoriaVisual:
+      filtro.visualDe(folhaId) ?? resolverCategoriaVisual(slug, filtro.catalogo),
     economia: Number(row.economia),
     economiaVariavel: row.economia_variavel,
     // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
@@ -164,16 +174,20 @@ export async function buscarCuponsHome(
   // consulta, não `.filter()` no cliente) e o slug já vem saneado contra o
   // catálogo — ver categoriaValida em src/lib/data/categorias.ts.
   //
-  // TX-P2A: o predicado deixou de ser `categoria_id = <slug>`. O slug é
-  // público; `cupons.categoria_id` é FÍSICO. Hoje a fronteira devolve
-  // `[slug]` (identidade) e o resultado é idêntico ao `.eq` anterior;
-  // após o cutover devolve as folhas do segmento, e este código não muda.
+  // TX-P2A/MARCO 2A: o predicado nunca foi `categoria_id = <slug>`. O slug
+  // é público (segmento); a coluna é FÍSICA (folha uuid). A fronteira agora
+  // devolve as folhas do segmento — e é só por isso que trocar a taxonomia
+  // inteira custou uma linha aqui.
+  //
+  // NÃO filtra `ativo`: cupom vivo numa folha desativada depois continua
+  // aparecendo sob o chip do seu segmento. `ativo` governa nova seleção,
+  // não o acervo.
   //
   // Lista vazia NÃO vira "sem filtro": um slug do catálogo sem nenhuma
   // categoria física é um filtro legítimo com zero resultados. Trocar isso
   // por "mostra tudo" seria mentir na tela.
   if (categoriaId) {
-    query = query.in("categoria_id", filtroPre!.idsFisicosDoFiltro(categoriaId));
+    query = query.in("categoria_nova_id", filtroPre!.idsFisicosDoFiltro(categoriaId));
   }
   // com filtro, a folga do limite não vale: o corte por categoria pode
   // deixar de fora justamente os que sobrariam
@@ -329,7 +343,9 @@ export async function buscarCupomParaEdicao(
     id: data.id,
     titulo: data.titulo,
     beneficio: data.beneficio,
-    categoriaId: data.categoria_id,
+    // MARCO 2A: o DTO de edição carrega a FOLHA (uuid). O `categoria_id`
+    // legado nem chega ao form — está congelado, e a Action não o grava.
+    categoriaId: data.categoria_nova_id ?? "",
     economia: Number(data.economia),
     economiaVariavel: data.economia_variavel,
     taxas: sanearTaxas(data.taxas),
@@ -440,14 +456,14 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
 
   const { data: estabelecimento } = await supabase
     .from("estabelecimentos")
-    .select("id, nome, categoria_id")
+    .select("id, nome, categoria_principal_id")
     .eq("owner_id", userId)
     .maybeSingle();
   if (!estabelecimento) return { estabelecimento: null, itens: [] };
   const estOut = {
     id: estabelecimento.id,
     nome: estabelecimento.nome,
-    categoriaId: estabelecimento.categoria_id,
+    categoriaId: estabelecimento.categoria_principal_id ?? "",
   };
 
   const { data: cupons, error } = await supabase

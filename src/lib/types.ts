@@ -13,14 +13,20 @@ export type { JanelaConsumo };
  * exigir mudança de tipo aqui; quem precisa do visual (label/icon/gradiente)
  * usa `categoriaVisual` (abaixo) ou `resolverCategoriaVisual`.
  *
- * DÍVIDA EXPLÍCITA (TX-P2AF): em `Cupom.categoria` este valor é o slug do
- * FILTRO de descoberta (`catalogo_filtros`/`categoria_para_filtro` — ver
- * src/lib/data/taxonomia.ts), NÃO necessariamente a categoria FOLHA física
- * do cupom. Hoje as duas coincidem; depois do cutover um cupom de folha
- * "pizzarias" carrega aqui o slug do segmento "alimentacao". Renomear o
- * campo é escopo do TX-P7 (quando existir filtro por segmento E por folha
- * ao mesmo tempo) — mantido como `categoria` por compatibilidade com
- * `/m/buscar` (`c.categoria === cat`) e com todo consumidor atual.
+ * DÍVIDA EXPLÍCITA (TX-P2AF, agora REAL — MARCO 2A): em `Cupom.categoria`
+ * este valor é o slug do SEGMENTO (`catalogo_segmentos`/`folha_para_segmento`
+ * — ver src/lib/data/taxonomia.ts), NÃO a categoria FOLHA física do cupom.
+ *
+ * Até o cutover os dois coincidiam, porque `public.categorias` era as duas
+ * coisas ao mesmo tempo. Não coincidem mais: um cupom da folha "pizzaria"
+ * carrega aqui o slug do segmento "alimentacao", e a folha propriamente
+ * dita viaja em `categoriaVisual` (cujo `id` é o uuid dela). Quem precisa
+ * da folha usa `categoriaVisual.id`; quem precisa do filtro usa este campo.
+ *
+ * Renomear é escopo do Marco 3 (quando existir `?seg=&cat=`, com filtro
+ * por segmento E por folha ao mesmo tempo) — mantido como `categoria` por
+ * compatibilidade com `/m/buscar` (`c.categoria === cat`) e com todo
+ * consumidor atual.
  */
 export type CategoriaId = string;
 

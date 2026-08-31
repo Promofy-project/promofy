@@ -295,11 +295,26 @@ async function main() {
   for (const [arq, fn] of consumidoresFiltro) {
     const src = le(arq);
     check(`${arq}: chama ${fn}()`, src.includes(`${fn}(`), "não encontrado");
-    check(`${arq}: NÃO chama buscarCatalogoCategorias`, !src.includes("buscarCatalogoCategorias"));
+    check(
+      `${arq}: NÃO chama a fronteira operacional (seria segmento onde precisa de folha)`,
+      !src.includes("buscarCatalogoCategorias") &&
+        !src.includes("buscarCatalogoFolhas") &&
+        !src.includes("buscarCatalogoResolucao"),
+    );
   }
 
-  // Consumidores de CATEGORIA OPERACIONAL: chamam buscarCatalogoCategorias,
+  // Consumidores de CATEGORIA OPERACIONAL: chamam a fronteira operacional,
   // NUNCA buscarFiltrosPublicos/buscarFiltrosTaxonomia.
+  //
+  // MARCO 2A: a função operacional deixou de se chamar
+  // `buscarCatalogoCategorias` e virou DUAS, porque `ativo` separou o que
+  // antes era um só catálogo — `buscarCatalogoFolhas` (o que se pode
+  // ESCOLHER agora) e `buscarCatalogoResolucao` (o que uma folha JÁ
+  // atribuída É, inclusive desativada). A prova estrutural aqui é a mesma
+  // de sempre e continua valendo: estas três telas consomem a metade
+  // OPERACIONAL da fronteira, nunca a de filtros. Só o nome mudou.
+  const usaOperacional = (src: string) =>
+    src.includes("buscarCatalogoFolhas(") || src.includes("buscarCatalogoResolucao(");
   const consumidoresOperacional: string[] = [
     "src/app/admin/(painel)/cupons/page.tsx",
     "src/app/admin/(painel)/estabelecimentos/page.tsx",
@@ -307,7 +322,7 @@ async function main() {
   ];
   for (const arq of consumidoresOperacional) {
     const src = le(arq);
-    check(`${arq}: chama buscarCatalogoCategorias()`, src.includes("buscarCatalogoCategorias("), "não encontrado");
+    check(`${arq}: chama a fronteira OPERACIONAL (buscarCatalogoFolhas/Resolucao)`, usaOperacional(src), "não encontrado");
     check(
       `${arq}: NÃO chama buscarFiltrosPublicos/buscarFiltrosTaxonomia`,
       !src.includes("buscarFiltrosPublicos") && !src.includes("buscarFiltrosTaxonomia"),

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
 
 /** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */
 function hojeBrt(): string {
@@ -26,32 +25,65 @@ function dataBrt(iso: string): string {
 export interface CategoriaEstab {
   id: string;
   label: string;
+  /**
+   * A folha (e o segmento dela) continuam ativos.
+   *
+   * MARCO 2A: `ativo` governa NOVA SELEÇÃO, nunca o histórico. Uma
+   * categoria desativada depois continua vinculada ao estabelecimento e
+   * continua sendo a categoria do cupom que já a usa — ela só deixa de
+   * ser escolhível. Quem consome esta lista decide o que fazer com a
+   * flag: o form de criação esconde as inativas, o de edição mantém a
+   * ATUAL visível (senão o campo ficaria sem rótulo), e o admin mostra
+   * todas para poder desvincular.
+   */
+  ativo: boolean;
 }
 
 /**
- * Categorias do estabelecimento (junção da Fase 4), com a principal
- * primeiro (pré-seleção dos forms de cupom). Lojista lê as próprias via
- * RLS mesmo com estabelecimento pendente/suspenso; labels vêm da tabela
- * categorias (leitura pública).
+ * Categorias do estabelecimento — as FOLHAS (uuid) da junção nova, com a
+ * principal primeiro (pré-seleção dos forms de cupom).
+ *
+ * Lojista lê as próprias via RLS mesmo com estabelecimento pendente ou
+ * suspenso (policy "dono e admin leem", migration 20260831120000) — é o
+ * que faz `/e/cupom/novo` funcionar antes da aprovação.
+ *
+ * Os rótulos vêm de `folha_para_segmento`, que NÃO filtra `ativo`: se
+ * viessem de `catalogo_folhas`, uma categoria desativada perderia o
+ * rótulo e apareceria como o próprio uuid na tela.
  */
 export async function buscarCategoriasEstab(
   estabId: string,
   principalId?: string | null,
 ): Promise<CategoriaEstab[]> {
   const supabase = createClient();
-  const [{ data }, catalogo] = await Promise.all([
+  const [{ data: vinculos }, { data: folhas }] = await Promise.all([
     supabase
-      .from("estabelecimento_categorias")
+      .from("estabelecimento_categorias_novas")
       .select("categoria_id")
       .eq("estabelecimento_id", estabId),
-    buscarCatalogoCategorias(),
+    supabase
+      .from("folha_para_segmento")
+      .select("categoria_id, nome, ativo, segmento_ativo"),
   ]);
 
-  const labelPorId = new Map(catalogo.map((c) => [c.id, c.label]));
-  const lista = (data ?? []).map((r) => ({
-    id: r.categoria_id,
-    label: labelPorId.get(r.categoria_id) ?? r.categoria_id,
-  }));
+  const porId = new Map(
+    (folhas ?? []).flatMap((f) =>
+      f.categoria_id
+        ? [[f.categoria_id, { nome: f.nome, ativo: Boolean(f.ativo && f.segmento_ativo) }] as const]
+        : [],
+    ),
+  );
+
+  const lista = (vinculos ?? []).map((r) => {
+    const folha = porId.get(r.categoria_id);
+    return {
+      id: r.categoria_id,
+      // uuid cru é um rótulo péssimo, mas é honesto: significa "esta folha
+      // sumiu do catálogo", e é melhor do que um campo vazio.
+      label: folha?.nome ?? r.categoria_id,
+      ativo: folha?.ativo ?? false,
+    };
+  });
   lista.sort((a, b) =>
     a.id === principalId ? -1 : b.id === principalId ? 1 : a.label.localeCompare(b.label),
   );

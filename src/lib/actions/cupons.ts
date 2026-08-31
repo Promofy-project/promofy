@@ -9,6 +9,7 @@ import {
   type CupomParaEdicao,
 } from "@/lib/data/cupons";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import { buscarCategoriasEstab } from "@/lib/data/estab";
 import { statusPortalDe } from "@/lib/ciclo-cupom";
 import {
   PRAZO_ATIVACAO_MIN_HORAS,
@@ -294,7 +295,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
 
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("id, nome, categoria_id")
+      .select("id, nome, categoria_principal_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
@@ -310,19 +311,29 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       }
     }
 
-    // Fase 4: a categoria escolhida DEVE pertencer ao conjunto do
-    // estabelecimento (junção). Ausente → principal. Fora do conjunto →
-    // rejeitada aqui; o trigger checar_categoria_cupom é a 2ª barreira
-    // (barra também o PostgREST direto).
-    const { data: cats } = await supabase
-      .from("estabelecimento_categorias")
-      .select("categoria_id")
-      .eq("estabelecimento_id", est.id);
-    const conjunto = new Set((cats ?? []).map((c) => c.categoria_id));
-    conjunto.add(est.categoria_id); // invariante: principal ∈ conjunto
-    const categoriaId = input.categoria || est.categoria_id;
-    if (!conjunto.has(categoriaId)) {
+    // Fase 4 / MARCO 2A: a categoria escolhida é uma FOLHA (uuid) e DEVE
+    // pertencer ao conjunto do estabelecimento. Ausente → a principal.
+    // Fora do conjunto → rejeitada aqui; o trigger
+    // checar_categoria_nova_cupom é a 2ª barreira, e é ela que cobre o
+    // PostgREST direto — que é justamente o que o app nativo vai falar.
+    //
+    // `ativo` é exigido porque isto é uma NOVA SELEÇÃO, a única situação
+    // em que a regra vale. Categoria que sai do catálogo depois não
+    // invalida nenhum cupom que já a use.
+    const categoriasEstab = await buscarCategoriasEstab(
+      est.id,
+      est.categoria_principal_id,
+    );
+    const categoriaId = input.categoria || est.categoria_principal_id || "";
+    const escolhida = categoriasEstab.find((c) => c.id === categoriaId);
+    if (!escolhida) {
       return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+    }
+    if (!escolhida.ativo) {
+      return {
+        ok: false,
+        erro: "Essa categoria saiu do catálogo. Escolha outra para publicar o cupom.",
+      };
     }
 
     // Fase 5 — hora malformada vira CHAVE OMITIDA, nunca string vazia.
@@ -346,9 +357,14 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
     const novo: Database["public"]["Tables"]["cupons"]["Insert"] = {
       estabelecimento_id: est.id,
       titulo: input.titulo.trim(),
-      // Fase 4 (evolui a D2): o form escolhe entre as N categorias do
-      // estabelecimento; o servidor valida contra a junção (acima).
-      categoria_id: categoriaId,
+      // Fase 4 (evolui a D2) / MARCO 2A: o form escolhe entre as N folhas
+      // do estabelecimento; o servidor valida contra a junção nova (acima).
+      //
+      // `categoria_id` legado NÃO é gravado, de propósito: está congelado
+      // desde a migration 20260831120000, e as folhas dos 8 segmentos que
+      // nunca existiram no legado não têm valor possível entre as 6
+      // categorias antigas — inventar um de-para é proibido.
+      categoria_nova_id: categoriaId,
       beneficio: input.beneficio.trim(),
       economia: input.economia,
       economia_variavel: Boolean(input.economiaVariavel),
@@ -510,7 +526,7 @@ export async function editarCupomAction(
 
     const { data: est } = await supabase
       .from("estabelecimentos")
-      .select("id, nome, categoria_id")
+      .select("id, nome, categoria_principal_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (!est) return { ok: false, erro: "Nenhum estabelecimento vinculado à sua conta." };
@@ -523,18 +539,42 @@ export async function editarCupomAction(
     const patch = montado.patch;
 
     // A categoria fica aqui (e não no módulo puro) porque depende do banco:
-    // precisa das categorias cadastradas DESTE estabelecimento.
+    // precisa das folhas cadastradas DESTE estabelecimento.
+    //
+    // MARCO 2A — o ponto sutil desta função. `ativo` só é exigido de uma
+    // NOVA seleção. Se o lojista salvar o form sem trocar de categoria, e
+    // a categoria dele tiver sido desativada no catálogo depois, a coluna
+    // NÃO pode entrar no patch: `checar_categoria_nova_cupom` dispara em
+    // "update OF categoria_nova_id" — ou seja, sempre que a coluna está no
+    // SET, mesmo reescrevendo o MESMO valor — e recusaria a edição inteira.
+    // O lojista ficaria sem conseguir corrigir um typo por causa de uma
+    // decisão de catálogo que não é dele.
     if (input.categoria !== undefined) {
-      const { data: cats } = await supabase
-        .from("estabelecimento_categorias")
-        .select("categoria_id")
-        .eq("estabelecimento_id", est.id);
-      const conjunto = new Set((cats ?? []).map((c) => c.categoria_id));
-      conjunto.add(est.categoria_id);
-      if (!conjunto.has(input.categoria)) {
-        return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+      const { data: atual } = await supabase
+        .from("cupons")
+        .select("categoria_nova_id")
+        .eq("id", input.id)
+        .maybeSingle();
+
+      if ((atual?.categoria_nova_id ?? "") !== input.categoria) {
+        const categoriasEstab = await buscarCategoriasEstab(
+          est.id,
+          est.categoria_principal_id,
+        );
+        const escolhida = categoriasEstab.find((c) => c.id === input.categoria);
+        if (!escolhida) {
+          return { ok: false, erro: "Categoria inválida para o seu estabelecimento." };
+        }
+        if (!escolhida.ativo) {
+          return {
+            ok: false,
+            erro: "Essa categoria saiu do catálogo. Mantenha a atual ou escolha outra.",
+          };
+        }
+        patch.categoria_nova_id = input.categoria;
       }
-      patch.categoria_id = input.categoria;
+      // Não mudou → fica FORA do patch. Mantém a categoria atual, ainda
+      // que ela tenha sido desativada, e não dispara o trigger.
     }
 
     if (Object.keys(patch).length === 0) {

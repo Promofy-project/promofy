@@ -324,10 +324,14 @@ async function main(): Promise<number> {
   // categoria válida do e1 (o trigger da Fase 4 exige pertencer ao conjunto)
   const { data: e1 } = await svc
     .from("estabelecimentos")
-    .select("categoria_id")
+    .select("categoria_id, categoria_principal_id")
     .eq("id", "e1")
     .single();
   const cat = e1!.categoria_id as string;
+  // MARCO 2A (HARDENING): o insert via lojista mais abaixo (auto-publish)
+  // precisa de categoria_nova_id -- INSERT de authenticated sem ela e
+  // recusado desde o bridge (categoria_nova_obrigatoria_no_runtime).
+  const catNova = e1!.categoria_principal_id as string;
   const base = {
     estabelecimento_id: "e1",
     categoria_id: cat,
@@ -437,6 +441,7 @@ async function main(): Promise<number> {
           id: AUTO,
           estabelecimento_id: "e1",
           categoria_id: cat,
+          categoria_nova_id: catNova,
           titulo: "F6 tentativa de auto-publish",
           economia: 1,
           validade_fim: "2030-12-31",

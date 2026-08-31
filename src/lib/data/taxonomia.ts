@@ -2,56 +2,63 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { gradienteWeb } from "@/lib/tema-visual";
 
 /**
- * TX-P2A/TX-P2AF — a ÚNICA porta do app para a taxonomia física. O
- * runtime não fala mais com `public.categorias`: fala com três views de
- * fronteira, para que o cutover (TX-P2B/D) troque o CORPO delas —
- * categorias legado → segmentos + folhas — sem que nenhuma tela mude de
- * novo.
+ * MARCO 2A — a ÚNICA porta do app para a taxonomia física.
  *
- * A auditoria do TX-P2A achou uma colisão: uma função `buscarCategorias()`
- * genérica servia ao mesmo tempo o FILTRO público (vai virar segmento) e
- * a CATEGORIA operacional do admin/portal (vai virar folha). Hoje as duas
- * coincidem porque `categorias` é as duas coisas ao mesmo tempo — depois
- * do cutover não coincidem mais, e um admin recebendo segmento onde
- * precisa de UUID de folha é exatamente o bug que este módulo existe
- * para impedir. Por isso os nomes abaixo são deliberadamente compridos:
+ * A TX-P2A criou esta fronteira exatamente para o dia de hoje: o runtime
+ * nunca falou com `public.categorias`, falou com views. O cutover troca
+ * QUAIS views, e nenhuma tela precisou mudar de novo. As três novas:
  *
- *   buscarFiltrosTaxonomia() → FILTRO de descoberta (/m, /m/buscar,
- *                              /m/filtros) + a tradução física→filtro
- *                              que buscarCuponsHome usa no predicado e no
- *                              visual do card.
- *   buscarCatalogoCategorias() → CATEGORIA operacional (admin edita o
- *                              vínculo estabelecimento↔categoria; portal
- *                              usa no form de cupom). Chave = categoria_id
- *                              FÍSICO, o mesmo que está em
- *                              cupons.categoria_id.
+ *   catalogo_segmentos   → os 14 segmentos ATIVOS (chips de descoberta)
+ *   catalogo_folhas      → as 75 folhas ATRIBUÍVEIS (o que se pode ligar
+ *                          a um cupom/estabelecimento AGORA)
+ *   folha_para_segmento  → folha → segmento + visual, SEM filtro de
+ *                          `ativo` (histórico)
  *
- * Nunca reintroduzir um `buscarCategorias()` sem qualificação — é
- * exatamente o nome que já escondeu esta colisão uma vez.
+ * A colisão semântica que a TX-P2AF corrigiu agora é real, não hipotética:
+ * `catalogo_segmentos` tem 14 linhas e `catalogo_folhas` tem 75. Um admin
+ * recebendo segmento onde precisa de UUID de folha é o bug que este
+ * módulo existe para impedir — por isso os nomes continuam deliberadamente
+ * compridos, e um `buscarCategorias()` genérico segue proibido.
+ *
+ * `tema` → `gradiente` é resolvido AQUI. O banco guarda token e nunca CSS
+ * (ver src/lib/tema-visual.ts); a UI continua recebendo `CategoriaVisual`
+ * com a mesma forma de sempre, e por isso nenhum card, avatar ou chip
+ * mudou uma linha no cutover.
  */
 
 // ============================================================
-// Filtro de descoberta (catalogo_filtros + categoria_para_filtro)
+// Descoberta pública (catalogo_segmentos + folha_para_segmento)
 // ============================================================
 
 export interface FiltroTaxonomia {
-  /** Catálogo de filtros, na ordem de produto. Também é a fonte do visual. */
+  /** Segmentos ATIVOS, na ordem de produto. Também é a fonte do visual dos chips. */
   catalogo: CategoriaVisual[];
-  /** Slug do FILTRO que representa esta categoria física na descoberta. */
-  filtroSlugDe(categoriaIdFisico: string): string | undefined;
+  /** Slug do SEGMENTO que representa esta folha na descoberta. */
+  filtroSlugDe(categoriaId: string): string | undefined;
   /**
-   * Ids FÍSICOS que um filtro representa — o predicado da consulta.
-   * Hoje devolve `[slug]` (identidade); após o cutover, todas as folhas
-   * do segmento.
+   * UUIDs das folhas que um segmento representa — o predicado da consulta.
+   *
+   * NÃO filtra `ativo`: um cupom vivo numa folha desativada depois continua
+   * aparecendo sob o chip do seu segmento. `ativo` governa NOVA SELEÇÃO,
+   * não o que já existe (ver o contrato da TX-P2B).
    */
   idsFisicosDoFiltro(filtroSlug: string): string[];
+  /**
+   * Visual RESOLVIDO de uma folha — inclusive desativada.
+   *
+   * Existe porque `catalogo` filtra `ativo` e o histórico não pode: sem
+   * isto, desativar uma categoria mandaria todo card existente dela para o
+   * fallback cinza, em silêncio e sem erro nenhum.
+   */
+  visualDe(categoriaId: string): CategoriaVisual | undefined;
 }
 
 /**
- * Lê as duas views do filtro em paralelo (duas consultas por render, de
- * tabela pequena — não há N+1: nada aqui roda por card ou por linha).
+ * Lê as duas views em paralelo (duas consultas por render, de tabela
+ * pequena — não há N+1: nada aqui roda por card ou por linha).
  *
  * Banco fora do ar → catálogo vazio e mapas vazios, mesma degradação
  * tolerante de sempre: a faixa de chips some, a tela não quebra.
@@ -59,68 +66,126 @@ export interface FiltroTaxonomia {
 export async function buscarFiltrosTaxonomia(): Promise<FiltroTaxonomia> {
   const supabase = createClient();
 
-  const [filtros, mapa] = await Promise.all([
+  const [segmentos, folhas] = await Promise.all([
     supabase
-      .from("catalogo_filtros")
-      .select("slug, label, icon, gradiente")
+      .from("catalogo_segmentos")
+      .select("slug, nome, icone, tema")
       .order("ordem", { ascending: true }),
-    supabase.from("categoria_para_filtro").select("categoria_id, filtro_slug"),
+    supabase
+      .from("folha_para_segmento")
+      .select("categoria_id, nome, segmento_slug, icone, tema"),
   ]);
 
   // Colunas voltam anuláveis porque o gerador não infere NOT NULL através
   // de uma view. Linha incompleta é descartada em vez de virar chip sem
   // label ou visual vazio — o catálogo prefere encolher a mentir.
-  const catalogo: CategoriaVisual[] = filtros.error
+  const catalogo: CategoriaVisual[] = segmentos.error
     ? []
-    : (filtros.data ?? []).flatMap((c) =>
-        c.slug && c.label && c.icon && c.gradiente
-          ? [{ id: c.slug, label: c.label, icon: c.icon, gradiente: c.gradiente }]
+    : (segmentos.data ?? []).flatMap((s) =>
+        s.slug && s.nome && s.icone && s.tema
+          ? [{ id: s.slug, label: s.nome, icon: s.icone, gradiente: gradienteWeb(s.tema) }]
           : [],
       );
 
-  const porFisico = new Map<string, string>();
-  const porFiltro = new Map<string, string[]>();
-  if (!mapa.error) {
-    for (const r of mapa.data ?? []) {
-      if (!r.categoria_id || !r.filtro_slug) continue;
-      porFisico.set(r.categoria_id, r.filtro_slug);
-      const atual = porFiltro.get(r.filtro_slug);
-      if (atual) atual.push(r.categoria_id);
-      else porFiltro.set(r.filtro_slug, [r.categoria_id]);
+  const porFolha = new Map<string, string>();
+  const porSegmento = new Map<string, string[]>();
+  const visualPorFolha = new Map<string, CategoriaVisual>();
+  if (!folhas.error) {
+    for (const f of folhas.data ?? []) {
+      if (!f.categoria_id || !f.segmento_slug) continue;
+      porFolha.set(f.categoria_id, f.segmento_slug);
+      const atual = porSegmento.get(f.segmento_slug);
+      if (atual) atual.push(f.categoria_id);
+      else porSegmento.set(f.segmento_slug, [f.categoria_id]);
+      if (f.nome && f.icone && f.tema) {
+        visualPorFolha.set(f.categoria_id, {
+          id: f.categoria_id,
+          label: f.nome,
+          icon: f.icone,
+          gradiente: gradienteWeb(f.tema),
+        });
+      }
     }
   }
 
   return {
     catalogo,
-    filtroSlugDe: (id) => porFisico.get(id),
-    idsFisicosDoFiltro: (slug) => porFiltro.get(slug) ?? [],
+    filtroSlugDe: (id) => porFolha.get(id),
+    idsFisicosDoFiltro: (slug) => porSegmento.get(slug) ?? [],
+    visualDe: (id) => visualPorFolha.get(id),
   };
 }
 
 // ============================================================
-// Catálogo operacional (catalogo_categorias)
+// Catálogo operacional (catalogo_folhas / folha_para_segmento)
 // ============================================================
 
 /**
- * As categorias FÍSICAS que podem ser ligadas a um estabelecimento ou
- * cupom — quem edita `estabelecimento_categorias` (admin) e quem
- * seleciona categoria num form de cupom (portal) precisa disto, NUNCA do
- * catálogo de filtros: `id` aqui é `categoria_id` físico, o mesmo valor
- * que trafega em `cupons.categoria_id` e
- * `estabelecimento_categorias.categoria_id` — não o slug de segmento.
+ * As folhas que podem ser ATRIBUÍDAS agora — o que o form de cupom
+ * oferece e o que o admin pode vincular a um estabelecimento.
+ *
+ * `id` aqui é o UUID da folha, o mesmo valor que trafega em
+ * `cupons.categoria_nova_id` e `estabelecimento_categorias_novas.categoria_id`
+ * — NUNCA o slug do segmento. É a distinção que a TX-P2AF comprou.
+ *
+ * Filtra `ativo` nos dois níveis (a view faz isso): é a lista do que pode
+ * ser escolhido, e escolher uma folha inativa é justamente o que o
+ * trigger `checar_categoria_nova_cupom` recusa no banco. Para RESOLVER o
+ * visual de um dado que já existe (que pode apontar para folha
+ * desativada), use `visualDe` de `buscarFiltrosTaxonomia`.
  *
  * Banco fora do ar → catálogo vazio, mesma tolerância do filtro.
  */
-export async function buscarCatalogoCategorias(): Promise<CategoriaVisual[]> {
+export async function buscarCatalogoFolhas(): Promise<CategoriaVisual[]> {
   const supabase = createClient();
   const { data, error } = await supabase
-    .from("catalogo_categorias")
-    .select("categoria_id, label, icon, gradiente")
+    .from("catalogo_folhas")
+    .select("categoria_id, nome, icone, tema, ordem, segmento_ordem")
+    .order("segmento_ordem", { ascending: true })
     .order("ordem", { ascending: true });
   if (error) return [];
   return (data ?? []).flatMap((c) =>
-    c.categoria_id && c.label && c.icon && c.gradiente
-      ? [{ id: c.categoria_id, label: c.label, icon: c.icon, gradiente: c.gradiente }]
+    c.categoria_id && c.nome && c.icone && c.tema
+      ? [
+          {
+            id: c.categoria_id,
+            label: c.nome,
+            icon: c.icone,
+            gradiente: gradienteWeb(c.tema),
+          },
+        ]
+      : [],
+  );
+}
+
+/**
+ * TODAS as folhas, ativas ou não — o catálogo de RESOLUÇÃO.
+ *
+ * É o que as telas de admin e portal precisam para traduzir o
+ * `categoria_nova_id` de um cupom ou vínculo que JÁ existe em rótulo,
+ * ícone e tema. Se filtrasse `ativo`, desativar uma categoria faria os
+ * cupons dela aparecerem como "Categoria" cinza no painel de moderação —
+ * um verde vazio na tela do moderador.
+ *
+ * Não confundir com `buscarCatalogoFolhas()`: aquele responde "o que se
+ * pode escolher", este responde "o que isto é".
+ */
+export async function buscarCatalogoResolucao(): Promise<CategoriaVisual[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("folha_para_segmento")
+    .select("categoria_id, nome, icone, tema");
+  if (error) return [];
+  return (data ?? []).flatMap((c) =>
+    c.categoria_id && c.nome && c.icone && c.tema
+      ? [
+          {
+            id: c.categoria_id,
+            label: c.nome,
+            icon: c.icone,
+            gradiente: gradienteWeb(c.tema),
+          },
+        ]
       : [],
   );
 }

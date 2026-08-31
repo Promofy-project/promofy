@@ -34,12 +34,18 @@ export default async function EditarCupomPage({
   const { data: claims } = await supabase.auth.getClaims();
   const { data: est } = await supabase
     .from("estabelecimentos")
-    .select("id, nome, categoria_id")
+    .select("id, nome, categoria_principal_id")
     .eq("owner_id", claims?.claims?.sub ?? "")
     .maybeSingle();
   if (!est) notFound();
 
-  const categorias = await buscarCategoriasEstab(est.id, est.categoria_id);
+  // EDIÇÃO: as folhas ainda em catálogo, MAIS a categoria ATUAL do cupom
+  // mesmo que ela tenha sido desativada depois. Sem essa exceção o campo
+  // abriria sem seleção e sem rótulo, e salvar qualquer outra coisa
+  // (um typo no título) forçaria uma recategorização que ninguém pediu.
+  const categorias = (
+    await buscarCategoriasEstab(est.id, est.categoria_principal_id)
+  ).filter((c) => c.ativo || c.id === cupom.categoriaId);
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-5">
@@ -56,7 +62,7 @@ export default async function EditarCupomPage({
 
       <NovoCupomForm
         categorias={categorias}
-        categoriaPrincipal={est.categoria_id}
+        categoriaPrincipal={est.categoria_principal_id}
         cupomInicial={cupom}
         estabelecimentoId={est.id}
       />
