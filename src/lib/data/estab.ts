@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { buscarCatalogoCategorias } from "@/lib/data/taxonomia";
 
 /** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */
 function hojeBrt(): string {
@@ -38,14 +39,18 @@ export async function buscarCategoriasEstab(
   principalId?: string | null,
 ): Promise<CategoriaEstab[]> {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("estabelecimento_categorias")
-    .select("categoria_id, categorias(label)")
-    .eq("estabelecimento_id", estabId);
+  const [{ data }, catalogo] = await Promise.all([
+    supabase
+      .from("estabelecimento_categorias")
+      .select("categoria_id")
+      .eq("estabelecimento_id", estabId),
+    buscarCatalogoCategorias(),
+  ]);
 
+  const labelPorId = new Map(catalogo.map((c) => [c.id, c.label]));
   const lista = (data ?? []).map((r) => ({
     id: r.categoria_id,
-    label: r.categorias?.label ?? r.categoria_id,
+    label: labelPorId.get(r.categoria_id) ?? r.categoria_id,
   }));
   lista.sort((a, b) =>
     a.id === principalId ? -1 : b.id === principalId ? 1 : a.label.localeCompare(b.label),

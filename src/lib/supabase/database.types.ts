@@ -251,37 +251,37 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           criado_em: string
-          icon_override: string | null
+          icone: string | null
           id: string
           nome: string
           ordem: number
           segmento_id: string
           slug: string
-          tema_override: string | null
+          tema: string | null
         }
         Insert: {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon_override?: string | null
+          icone?: string | null
           id?: string
           nome: string
           ordem: number
           segmento_id: string
           slug: string
-          tema_override?: string | null
+          tema?: string | null
         }
         Update: {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon_override?: string | null
+          icone?: string | null
           id?: string
           nome?: string
           ordem?: number
           segmento_id?: string
           slug?: string
-          tema_override?: string | null
+          tema?: string | null
         }
         Relationships: [
           {
@@ -310,6 +310,7 @@ export type Database = {
       }
       cupom_eventos: {
         Row: {
+          categoria_id: string | null
           criado_em: string
           cupom_id: string
           id: number
@@ -317,6 +318,7 @@ export type Database = {
           usuario_id: string | null
         }
         Insert: {
+          categoria_id?: string | null
           criado_em?: string
           cupom_id: string
           id?: never
@@ -324,6 +326,7 @@ export type Database = {
           usuario_id?: string | null
         }
         Update: {
+          categoria_id?: string | null
           criado_em?: string
           cupom_id?: string
           id?: never
@@ -331,6 +334,13 @@ export type Database = {
           usuario_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cupom_eventos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_novas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cupom_eventos_cupom_id_fkey"
             columns: ["cupom_id"]
@@ -353,6 +363,7 @@ export type Database = {
           avaliacoes: number
           beneficio: string
           categoria_id: string
+          categoria_nova_id: string | null
           criado_em: string
           destaque: boolean
           distancia_km: number | null
@@ -385,6 +396,7 @@ export type Database = {
           avaliacoes?: number
           beneficio?: string
           categoria_id: string
+          categoria_nova_id?: string | null
           criado_em?: string
           destaque?: boolean
           distancia_km?: number | null
@@ -417,6 +429,7 @@ export type Database = {
           avaliacoes?: number
           beneficio?: string
           categoria_id?: string
+          categoria_nova_id?: string | null
           criado_em?: string
           destaque?: boolean
           distancia_km?: number | null
@@ -488,6 +501,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cupons_categoria_nova_id_fkey"
+            columns: ["categoria_nova_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_novas"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cupons_estabelecimento_id_fkey"
             columns: ["estabelecimento_id"]
             isOneToOne: false
@@ -499,6 +519,7 @@ export type Database = {
       cupons_usuario: {
         Row: {
           ativado_em: string
+          categoria_id: string | null
           codigo: string
           cupom_id: string
           expira_em: string | null
@@ -511,6 +532,7 @@ export type Database = {
         }
         Insert: {
           ativado_em?: string
+          categoria_id?: string | null
           codigo?: string
           cupom_id: string
           expira_em?: string | null
@@ -523,6 +545,7 @@ export type Database = {
         }
         Update: {
           ativado_em?: string
+          categoria_id?: string | null
           codigo?: string
           cupom_id?: string
           expira_em?: string | null
@@ -534,6 +557,13 @@ export type Database = {
           validado_em?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cupons_usuario_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_novas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cupons_usuario_cupom_id_fkey"
             columns: ["cupom_id"]
@@ -615,10 +645,44 @@ export type Database = {
           },
         ]
       }
+      estabelecimento_categorias_novas: {
+        Row: {
+          categoria_id: string
+          criado_em: string
+          estabelecimento_id: string
+        }
+        Insert: {
+          categoria_id: string
+          criado_em?: string
+          estabelecimento_id: string
+        }
+        Update: {
+          categoria_id?: string
+          criado_em?: string
+          estabelecimento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estabelecimento_categorias_novas_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_novas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estabelecimento_categorias_novas_estabelecimento_id_fkey"
+            columns: ["estabelecimento_id"]
+            isOneToOne: false
+            referencedRelation: "estabelecimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estabelecimentos: {
         Row: {
           atualizado_em: string
           categoria_id: string
+          categoria_principal_id: string | null
           cidade: string
           criado_em: string
           id: string
@@ -631,6 +695,7 @@ export type Database = {
         Insert: {
           atualizado_em?: string
           categoria_id: string
+          categoria_principal_id?: string | null
           cidade: string
           criado_em?: string
           id?: string
@@ -643,6 +708,7 @@ export type Database = {
         Update: {
           atualizado_em?: string
           categoria_id?: string
+          categoria_principal_id?: string | null
           cidade?: string
           criado_em?: string
           id?: string
@@ -693,6 +759,13 @@ export type Database = {
             columns: ["categoria_id"]
             isOneToOne: false
             referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estabelecimentos_categoria_principal_id_fkey"
+            columns: ["categoria_principal_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_novas"
             referencedColumns: ["id"]
           },
           {
@@ -878,7 +951,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           criado_em: string
-          icon: string
+          icone: string
           id: string
           nome: string
           ordem: number
@@ -889,7 +962,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon: string
+          icone: string
           id?: string
           nome: string
           ordem: number
@@ -900,7 +973,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
-          icon?: string
+          icone?: string
           id?: string
           nome?: string
           ordem?: number

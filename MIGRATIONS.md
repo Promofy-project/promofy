@@ -708,9 +708,16 @@ migrations 5 e 8); estender um domain é `alter domain` numa migration comum. **
 CHECKs iguais:** a mesma verdade em dois lugares vira duas verdades no primeiro dia em que alguém
 edita uma só.
 
-**O vocabulário está FECHADO no catálogo definitivo (§5.1 — 14 segmentos / 75 categorias folhas):**
-um token por segmento, nomeado pelo matiz. TX-P2C carrega o catálogo **dentro** deste vocabulário e
-não precisa estendê-lo.
+**O vocabulário inicial é o catálogo definitivo (§5.1 — 14 segmentos / 75 categorias folhas):** um
+token por segmento, nomeado pelo matiz. TX-P2C carrega o catálogo **dentro** deste vocabulário.
+
+> ⚠️ **Nota (TX-P2D1E): o domain deixou de ser whitelist fechada.** Este parágrafo, como escrito
+> originalmente, dizia que o vocabulário era fechado nestes 14 valores — **isso mudou**. A migration
+> `20260830150000` trocou a constraint do domain de uma lista fixa (`value = any (array[...])`) para
+> validação de FORMATO (`value ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and length(value) <= 50`). Os 14
+> valores abaixo continuam sendo o que o catálogo usa — são o **vocabulário inicial do seed**, não
+> mais o teto do que o schema aceita. Produto pode introduzir um token novo por dado, sem migration
+> de DDL. Ver a seção TX-P2D1E, mais abaixo, para o porquê.
 
 | segmento | tema | segmento | tema |
 |---|---|---|---|
@@ -727,9 +734,10 @@ São **design tokens**, não CSS: nada de hex, `rgb` ou `gradient` no domain, e 
 também não é tema (`alimentacao` não é um token válido). Se um dia o vocabulário precisar mudar,
 isso é migration nova com `alter domain` — nunca texto livre.
 
-**Visual das folhas é herdado.** `icon_override`/`tema_override` `NULL` = "use o do segmento".
-Copiar ícone/tema para ~75 linhas criaria 75 cópias para manter sincronizadas, e a primeira que
-divergisse seria um bug de UI sem causa aparente.
+**Visual das folhas é herdado.** `NULL` em `icone`/`tema` (colunas renomeadas na TX-P2D1E — nasceram
+como `icon_override`/`tema_override`) = "use o do segmento". Copiar ícone/tema para ~75 linhas
+criaria 75 cópias para manter sincronizadas, e a primeira que divergisse seria um bug de UI sem
+causa aparente.
 
 **Slug de segmento é único global; slug de folha é único DENTRO do segmento** (`unique (segmento_id,
 slug)`). O modelo precisa suportar `outros` em mais de um segmento — a decisão de produto sobre
@@ -760,10 +768,16 @@ desativação. CASCADE apagaria silenciosamente as folhas e, no futuro, órfãos
 
 **Catálogo é somente leitura para todo mundo**, inclusive admin: neste estágio o catálogo muda por
 migration, não por DML de aplicação. Não há CRUD de taxonomia neste WP, então não há grant de
-escrita para sustentar — e é justamente isso que hoje torna o **reparenting** de `segmento_id`
-impossível na prática. No cutover, quando `cupons.categoria_id` passar a apontar para cá, entra o
-trigger defensivo que recusa mudar `segmento_id` de categoria em uso; construí-lo agora seria
-escrever regra sobre um contrato que ainda não existe.
+escrita para sustentar.
+
+> ⚠️ **Nota (TX-P2D1E): reparenting não depende mais de ausência de grant.** Este parágrafo dizia
+> originalmente que a ausência de grant de escrita era o que tornava o reparenting de `segmento_id`
+> "impossível na prática", e que um trigger defensivo entraria só no cutover. A migration
+> `20260830150000` adiantou esse trigger para antes dos shadows — `segmento_id` agora é
+> **incondicionalmente** imutável por `trg_categorias_novas_impedir_reparent`, independente de
+> grant, de a categoria já ter cupom, de estar ativa, ou de quem executa o UPDATE (inclusive
+> `service_role`). O motivo do adiantamento: os shadows do TX-P2D2+ vão começar a escrever nessa
+> tabela, e a garantia não podia continuar dependendo só de ninguém ter grant de UPDATE.
 
 **`atualizado_em` reusa `public.set_atualizado_em()`** (migration 3) — não se duplica função global
 por estética.
@@ -937,3 +951,313 @@ nem um a mais, nem um a menos. Nenhuma conta, nenhum estabelecimento e nenhuma l
 14×75 foi tocada; `segmentos`/`categorias_novas`/`categorias` legado/`estabelecimentos`/
 `estabelecimento_categorias` e as três views da TX-P2A saíram do apply com as mesmas contagens de
 sempre. O snapshot read-only pré-delete (fora do Git) foi preservado durante toda a validação.
+
+## TX-P2D1E — canonicaliza o staging antes dos shadows do cutover
+
+`20260830150000_tx_p2d1e_canonicaliza_staging_taxonomia.sql`
+
+**Corrige três dívidas do contrato de staging por forward migration, antes do TX-P2D2 (shadows)
+começar a escrever em `segmentos`/`categorias_novas`.** Não toca `20260829120000` / `20260830120000`
+/ `20260830130000` / `20260830140000` — todas continuam hospedadas, imutáveis, e seus arquivos
+`.sql` não foram editados. Onde o texto delas ficou desatualizado por essa migration (o vocabulário
+do domain, o mecanismo de reparenting), a correção está em notas ⚠️ nas seções acima — o `.sql`
+histórico permanece intocado, só a prosa deste arquivo (editável) foi atualizada.
+
+**1. Rename físico:** `segmentos.icon` → `icone`; `categorias_novas.icon_override` → `icone`;
+`categorias_novas.tema_override` → `tema`. `NULL` continua significando "herdar do segmento" — só o
+NOME mudou. `ALTER TABLE ... RENAME COLUMN` preserva dado, `NULL`s, UUIDs e as expressões das
+`CHECK` constraints automaticamente (Postgres rastreia por posição de coluna, não por texto); só os
+NOMES das constraints (`segmentos_icon_nao_vazio` → `segmentos_icone_nao_vazio`, etc.) precisaram de
+`RENAME CONSTRAINT` explícito, para não ficarem enganosos.
+
+**2. `public.tema_visual`: de whitelist fechada para validação de formato.** A constraint original
+(`tema_visual_check`, nome auto-gerado — confirmado no catálogo antes de escrever a migration, não
+hardcodado às cegas) comparava `value` contra um array fixo de 14 strings. A nova
+(`tema_visual_formato`) exige `value ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and length(value) <= 50` — slug
+minúsculo, sem CSS, até 50 caracteres. Os 14 valores do seed continuam válidos pelo novo formato, e o
+`drop constraint` + `add constraint` roda na mesma transação: o Postgres valida TODO uso atual do
+domain (as 14 linhas de `segmentos.tema` e as ~10 de `categorias_novas.tema` com override) antes de
+confirmar — se algum valor existente não batesse com o novo formato, a migration teria abortado
+sozinha. Sem `ALTER TYPE ... ADD VALUE` (armadilha das migrations 5/8: não dá para usar o valor novo
+na mesma transação em que nasce) — aqui nem se aplica, porque não é mais enum, é regra de formato.
+
+**3. `categorias_novas.segmento_id` ganha trigger de imutabilidade incondicional.**
+`trg_categorias_novas_impedir_reparent` (`BEFORE UPDATE OF segmento_id`) chama
+`impedir_reparent_categoria_nova()`, que recusa qualquer `UPDATE` onde `new.segmento_id is distinct
+from old.segmento_id` — **independente de grant, de a categoria já ter cupom, de estar ativa, ou de
+quem executa**. Provado localmente inclusive como `service_role` via PostgREST (o papel mais
+privilegiado que a API expõe) e como `postgres` superuser via `psql` direto (mais privilegiado que
+`service_role`): os dois têm o `UPDATE` negado do mesmo jeito. O `revoke execute ... from public,
+anon, authenticated` na função não é o que bloqueia o reparenting — triggers `BEFORE` disparam
+independente de grant de `EXECUTE` na função (isso só importaria para alguém chamar a função como
+RPC direta, o que não faz sentido fora de contexto de trigger). Um `UPDATE` que reafirma o *mesmo*
+`segmento_id` (sem mudar o valor) não é bloqueado — a função usa `is distinct from`, reage a mudança
+de valor, não à presença da coluna na cláusula `SET`. Mover uma folha de segmento continua sendo:
+desativar a categoria antiga + criar uma nova.
+
+**Testes atualizados, não enfraquecidos.** `scripts/test-tx-p2b.ts` tinha três casos que provavam
+"fora do vocabulário fechado é NEGADO" com um valor sintaticamente válido (`turquesa`,
+`alimentacao`, `neon`) — sob o novo domain de formato, esses valores **são aceitos**, e os testes
+foram invertidos para provar exatamente isso (a extensibilidade), não removidos. Os casos que
+continuam negados (vazio, CSS, hex, `rgb()`, maiúscula, espaço em qualquer ponta, underscore, hífen
+malformado em qualquer ponta) ganharam cobertura nova onde faltava (espaço no início, underscore,
+hífen no início) — o rigor sobre FORMATO aumentou; só o rigor sobre um vocabulário fechado de
+produto, que nunca deveria ter sido responsabilidade do schema, foi removido. `test:tx-p2b`: 96 → 109
+testes (13 novos: `20c2`, `20j`, `20k`, `20l`, `20m`, `21f`, e os 7 de reparenting `35`–`41`).
+`test:tx-p2c` permanece 71 (mesmos testes, campos renomeados para `icone`/`tema`).
+
+**`docs/taxonomia/catalogo-v1.json` também foi renomeado** (`icon`→`icone`,
+`icon_override`/`tema_override`→`icone`/`tema`, valores `null` preservados) — não é migration
+hospedada, pode ser editado livremente. A migration `20260830130000` (que gerou os dados a partir
+dele) permanece intocada e imutável; o JSON é a fonte versionada, não o `.sql` já aplicado.
+
+**Runtime segue incólume.** Nenhuma tela lê `segmentos`/`categorias_novas` hoje — confirmado antes e
+depois desta migration. As três views da TX-P2A continuam lendo `public.categorias` legado e
+devolvendo 6/6/6. `database.types.ts` regenerado (`icone` presente, `icon_override`/`tema_override`
+zerados).
+
+✅ **Aplicada no hospedado e IMUTÁVEL.** `20260830150000` foi ao ar no Supabase de produção (`bpeqpxvxgdyjjdcoycgp`) junto com `20260830160000`/`20260830170000` — mesmo apply, mesma janela. Hash SHA-256 do arquivo validado antes e depois do apply: `e0fced8603e30a533afdbf0c1cfde85fe97a2633a5511f3197ae72c2620cf266`. Não editar este arquivo nunca mais, pelo mesmo motivo das anteriores da cadeia. Ver seção «PUBLICAÇÃO» ao final do capítulo MARCO 1 para o estado hospedado completo.
+
+## MARCO 1 — shadows UUID, relações novas e snapshots imutáveis
+
+Continuação direta da TX-P2D1E: ali o *staging* (`segmentos`/`categorias_novas`) foi canonicalizado;
+aqui o resto do banco ganha os **campos-sombra** que vão substituir o legado no cutover, sem tocar
+uma tela sequer. Duas migrations, a mesma regra das anteriores: **aditivas**, `ON DELETE RESTRICT`
+em toda FK para categoria (histórico nunca é apagado por physical delete, só por desativação), e
+falha alta (`RAISE EXCEPTION`) em qualquer contagem que não bater.
+
+### `20260830160000_m1_relacoes_uuid_shadow.sql`
+
+**Schema novo, todo NULL/vazio até o backfill do fim da própria migration:**
+
+- `public.cupons.categoria_nova_id uuid null references categorias_novas(id) on delete restrict` —
+  a folha UUID do cupom. `cupons.categoria_id text` (legado) **não é tocado, não é substituído**.
+- `public.estabelecimentos.categoria_principal_id uuid null references categorias_novas(id) on
+  delete restrict` — a folha UUID pré-selecionada nos forms (equivalente novo do
+  `estabelecimentos.categoria_id` legado).
+- `public.estabelecimento_categorias_novas (estabelecimento_id text, categoria_id uuid, criado_em
+  timestamptz, PK (estabelecimento_id, categoria_id))` — o N:N novo, RLS ligada, **leitura pública**
+  (`grant select` a `anon`/`authenticated`, policy `using (true)`), **zero grant de escrita** para
+  qualquer papel da aplicação. Só `service_role` escreve.
+
+**Duas famílias de invariante, as duas nos DOIS SENTIDOS, via trigger — não via grant, não via
+CHECK estático (dependem de outra linha/tabela, CHECK não alcança):**
+
+1. **Principal ∈ join, e categoria em uso não sai do join.** `checar_principal_novo_no_conjunto()`
+   (`BEFORE INSERT OR UPDATE OF categoria_principal_id` em `estabelecimentos`) recusa definir uma
+   principal que não esteja em `estabelecimento_categorias_novas` para aquele estabelecimento.
+   `impedir_remover_categoria_do_conjunto_em_uso()` (`BEFORE DELETE OR UPDATE OF estabelecimento_id,
+   categoria_id` em `estabelecimento_categorias_novas` — a função e o nome do trigger foram
+   estendidos no HARDENING FINAL, ver abaixo) recusa remover — ou mudar a chave, o equivalente de
+   remover — exatamente a relação que hoje é (a) a principal do estabelecimento, OU (b) está em uso
+   por `categoria_nova_id` de algum cupom daquele estabelecimento. Remover qualquer OUTRA relação
+   continua permitido, e um `UPDATE` que reafirma a MESMA chave (sem mudar valor) não é bloqueado.
+   Provado nos dois sentidos, e nos dois eixos (principal / uso por cupom), via `psql` direto como
+   `service_role`/`postgres`.
+2. **Categoria do cupom ∈ join do seu estabelecimento, e ativa NO MOMENTO da seleção.**
+   `checar_categoria_nova_cupom()` (`BEFORE INSERT OR UPDATE OF categoria_nova_id,
+   estabelecimento_id` em `cupons`) recusa `categoria_nova_id` que não esteja em
+   `estabelecimento_categorias_novas` para o `estabelecimento_id` daquele cupom
+   (`categoria_nova_fora_do_conjunto`), e recusa uma categoria/segmento com `ativo = false` **só
+   quando o valor está sendo definido/alterado** (`categoria_nova_inativa_para_nova_selecao`) — uma
+   categoria desativada **depois** de já estar num cupom não invalida esse cupom; a checagem não
+   roda em leitura nem é reavaliada por nenhum job, só dispara em escrita da própria coluna. Como a
+   trigger já dispara em `UPDATE OF ... estabelecimento_id`, mudar o estabelecimento de um cupom
+   mantendo uma `categoria_nova_id` que o NOVO estabelecimento não tem também é negado — auditado no
+   HARDENING FINAL isolando esse caso do check LEGADO equivalente (que usa outra tabela e teria
+   bloqueado por um motivo diferente em muitos pares óbvios).
+
+**Backfill do de-para (`docs/taxonomia/depara-v1.json`), idempotente por necessidade, não por
+estilo:** o `supabase db reset` local aplica **todas** as migrations antes de rodar `seed.sql` — as
+linhas que este backfill referencia (`estabelecimentos` e1–e6, os 14 `cupons` canônicos) só existem
+no HOSPEDADO no instante em que a migration roda; localmente ainda não existem. A saída foi
+`private.aplicar_backfill_m1_taxonomia()`, uma função `returns void` com guarda `contagem é 0 (no-op)
+ou N exato (aborta no meio)`: a própria migration a chama uma vez no fim (efeito real no hospedado,
+NO-OP seguro local) e `supabase/seed.sql` a chama de novo no fim (efeito real local, depois que os
+dados do seed existem). Uma fonte só da lógica de mapeamento, nos dois ambientes — nunca uma segunda
+cópia divergente. Resultado, nos dois lados: **10 relações** em `estabelecimento_categorias_novas`
+(exatamente o de-para — deliberadamente **sem** `e1 → fitness`, que era vínculo legado decorativo,
+nunca replicado no shadow), **6/6** `categoria_principal_id` preenchidos, **14/14**
+`cupons.categoria_nova_id` preenchidos.
+
+**HARDENING FINAL: a função vive em `private`, não em `public`, e não é mais `SECURITY DEFINER`** —
+ver seção própria ao final deste capítulo.
+
+### `20260830170000_m1_snapshots_taxonomia.sql`
+
+**Snapshot histórico, server-owned, imutável.** `public.cupom_eventos.categoria_id` e
+`public.cupons_usuario.categoria_id` (as duas `uuid null references categorias_novas(id) on delete
+restrict`) guardam qual categoria folha o cupom tinha **no momento** daquele evento/uso — não a
+categoria atual do cupom, que pode mudar depois.
+
+- **Captura automática, incondicional (HARDENING FINAL):** `capturar_categoria_nova_evento()` /
+  `capturar_categoria_nova_uso()` (`BEFORE INSERT`) **sempre** derivam `categoria_id` a partir de
+  `cupons.categoria_nova_id`, sem olhar o que o caller mandou. A versão original só preenchia "se o
+  caller não mandou nada" (`new.categoria_id is null`) — o que deixava a porta aberta para um caller
+  (RPC, Server Action, PostgREST direto, **inclusive `service_role` da aplicação**) mandar um UUID
+  qualquer e ele ser aceito como se fosse o snapshot real. Agora o valor recebido é **ignorado e
+  sobrescrito** antes de a linha existir: o snapshot nunca é input, é sempre fato derivado. Se o
+  shadow do cupom ainda for `NULL` (transição), o snapshot nasce `NULL` também, mesmo que o caller
+  tenha mandado um UUID — não é erro, é o estado esperado até aquele cupom terminar de ser
+  classificado. Provado (`scripts/test-m1-taxonomia.ts`, itens 42–43): INSERT mentindo a categoria
+  grava a categoria REAL do cupom, não a mentira.
+- **Imutabilidade incondicional:** `impedir_mudar_categoria_evento()` / `impedir_mudar_categoria_uso()`
+  (`BEFORE UPDATE OF categoria_id`, `IS DISTINCT FROM`) recusam **qualquer** UPDATE que mude um
+  `categoria_id` já preenchido — `NULL → UUID` (backfill/transição) passa, `UUID → UUID diferente`
+  nunca, **para qualquer role, incluindo `service_role` da aplicação** (mesmo mecanismo já provado em
+  `trg_categorias_novas_impedir_reparent`, TX-P2D1E: trigger `BEFORE` não é gated por `EXECUTE` grant
+  na função). Não existe RPC de bypass, não existe grant de escrita pública nessas colunas. Continua
+  valendo mesmo depois da captura passar a ser incondicional (item 44 do teste).
+- **Backfill dos fatos já existentes**, mesmo padrão idempotente (`private.aplicar_backfill_m1_snapshots()`,
+  chamada pela migration e por nascer de novo em `seed.sql`), mas com assert de **orfandade zero**
+  em vez de contagem fixa — o volume de `cupom_eventos`/`cupons_usuario` varia por ambiente/atividade
+  orgânica; o que não pode existir é um fato cujo cupom já tem `categoria_nova_id` e cujo snapshot
+  ficou `NULL`. HARDENING FINAL: função em `private`, não mais `SECURITY DEFINER` (ver seção própria).
+
+**Prova histórica completa** (`scripts/test-m1-taxonomia.ts`, itens 26–28): cupom em categoria A →
+evento captura A → cupom recategorizado para B (válida, ∈ join) → o evento antigo **continua A** →
+um evento novo **já captura B** → tentar alterar o snapshot antigo de A para B direto é **negado**. A
+suíte reverte o cupom de teste (`c01`) para a categoria original no `finally`, para o mapeamento
+exato do de-para continuar batendo depois da suíte rodar.
+
+### Transição — como a escrita nova se comporta hoje
+
+Nenhum Server Action/RPC escreve `categoria_nova_id`/`categoria_principal_id` ainda — o cutover de
+runtime é Marco 2+. O que já é verdade, provado por `scripts/test-m1-taxonomia.ts` (itens 29–30):
+
+- **INSERT de cupom só com o campo legado (`categoria_id` texto) continua funcionando sem erro** —
+  `categoria_nova_id` nasce `NULL`, nenhum trigger bloqueia. É o caminho que o portal/`/e` usam hoje.
+- **Um shadow `NULL` gerado por essa escrita legítima é detectável por query** (`select count(*) from
+  cupons where categoria_nova_id is null`) — não existe estado silenciosamente incompleto. Isto é o
+  gate que o Marco 2 usa para achar o que falta classificar.
+- **Deliberadamente não resolvido agora:** um slug legado ambíguo (`alimentacao` → `restaurante` OU
+  `pizzaria`) não tem resolução automática segura — adivinhar uma folha específica seria inventar dado
+  que ninguém informou. Fica nulável até existir uma decisão de produto ou uma tela que pergunte.
+
+### Runtime — acoplamentos físicos removidos onde a fronteira já existia
+
+Sem mudar UX/formato de saída: `src/app/e/perfil/page.tsx` e `buscarCategoriasEstab()`
+(`src/lib/data/estab.ts`) liam `public.categorias` **direto** (embed `categorias(label)` num caso,
+`.from("categorias")` solto no outro) para resolver só o `label` de uma categoria já conhecida — a
+mesma informação que `buscarCatalogoCategorias()` (a fronteira da TX-P2A, `src/lib/data/taxonomia.ts`)
+já expõe. As duas trocaram a leitura direta por um lookup no catálogo da fronteira; a consulta ao
+N:N legado (`estabelecimento_categorias`, específica de cada estabelecimento) continua onde estava,
+porque não é isso que a fronteira generaliza. Nenhum import de `"categorias"` sobrou em `src/`
+(`grep` confirmado). Isto não é o cutover de UX (Parte M do prompt) — é só remover a distância física
+entre tela e o ponto único de troca, para o Marco 2 não precisar caçar consumidor por consumidor.
+
+### Segurança da nova join (Parte N)
+
+`estabelecimento_categorias_novas`: `anon` e `authenticated` **leem** (policy `using (true)`,
+confirmado via `anon` real), **não escrevem** (INSERT/UPDATE/DELETE negados para os dois papéis,
+confirmado via chamada real, não só inspeção de grant). `categoria_nova_id`/`categoria_principal_id`
+herdam o `grant insert`/`grant select` de tabela que `cupons`/`estabelecimentos` já tinham para
+`authenticated` — isso permite a um lojista **classificar um cupom novo na criação** (o trigger ainda
+valida que a categoria pertence ao próprio estabelecimento e está ativa), mas **não** existe `grant
+update` de coluna para essas duas colunas: reclassificar um cupom/estabelecimento já existente por
+`authenticated` é negado (confirmado via `psql`: `authenticated` tenta `UPDATE categoria_nova_id` e
+recebe erro de privilégio, não erro de invariante). Nenhuma função de trigger é `SECURITY DEFINER`
+desnecessária; todas usam `SET search_path TO ''` e qualificam `public.` internamente. As duas funções
+de backfill (`private.aplicar_backfill_m1_taxonomia()` / `private.aplicar_backfill_m1_snapshots()`)
+não são mais `SECURITY DEFINER` — ver HARDENING FINAL abaixo.
+
+### HARDENING FINAL — três fechamentos pós-auditoria
+
+Auditoria final do Marco 1 (ainda antes de qualquer hospedagem) achou três lacunas — todas corrigidas
+**editando diretamente** `20260830160000`/`20260830170000` (não hospedadas, sem custo de nova
+migration) e o `supabase/seed.sql`. Nenhuma mudou o schema visível a ponto de exigir nova coluna;
+`database.types.ts` foi regenerado mesmo assim (as duas funções de backfill saem de `Functions` — não
+existem mais em `public`, ver abaixo).
+
+1. **Invariante reversa cupom → join.** A proteção original de `estabelecimento_categorias_novas`
+   só olhava `categoria_principal_id`. Faltava o outro lado: nada impedia `DELETE (e1, pizzaria)` do
+   join enquanto um cupom de `e1` ainda tivesse `categoria_nova_id = pizzaria` — o cupom ficaria com
+   uma categoria fisicamente fora do conjunto do próprio estabelecimento, exatamente o estado que a
+   invariante de `checar_categoria_nova_cupom()` existe para impedir do outro lado. A função
+   (renomeada `impedir_remover_principal_novo_do_conjunto()` → `impedir_remover_categoria_do_conjunto_em_uso()`)
+   agora nega os dois casos, e o trigger passou a disparar também em `UPDATE OF estabelecimento_id,
+   categoria_id` (mudar a chave de uma relação em uso é tratado como removê-la) — um `UPDATE` que
+   reafirma a MESMA chave sem mudar valor continua permitido. Provado (itens 38–40b): remover relação
+   em uso é negado; recategorizar o cupom para liberar a relação e SÓ ENTÃO remover funciona; a
+   proteção de principal continua intacta; `UPDATE` de chave numa relação em uso é negado.
+2. **Mudança de `estabelecimento_id` do cupom.** Auditado, não corrigido — já funcionava, porque
+   `checar_categoria_nova_cupom()` já disparava em `UPDATE OF ... estabelecimento_id` e valida contra
+   `NEW.estabelecimento_id`. O risco real era um teste que provasse isso por engano: mover `c11`
+   (pet/banho-tosa) de `e6` para `e1` já falha por um motivo DIFERENTE — o check LEGADO
+   (`checar_categoria_cupom()`, `categoria_fora_do_conjunto`), já que `e1` não tem `pet` no legado.
+   Isso mascararia um buraco real no check NOVO. O teste isolante usa `c03` (fitness legado/academia
+   nova, de `e2`) → `e1`: `e1` TEM `fitness` no legado (o vínculo decorativo do item 15) mas NÃO tem
+   `academia` no join novo — só o check NOVO bloqueia esse caso, com `categoria_nova_fora_do_conjunto`.
+   Provado isolado do legado (itens 41–41b).
+3. **Snapshot 100% server-owned.** `capturar_categoria_nova_evento()`/`_uso()` preenchiam
+   `categoria_id` só quando `new.categoria_id is null` — um caller que mandasse um UUID no INSERT
+   tinha esse valor aceito como se fosse o snapshot real, nenhuma validação rodava. Agora as duas
+   funções **sempre** sobrescrevem `NEW.categoria_id` com o valor derivado de
+   `cupons.categoria_nova_id`, incondicionalmente — o campo enviado pelo caller nunca chega a ser
+   gravado. Provado com um INSERT deliberadamente mentiroso (itens 42–43): `cupom_eventos`/
+   `cupons_usuario` recebem a categoria REAL do cupom, não a mandada; a imutabilidade continua negando
+   UPDATE depois disso (item 44).
+
+**Efeito colateral desejado, não um quarto item:** as duas funções de backfill deixaram de viver em
+`public` — agora são `private.aplicar_backfill_m1_taxonomia()` / `private.aplicar_backfill_m1_snapshots()`.
+Não são API de produto, só ferramenta de migration/seed/reset administrativo, e `private` não está em
+`schemas = ["public", "graphql_public"]` (`supabase/config.toml`) — a função simplesmente não existe
+do ponto de vista do PostgREST, para nenhum papel, `service_role` incluído. O `revoke execute ...
+from public, anon, authenticated` que as duas já tinham foi mantido como defesa em profundidade (mesmo
+padrão de `private.hmac_cpf`), não é o que efetivamente bloqueia. As duas também deixaram de ser
+`SECURITY DEFINER`: só rodam como `postgres` (migration/seed), que já tem acesso direto às tabelas —
+`DEFINER` só se justifica quando quem chama precisa de um privilégio que não tem. Provado (itens
+45–49): `anon` e `authenticated` recebem erro tentando `.rpc(...)` as duas funções; até `service_role`
+via API REST não alcança (o bloqueio é a ausência da função no schema exposto, não um grant).
+
+### Estado
+
+**Prova integrada:** `scripts/test-m1-taxonomia.ts` (`npm run test:m1-taxonomia`) — **64 testes**
+(44 da primeira rodada do Marco 1 + 20 do HARDENING FINAL), cobrindo canonicalização (regressão
+leve), os dois shadows, as 10 relações, os invariantes em TODOS os sentidos provados (principal↔join,
+cupom↔join, join→cupom reverso, estabelecimento_id↔categoria), os snapshots (captura incondicional +
+imutabilidade + prova de recategorização + prova de injeção maliciosa), a transição, o legado intocado
+(`categorias` = 6, `estabelecimento_categorias` = 7, views TX-P2A = 6/6/6), e a inacessibilidade das
+duas funções de backfill via RPC para `anon`/`authenticated`/`service_role`. Cleanup de toda fixture
+provado no próprio teste (nenhuma linha residual, `c01` de volta à categoria original, relação
+`e1`/pizzaria de volta ao join).
+
+✅ **`20260830160000` e `20260830170000`: aplicadas no hospedado e IMUTÁVEIS**, no mesmo apply que
+`20260830150000`. Hashes SHA-256 validados antes e depois do apply:
+`10282c0868b7d67bdd1730ee5f907444f1fee3dab9326047c58f42198c6469bb` (160000) e
+`552f01ea4fa382cb6c66475964e02b675da8e6314aaab5b747f631f7cfc87727` (170000).
+**CUTOVER (runtime lendo os campos-sombra em vez do legado) AINDA NÃO ACONTECEU** — views da TX-P2A
+continuam 6/6/6, nenhuma tela lê `categoria_nova_id`/`categoria_principal_id`/
+`estabelecimento_categorias_novas`. Publicar o schema não publicou o comportamento.
+
+### PUBLICAÇÃO — apply hospedado (Supabase `bpeqpxvxgdyjjdcoycgp`, sa-east-1)
+
+Autorizado explicitamente pelo responsável do projeto. Preflight completo (28 gates, read-only +
+dry-run) rodou antes, sem nenhuma escrita; o apply real (`npx supabase db push --linked`) rodou uma
+única vez, aplicando as três migrations em ordem (150000 → 160000 → 170000), exit code 0. Ledger
+confirmado `local == remote` para as três logo em seguida.
+
+**Estado hospedado confirmado pós-apply** (todas as contagens lidas do próprio banco de produção,
+nenhuma assumida):
+
+- `segmentos` = 14, `categorias_novas` = 75 (inalterados).
+- `cupons` = 14, `categoria_nova_id` preenchido em **14/14**, 0 NULL, mapping **14/14** exatamente
+  igual a `docs/taxonomia/depara-v1.json`.
+- `estabelecimentos` = 6, `categoria_principal_id` preenchido em **6/6**, mapping **6/6** exato.
+- `estabelecimento_categorias_novas` = **10** relações, conjunto idêntico ao de-para (zero extra,
+  zero faltando), `e1 → fitness` confirmadamente ausente.
+- `cupom_eventos` = 20508, `categoria_id` preenchido em **20508/20508**, 0 NULL, 0 referência órfã.
+- `cupons_usuario` = 7, `categoria_id` preenchido em **7/7**, 0 NULL, 0 referência órfã.
+- `pontos_transacoes`: COUNT = 11, SUM(pontos) = 2870 — **idênticos ao pré-apply**. Nenhuma das três
+  migrations menciona essa tabela; confirmado tanto por leitura do texto quanto por leitura do banco.
+- Legado intocado: `categorias` = 6, `estabelecimento_categorias` = 7. Views TX-P2A = **6/6/6**.
+- Os 8 triggers do Marco 1 (reparent, cupom↔join, principal↔join, join→cupom reverso, captura +
+  imutabilidade dos dois snapshots) confirmados instalados com a definição exata já testada local.
+- `private.aplicar_backfill_m1_taxonomia` / `private.aplicar_backfill_m1_snapshots`: confirmadas
+  **só** em `private` (zero cópia em `public`), `SECURITY DEFINER = false`, inalcançáveis via API —
+  prova estrutural, nenhuma RPC foi chamada no hospedado.
+
+**Nenhuma linha foi deletada.** Zero `DELETE` nos três arquivos, confirmado por leitura e por
+resultado (nenhuma contagem caiu). `git push`/PR/merge tratados como GATE separado, registrados na
+seção de Git deste repositório quando acontecerem — a publicação do SCHEMA não implica cutover de
+runtime nem deploy de código.

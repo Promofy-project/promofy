@@ -43,7 +43,11 @@ function negado(r: { error: unknown }): boolean {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-/** Mesmo vocabulário fechado de public.tema_visual (TX-P2B). */
+/**
+ * Vocabulário INICIAL do seed (§5.1) — 14 tokens, um por segmento. NÃO é whitelist do domain
+ * (TX-P2D1E: public.tema_visual valida FORMATO, não uma lista fechada) — é o contrato do
+ * catálogo v1: exatamente estes 14 tokens, nem um a mais nem a menos, nesta versão do seed.
+ */
 const TEMAS = [
   "laranja", "verde", "grafite", "rosa", "roxo", "ciano", "violeta", "azul",
   "indigo", "ambar", "cinza", "vermelho", "terra", "amarelo",
@@ -140,14 +144,14 @@ interface CategoriaJson {
   nome: string;
   ordem: number;
   ativo: boolean;
-  icon_override: string | null;
-  tema_override: string | null;
+  icone: string | null;
+  tema: string | null;
 }
 interface SegmentoJson {
   id: string;
   slug: string;
   nome: string;
-  icon: string;
+  icone: string;
   tema: string;
   ordem: number;
   ativo: boolean;
@@ -223,8 +227,12 @@ async function main(): Promise<number> {
   );
 
   check("10. cada segmento possui nome não vazio", catalogo.segmentos.every((s) => s.nome.trim().length > 0));
-  check("11. icon não vazio", catalogo.segmentos.every((s) => s.icon.trim().length > 0));
-  check("12. tema pertence aos 14 tokens do domain", catalogo.segmentos.every((s) => (TEMAS as readonly string[]).includes(s.tema)));
+  check("11. icone não vazio", catalogo.segmentos.every((s) => s.icone.trim().length > 0));
+  check(
+    "12. os 14 segmentos usam EXATAMENTE o vocabulário visual inicial aprovado (não é limite do domain — TX-P2D1E)",
+    JSON.stringify(catalogo.segmentos.map((s) => s.tema).sort()) === JSON.stringify([...TEMAS].sort()),
+    catalogo.segmentos.map((s) => s.tema).join(","),
+  );
 
   const ordensSegmento = catalogo.segmentos.map((s) => s.ordem).sort((a, b) => a - b);
   check(
@@ -278,8 +286,8 @@ async function main(): Promise<number> {
 
   check("19. todos ativos", catalogo.segmentos.every((s) => s.ativo) && flatCategorias.every((c) => c.ativo));
   check(
-    "20. todas as 75 folhas com icon_override/tema_override null",
-    flatCategorias.every((c) => c.icon_override === null && c.tema_override === null),
+    "20. todas as 75 folhas com icone/tema null (herdam do segmento)",
+    flatCategorias.every((c) => c.icone === null && c.tema === null),
   );
 
   const outros = flatCategorias.filter((c) =>
@@ -304,10 +312,10 @@ async function main(): Promise<number> {
   });
   const temSessao = !login.error && Boolean(login.data.session);
 
-  const dbSeg = await svc.from("segmentos").select("id, slug, nome, icon, tema, ordem, ativo");
+  const dbSeg = await svc.from("segmentos").select("id, slug, nome, icone, tema, ordem, ativo");
   const dbCat = await svc
     .from("categorias_novas")
-    .select("id, segmento_id, slug, nome, ordem, ativo, icon_override, tema_override");
+    .select("id, segmento_id, slug, nome, ordem, ativo, icone, tema");
 
   check("22. segmentos no banco = 14", (dbSeg.data ?? []).length === 14, dbSeg.error?.message ?? String(dbSeg.data?.length));
   check("23. categorias_novas = 75", (dbCat.data ?? []).length === 75, dbCat.error?.message ?? String(dbCat.data?.length));
@@ -327,13 +335,13 @@ async function main(): Promise<number> {
     }
     if (r.nome !== s.nome) segmentosDivergentes.push(`${s.slug}: nome '${r.nome}' != '${s.nome}'`);
     if (r.slug !== s.slug) segmentosDivergentes.push(`${s.slug}: slug diverge`);
-    if (r.icon !== s.icon) segmentosDivergentes.push(`${s.slug}: icon '${r.icon}' != '${s.icon}'`);
+    if (r.icone !== s.icone) segmentosDivergentes.push(`${s.slug}: icone '${r.icone}' != '${s.icone}'`);
     if (r.tema !== s.tema) segmentosDivergentes.push(`${s.slug}: tema '${r.tema}' != '${s.tema}'`);
     if (r.ordem !== s.ordem) segmentosDivergentes.push(`${s.slug}: ordem ${r.ordem} != ${s.ordem}`);
     if (r.ativo !== s.ativo) segmentosDivergentes.push(`${s.slug}: ativo ${r.ativo} != ${s.ativo}`);
   }
   check(
-    "24. PARIDADE EXATA — 14 segmentos no banco correspondem byte-semanticamente ao JSON (id, slug, nome, icon, tema, ordem, ativo)",
+    "24. PARIDADE EXATA — 14 segmentos no banco correspondem byte-semanticamente ao JSON (id, slug, nome, icone, tema, ordem, ativo)",
     segmentosDivergentes.length === 0,
     segmentosDivergentes.join("; "),
   );
@@ -341,11 +349,11 @@ async function main(): Promise<number> {
   check("26. slug corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("slug diverge")));
   check("27. ordem corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("ordem")));
   check("28. tema corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("tema")));
-  check("29. icon corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("icon")));
+  check("29. icone corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("icone")));
   check("29b. ativo corresponde (segmentos)", !segmentosDivergentes.some((d) => d.includes("ativo")));
 
   // Paridade EXATA das 75 folhas: todo campo persistido, incluindo os que o gate anterior
-  // (só parent UUID) deixava passar batido — ativo, icon_override, tema_override.
+  // (só parent UUID) deixava passar batido — ativo, icone, tema.
   const categoriasDivergentes: string[] = [];
   for (const c of flatCategorias) {
     const r = dbCatPorId.get(c.id);
@@ -358,11 +366,11 @@ async function main(): Promise<number> {
     if (r.nome !== c.nome) categoriasDivergentes.push(`${c.slug}: nome '${r.nome}' != '${c.nome}'`);
     if (r.ordem !== c.ordem) categoriasDivergentes.push(`${c.slug}: ordem ${r.ordem} != ${c.ordem}`);
     if (r.ativo !== c.ativo) categoriasDivergentes.push(`${c.slug}: ativo ${r.ativo} != ${c.ativo}`);
-    if (r.icon_override !== c.icon_override) categoriasDivergentes.push(`${c.slug}: icon_override '${r.icon_override}' != '${c.icon_override}'`);
-    if (r.tema_override !== c.tema_override) categoriasDivergentes.push(`${c.slug}: tema_override '${r.tema_override}' != '${c.tema_override}'`);
+    if (r.icone !== c.icone) categoriasDivergentes.push(`${c.slug}: icone '${r.icone}' != '${c.icone}'`);
+    if (r.tema !== c.tema) categoriasDivergentes.push(`${c.slug}: tema '${r.tema}' != '${c.tema}'`);
   }
   check(
-    "30. PARIDADE EXATA — 75 categorias no banco correspondem EXATAMENTE ao JSON por UUID (segmento_id, slug, nome, ordem, ativo, icon_override, tema_override)",
+    "30. PARIDADE EXATA — 75 categorias no banco correspondem EXATAMENTE ao JSON por UUID (segmento_id, slug, nome, ordem, ativo, icone, tema)",
     categoriasDivergentes.length === 0,
     categoriasDivergentes.join("; "),
   );
@@ -371,8 +379,8 @@ async function main(): Promise<number> {
   check("30c. nome corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("nome")));
   check("30d. ordem corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("ordem")));
   check("30e. ativo corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("ativo")));
-  check("30f. icon_override corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("icon_override")));
-  check("30g. tema_override corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("tema_override")));
+  check("30f. icone corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes("icone")));
+  check("30g. tema corresponde (categorias_novas)", !categoriasDivergentes.some((d) => d.includes(": tema ")));
 
   const idsJson = new Set(todosUuids);
   const idsDb = new Set(Array.from(dbSegPorId.keys()).concat(Array.from(dbCatPorId.keys())));
@@ -393,12 +401,12 @@ async function main(): Promise<number> {
 
   const anonIns = await anon
     .from("segmentos")
-    .insert({ slug: "p2c-anon-hack", nome: "H", icon: "Star", tema: "azul", ordem: 999 });
+    .insert({ slug: "p2c-anon-hack", nome: "H", icone: "Star", tema: "azul", ordem: 999 });
   check("35. anon não ganhou INSERT", negado(anonIns), "insert passou!");
   if (temSessao) {
     const authIns = await usuario
       .from("segmentos")
-      .insert({ slug: "p2c-auth-hack", nome: "H", icon: "Star", tema: "azul", ordem: 999 });
+      .insert({ slug: "p2c-auth-hack", nome: "H", icone: "Star", tema: "azul", ordem: 999 });
     check("36. authenticated comum não ganhou INSERT", negado(authIns), "insert passou!");
   }
 
