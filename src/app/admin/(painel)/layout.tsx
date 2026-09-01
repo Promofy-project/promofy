@@ -5,5 +5,12 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell variant="admin">{children}</DashboardShell>;
+  return (
+    <DashboardShell
+      variant="admin"
+      identidade={{ nome: "Equipe Promofy", papel: "Administrador" }}
+    >
+      {children}
+    </DashboardShell>
+  );
 }
