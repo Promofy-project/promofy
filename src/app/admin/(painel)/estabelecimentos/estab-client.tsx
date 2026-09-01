@@ -308,7 +308,12 @@ function CategoriasModal({
         className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="animate-fade-up relative w-full max-w-[520px] rounded-card bg-surface p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-categorias-titulo"
+        className="animate-fade-up relative max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-card bg-surface p-6 shadow-2xl"
+      >
         <button
           type="button"
           aria-label="Fechar"
@@ -317,7 +322,9 @@ function CategoriasModal({
         >
           <X className="h-4 w-4" />
         </button>
-        <h2 className="text-lg font-bold">Categorias</h2>
+        <h2 id="admin-categorias-titulo" className="text-lg font-bold">
+          Categorias
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {estabelecimento.nome} — a categoria principal não pode ser removida.
           Associações inativas continuam visíveis; não é possível reativá-las

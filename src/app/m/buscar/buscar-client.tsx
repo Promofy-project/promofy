@@ -13,7 +13,7 @@ import { CouponListItem } from "@/components/coupon-list-item";
 import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { FiltroTaxonomiaChips } from "@/components/filtro-taxonomia-chips";
 
-const chips = ["Ordenar", "Mais próximos", "Maior economia", "Melhor avaliados"];
+const chips = ["Ordenar", "Maior economia"] as const;
 
 /**
  * Corpo client da busca. O filtro de taxonomia já veio do servidor
@@ -35,11 +35,11 @@ export function BuscarClient({
   diaInicial?: string;
 }) {
   const [query, setQuery] = React.useState("");
-  const [chip, setChip] = React.useState("Ordenar");
+  const [chip, setChip] = React.useState<(typeof chips)[number]>("Ordenar");
   const [dia, setDia] = React.useState<string>(diaInicial ?? "Todos");
 
   const termo = query.trim().toLowerCase();
-  const resultados = cupons
+  const filtrados = cupons
     .filter(
       (c) =>
         !termo ||
@@ -47,6 +47,11 @@ export function BuscarClient({
         c.estabelecimento.toLowerCase().includes(termo),
     )
     .filter((c) => dia === "Todos" || cupomDisponivelNoDia(c.dias, dia));
+
+  const resultados =
+    chip === "Maior economia"
+      ? [...filtrados].sort((a, b) => b.economia - a.economia)
+      : filtrados;
 
   const labelSeg = nomeDoSegmento(filtro.seg, catalogo);
   const labelCat = nomeDaFolha(filtro, catalogo);
@@ -62,6 +67,7 @@ export function BuscarClient({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Pesquise cupom..."
+          aria-label="Pesquisar cupom"
           className="h-12 rounded-xl border-2 border-primary pl-10"
         />
       </div>

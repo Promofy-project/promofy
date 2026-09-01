@@ -1,48 +1,34 @@
-"use client";
+import { redirect } from "next/navigation";
+import { MapPin } from "lucide-react";
 
-import * as React from "react";
-import { Bell, MapPin, Ticket } from "lucide-react";
-
-import type { Estabelecimento } from "@/lib/types";
-import { estabelecimentos } from "@/lib/mock-data";
-import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
-import { cn } from "@/lib/utils";
+import { buscarEstabelecimentosPublicos, type EstabPublico } from "@/lib/data/estab";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import {
+  filtroDeQuery,
+  hrefBusca,
+  idsParaConsulta,
+  normalizarFiltroUrl,
+  precisaCanonicalizar,
+  queryPrecisaLimpeza,
+} from "@/lib/taxonomia-url";
+import {
+  CATEGORIA_VISUAL_FALLBACK,
+  rotuloHierarquico,
+} from "@/lib/categoria-visual";
 import { MobilePageHeader } from "@/components/mobile-page-header";
-import { CategoryChips } from "@/components/category-chips";
+import { FiltroTaxonomiaChips } from "@/components/filtro-taxonomia-chips";
 import { FavoriteButton } from "@/components/favorite-button";
-import { StarRating } from "@/components/star-rating";
 import { Icon } from "@/components/icon";
 
-/** Sino "notificar novos cupons" — só visual, alterna on/off (protótipo). */
-function NotifyBell({ nome }: { nome: string }) {
-  const [on, setOn] = React.useState(false);
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      aria-label={
-        on
-          ? `Desativar avisos de novos cupons de ${nome}`
-          : `Avisar sobre novos cupons de ${nome}`
-      }
-      onClick={() => setOn((v) => !v)}
-      className={cn(
-        "grid h-9 w-9 shrink-0 place-items-center rounded-full border shadow-sm transition hover:scale-105 active:scale-95",
-        on
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-surface text-muted-foreground",
-      )}
-    >
-      <Bell className={cn("h-[18px] w-[18px]", on && "fill-current")} />
-    </button>
-  );
-}
+export const dynamic = "force-dynamic";
 
-function EstabelecimentoCard({ e }: { e: Estabelecimento }) {
+const ORIGEM = "/m/estabelecimentos";
+
+function EstabelecimentoCard({ e }: { e: EstabPublico }) {
   const categoria = e.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
+  const rotulo = rotuloHierarquico(categoria.segmentoLabel, categoria.label);
   return (
     <article className="flex items-start gap-3 rounded-card border border-border bg-card p-3.5 shadow-card">
-      {/* Avatar da categoria */}
       <div
         className="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
         style={{ background: categoria.gradiente }}
@@ -53,55 +39,66 @@ function EstabelecimentoCard({ e }: { e: Estabelecimento }) {
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-bold leading-snug">{e.nome}</h3>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span>{categoria.label}</span>
-          <span aria-hidden>·</span>
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5" />
-            {e.cidade}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center gap-2 text-xs">
-          <StarRating rating={e.rating} />
-          <span aria-hidden className="text-muted-foreground">
-            ·
-          </span>
-          <span className="inline-flex items-center gap-1 font-semibold text-primary">
-            <Ticket className="h-3.5 w-3.5" />
-            {e.cuponsAtivos} cupons ativos
-          </span>
+          <span>{rotulo}</span>
+          {e.cidade ? (
+            <>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" />
+                {e.cidade}
+              </span>
+            </>
+          ) : null}
         </div>
       </div>
 
-      {/* Ações — Fase 4: o coração favorita o estabelecimento no banco.
-          Nesta lista (ainda mock) e4/e6 não estão ativos: a RPC recusa e
-          o toggle otimista reverte em silêncio (comportamento aceito). */}
-      <div className="flex shrink-0 flex-col items-center gap-2">
-        <FavoriteButton estabelecimentoId={e.id} />
-        <NotifyBell nome={e.nome} />
-      </div>
+      <FavoriteButton estabelecimentoId={e.id} />
     </article>
   );
 }
 
-export default function EstabelecimentosPage() {
-  const [categoria, setCategoria] = React.useState("todos");
+export default async function EstabelecimentosPage({
+  searchParams,
+}: {
+  searchParams?: { seg?: string | string[]; cat?: string | string[] };
+}) {
+  const filtroTax = await buscarFiltrosTaxonomia();
+  const bruto = filtroDeQuery(searchParams);
+  const filtro = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
 
+  if (precisaCanonicalizar(bruto, filtro) || queryPrecisaLimpeza(searchParams)) {
+    redirect(hrefBusca(filtro, { base: ORIGEM }));
+  }
+
+  const todos = await buscarEstabelecimentosPublicos(filtroTax);
+  const ids = idsParaConsulta(filtro, filtroTax.catalogoUrl);
   const lista =
-    categoria === "todos"
-      ? estabelecimentos
-      : estabelecimentos.filter((e) => e.categoria === categoria);
+    ids === null ? todos : todos.filter((e) => e.folhaId && ids.includes(e.folhaId));
 
   return (
     <div className="flex flex-col">
       <MobilePageHeader title="Estabelecimentos" back="/m" />
 
-      {/* Filtro por categoria */}
       <div className="border-b border-border px-4 py-2.5">
-        <CategoryChips value={categoria} onChange={setCategoria} />
+        {filtroTax.catalogo.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">
+            Não foi possível carregar os segmentos agora.
+          </p>
+        ) : (
+          <FiltroTaxonomiaChips
+            catalogo={filtroTax.catalogoUrl}
+            filtro={filtro}
+            base={ORIGEM}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-3 px-4 pb-6 pt-4">
-        {lista.length === 0 ? (
+        {todos.length === 0 ? (
+          <p className="py-16 text-center text-sm text-muted-foreground">
+            Nenhum estabelecimento disponível no momento.
+          </p>
+        ) : lista.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">
             Nenhum estabelecimento nesta categoria.
           </p>

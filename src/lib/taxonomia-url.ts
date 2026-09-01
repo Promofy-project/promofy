@@ -46,13 +46,77 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function ehUuid(valor: string): boolean {
+  // Next pode entregar `string | string[]` em query repetida. Sem este
+  // guarda, `valor.trim()` em array vira 500 no /m/buscar.
+  if (typeof valor !== "string") return false;
   return UUID_RE.test(valor.trim());
 }
 
 function limpar(valor: string | undefined): string | undefined {
-  const t = valor?.trim();
+  if (typeof valor !== "string") return undefined;
+  const t = valor.trim();
   if (!t || ehUuid(t)) return undefined;
   return t;
+}
+
+/**
+ * Primeiro valor escalar útil de um searchParam do App Router.
+ * `?seg=a&seg=b` chega como `string[]` — o primeiro não-vazio, determinístico.
+ */
+export function primeiroParametro(
+  valor: string | string[] | undefined,
+): string | undefined {
+  const candidatos = Array.isArray(valor)
+    ? valor
+    : valor !== undefined
+      ? [valor]
+      : [];
+  for (const item of candidatos) {
+    if (typeof item !== "string") continue;
+    const t = item.trim();
+    if (t) return t;
+  }
+  return undefined;
+}
+
+export function filtroDeQuery(sp?: {
+  seg?: string | string[];
+  cat?: string | string[];
+}): FiltroUrl {
+  return {
+    seg: primeiroParametro(sp?.seg),
+    cat: primeiroParametro(sp?.cat),
+  };
+}
+
+/** True quando a barra ainda tem array, espaços ou `?seg=` vazio. */
+export function queryPrecisaLimpeza(sp?: {
+  seg?: string | string[];
+  cat?: string | string[];
+  dia?: string | string[];
+}): boolean {
+  if (!sp) return false;
+  if (Array.isArray(sp.seg) || Array.isArray(sp.cat) || Array.isArray(sp.dia)) {
+    return true;
+  }
+  return [sp.seg, sp.cat, sp.dia].some(
+    (v) => typeof v === "string" && (v.trim() === "" || v !== v.trim()),
+  );
+}
+
+export function diaDeQuery(
+  valor: string | string[] | undefined,
+  dias: readonly string[],
+): string | undefined {
+  const candidatos = Array.isArray(valor)
+    ? valor
+    : valor !== undefined
+      ? [valor]
+      : [];
+  for (const d of candidatos) {
+    if (typeof d === "string" && dias.includes(d)) return d;
+  }
+  return undefined;
 }
 
 export function montarCatalogoUrl(args: {
@@ -149,14 +213,15 @@ export function precisaCanonicalizar(bruto: FiltroUrl, canon: FiltroUrl): boolea
 
 export function hrefBusca(
   filtro: FiltroUrl,
-  extra?: { dia?: string },
+  extra?: { dia?: string; base?: string },
 ): string {
+  const origem = extra?.base?.trim() || "/m/buscar";
   const p = new URLSearchParams();
   if (filtro.seg && !ehUuid(filtro.seg)) p.set("seg", filtro.seg);
   if (filtro.cat && !ehUuid(filtro.cat)) p.set("cat", filtro.cat);
   if (extra?.dia) p.set("dia", extra.dia);
   const q = p.toString();
-  return q ? `/m/buscar?${q}` : "/m/buscar";
+  return q ? `${origem}?${q}` : origem;
 }
 
 /**

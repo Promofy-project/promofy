@@ -6,12 +6,11 @@ import {
   CATEGORIA_VISUAL_FALLBACK,
   rotuloHierarquico,
 } from "@/lib/categoria-visual";
-import { cn, formatBRLValue, formatDistance, formatShortDate } from "@/lib/utils";
+import { cn, formatBRLValue, formatShortDate } from "@/lib/utils";
 import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
-import { StarRating } from "@/components/star-rating";
 import { FavoriteButton } from "@/components/favorite-button";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
@@ -31,7 +30,7 @@ export function CouponCard({
   ctaLabel?: string;
   /** cor da linha "Economize": yellow (landing) | blue (home Figma) */
   economiaTone?: "yellow" | "blue";
-  /** meta compacta (rating · distância numa linha) usada na home; default mostra estabelecimento + distância */
+  /** meta compacta (categoria + cidade) na home; default mostra estabelecimento + cidade */
   compact?: boolean;
   /** vitrine da landing: mantém o visual, mas troca o resgate por um CTA "Baixe o app" (→ /m) */
   showcase?: boolean;
@@ -130,25 +129,23 @@ export function CouponCard({
         </p>
 
         {compact ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <StarRating rating={cupom.rating} />
-            <span aria-hidden>·</span>
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
-              {formatDistance(cupom.distanciaKm)}
-            </span>
-          </div>
+          cupom.cidade ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{cupom.cidade}</span>
+            </div>
+          ) : null
         ) : (
           <>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="truncate">{cupom.estabelecimento}</span>
-              <span aria-hidden>·</span>
-              <StarRating rating={cupom.rating} />
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5" />
-              {formatDistance(cupom.distanciaKm)}
-            </div>
+            {cupom.cidade ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                {cupom.cidade}
+              </div>
+            ) : null}
           </>
         )}
 

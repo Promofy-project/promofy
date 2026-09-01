@@ -385,6 +385,7 @@ export const cupons: Cupom[] = cuponsBase.map((c) => ({
   categoriaVisual: resolverCategoriaVisual(c.categoria, categoriasDemo),
 }));
 
+/** Catálogo DEMO da landing / app-mockup. O detalhe `/m/cupom/[id]` NÃO usa. */
 export function getCupom(id: string): Cupom | undefined {
   return cupons.find((c) => c.id === id);
 }

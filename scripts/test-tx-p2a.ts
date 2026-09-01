@@ -287,9 +287,9 @@ async function main() {
   // Consumidores de FILTRO: chamam buscarFiltrosPublicos/buscarFiltrosTaxonomia,
   // NUNCA buscarCatalogoCategorias.
   const consumidoresFiltro: [string, string][] = [
-    ["src/app/m/page.tsx", "buscarFiltrosPublicos"],
-    ["src/app/m/buscar/page.tsx", "buscarFiltrosPublicos"],
-    ["src/app/m/filtros/page.tsx", "buscarFiltrosPublicos"],
+    ["src/app/m/page.tsx", "buscarFiltrosTaxonomia"],
+    ["src/app/m/buscar/page.tsx", "buscarFiltrosTaxonomia"],
+    ["src/app/m/filtros/page.tsx", "buscarFiltrosTaxonomia"],
     ["src/app/m/cupom/[id]/page.tsx", "buscarFiltrosPublicos"],
   ];
   for (const [arq, fn] of consumidoresFiltro) {

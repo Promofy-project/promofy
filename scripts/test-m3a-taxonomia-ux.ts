@@ -303,9 +303,8 @@ async function main(): Promise<number> {
   const urlMod = le("src/lib/taxonomia-url.ts");
 
   check(
-    "22. Home usa catalogo_segmentos (via buscarFiltrosPublicos/Taxonomia)",
-    home.includes("buscarFiltrosPublicos(") &&
-      (home.includes("buscarFiltrosTaxonomia(") || taxonomia.includes("catalogo_segmentos")),
+    "22. Home usa catalogo_segmentos (via buscarFiltrosTaxonomia)",
+    home.includes("buscarFiltrosTaxonomia(") && taxonomia.includes("catalogo_segmentos"),
   );
   check("23. chips da home apontam para /m/buscar?seg=", homeChips.includes("hrefBusca({ seg:"));
   check("24. chips da home NÃO filtram /m?cat=", !homeChips.includes("/m?cat="));

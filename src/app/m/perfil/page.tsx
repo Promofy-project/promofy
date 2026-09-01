@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Pencil,
   Bell,
   Wallet,
   CreditCard,
@@ -11,8 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PointsCard } from "@/components/points-card";
+import { PerfilIdentidade } from "@/components/perfil-identidade";
 
 const atalhos: {
   href: string;
@@ -20,7 +19,7 @@ const atalhos: {
   titulo: string;
   sub: string;
 }[] = [
-  { href: "/m/perfil/notificacoes", icon: Bell, titulo: "Notificações", sub: "2 não lidas" },
+  { href: "/m/perfil/notificacoes", icon: Bell, titulo: "Notificações", sub: "Avisos da conta" },
   { href: "/m/perfil/pagamento", icon: Wallet, titulo: "Pagamentos", sub: "Saldo, cartões e mais" },
 ];
 
@@ -41,27 +40,7 @@ export default function PerfilPage() {
     <div className="flex flex-col gap-5 px-4 pb-6 pt-5">
       <h1 className="text-xl font-extrabold">Perfil</h1>
 
-      {/* Cabeçalho do usuário */}
-      <div className="flex items-center gap-4 rounded-card border border-border bg-card p-4 shadow-card">
-        <Avatar className="h-16 w-16">
-          <AvatarFallback className="bg-primary/10 text-xl text-primary">
-            LO
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold">Lucas S. Orlandi</p>
-          <p className="truncate text-xs text-muted-foreground">
-            Membro Promofy
-          </p>
-        </div>
-        <Link
-          href="/m/perfil/dados"
-          aria-label="Editar perfil"
-          className="grid h-9 w-9 place-items-center rounded-full text-primary hover:bg-muted"
-        >
-          <Pencil className="h-4 w-4" />
-        </Link>
-      </div>
+      <PerfilIdentidade />
 
       {/* Pontos / gamificação */}
       <PointsCard />

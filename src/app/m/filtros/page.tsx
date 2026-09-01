@@ -1,7 +1,6 @@
-import { buscarFiltrosPublicos } from "@/lib/data/categorias";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
-import { normalizarFiltroUrl } from "@/lib/taxonomia-url";
+import { diaDeQuery, filtroDeQuery, normalizarFiltroUrl } from "@/lib/taxonomia-url";
 import { FiltrosClient } from "./filtros-client";
 
 export const dynamic = "force-dynamic";
@@ -9,15 +8,16 @@ export const dynamic = "force-dynamic";
 export default async function FiltrosPage({
   searchParams,
 }: {
-  searchParams?: { seg?: string; cat?: string; dia?: string };
+  searchParams?: {
+    seg?: string | string[];
+    cat?: string | string[];
+    dia?: string | string[];
+  };
 }) {
-  const [categorias, filtroTax] = await Promise.all([
-    buscarFiltrosPublicos(),
-    buscarFiltrosTaxonomia(),
-  ]);
-  const dias = DIAS_SEMANA as readonly string[];
+  const filtroTax = await buscarFiltrosTaxonomia();
+  const categorias = filtroTax.catalogo;
   const filtro = normalizarFiltroUrl(
-    { seg: searchParams?.seg, cat: searchParams?.cat },
+    filtroDeQuery(searchParams),
     filtroTax.catalogoUrl,
   );
   return (
@@ -26,11 +26,7 @@ export default async function FiltrosPage({
       catalogoVazio={categorias.length === 0}
       filtroInicial={filtro}
       diaHoje={diaSemanaBrt()}
-      diaInicial={
-        searchParams?.dia && dias.includes(searchParams.dia)
-          ? searchParams.dia
-          : undefined
-      }
+      diaInicial={diaDeQuery(searchParams?.dia, DIAS_SEMANA)}
     />
   );
 }

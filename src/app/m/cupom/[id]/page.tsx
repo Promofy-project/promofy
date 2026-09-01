@@ -2,14 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
-  Share2,
   MapPin,
-  Phone,
-  MessageCircle,
   MessageSquareOff,
 } from "lucide-react";
 
-import { getCupom } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
 import { buscarFiltrosPublicos } from "@/lib/data/categorias";
 import { resolverCategoriaVisual, rotuloHierarquico } from "@/lib/categoria-visual";
@@ -27,6 +23,7 @@ import { cn, formatBRL } from "@/lib/utils";
 import { CouponGallery } from "@/components/coupon-gallery";
 import { CupomAcaoUsar } from "@/components/cupom-acao-usar";
 import { FavoriteButton } from "@/components/favorite-button";
+import { BotaoCompartilhar } from "@/components/botao-compartilhar";
 import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
@@ -40,36 +37,19 @@ export default async function CupomDetalhe({
 }: {
   params: { id: string };
 }) {
-  // BANCO PRIMEIRO (Fase 6/H3). Era o contrário, e por isso o mesmo cupom
-  // exibia duas validades no mesmo fluxo: a home lia do banco ("até 20/08") e
-  // esta tela lia do mock ("até 12/08", mock-data.ts:180). O mock fica só como
-  // fallback dos ids que existem apenas no protótipo — nenhuma rota some.
-  const [doBanco, catalogo] = await Promise.all([
+  // Só o banco. Sem fallback de protótipo: id ausente ou invisível → 404.
+  const [cupom, catalogo] = await Promise.all([
     buscarCupomPorId(params.id),
     buscarFiltrosPublicos(),
   ]);
-  const doMock = getCupom(params.id);
-  const cupom = doBanco ?? doMock;
   if (!cupom) notFound();
 
-  // A JANELA VEM SEMPRE DO BANCO, mesmo quando o conteúdo vem do mock:
-  // o mock só tem `horarios` como texto ("Ter a Dom, 18h às 23h"), sem
-  // dias/início/fim estruturados. Confiar nele mostraria o botão
-  // habilitado num cupom que a RPC vai recusar — o "botão inerte" que
-  // esta fase existe para matar. Calculado no servidor (fuso BRT).
-  //
-  // Fase 9/QA: a pergunta é ALCANCE, não "agora". `dentroDaJanela` diria
-  // "fora" às 17:48 num cupom que abre às 18:00, mas o prazo de 5h cobre a
-  // janela inteira e `ativar_cupom` aceita (migration 30). Esmaecer aqui
-  // seria justamente o botão inerte que a Fase 5 matou — só que ao contrário.
-  const foraDaJanela = doBanco
-    ? !janelaAlcancavel(doBanco.janela, doBanco.prazoAtivacaoHoras ?? 5)
-    : false;
+  const foraDaJanela = !janelaAlcancavel(
+    cupom.janela,
+    cupom.prazoAtivacaoHoras ?? 5,
+  );
 
-  // Fase 6/H1: a tabela "Regras de Uso" descreve ESTE MESMO objeto `janela`.
-  // Antes era uma constante literal ("Hoje, Quinta", "09:00 - 16:00") que
-  // contradizia o botão logo acima. "hoje" resolvido no servidor (BRT).
-  const janela = doBanco?.janela;
+  const janela = cupom.janela;
   const janelaRestringe = temRestricao(janela);
   const linhas = linhasDaJanela(janela, diaSemanaBrt());
 
@@ -95,12 +75,7 @@ export default async function CupomDetalhe({
         </h1>
         {/* Fase 4: coração real — favorita o estabelecimento do cupom */}
         <FavoriteButton estabelecimentoId={cupom.estabelecimentoId} />
-        <button
-          aria-label="Compartilhar"
-          className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/15"
-        >
-          <Share2 className="h-5 w-5" />
-        </button>
+        <BotaoCompartilhar titulo={cupom.titulo} />
       </header>
 
       {/* Galeria */}
@@ -291,33 +266,18 @@ export default async function CupomDetalhe({
           </div>
         </section>
 
-        {/* Localização e Contato */}
-        <section>
-          <h3 className="mb-2 text-base font-bold">Localização e Contato</h3>
-          <div className="relative grid h-36 place-items-center overflow-hidden rounded-card border border-border bg-muted">
-            <div className="bg-dots absolute inset-0 opacity-50" />
-            <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary text-white shadow-md">
-              <MapPin className="h-5 w-5" />
-            </span>
-          </div>
-          <p className="mt-3 flex items-center gap-2 text-sm text-foreground">
-            <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-            Endereço lorem — {cupom.estabelecimento}
-          </p>
-          <p className="mt-1.5 flex items-center gap-2 text-sm text-foreground">
-            <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
-            11 989324802
-          </p>
-          <a
-            href="https://wa.me/5511989324802"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-success hover:underline"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Entre em contato
-          </a>
-        </section>
+        {/* Localização — só o que o schema tem (cidade). Rua, telefone e
+            WhatsApp NÃO existem em estabelecimentos: inventar número/endereço
+            era dado fake apresentado como real. Sem cidade, o bloco some. */}
+        {cupom.cidade ? (
+          <section>
+            <h3 className="mb-2 text-base font-bold">Localização</h3>
+            <p className="flex items-start gap-2 text-sm text-foreground">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              {cupom.cidade}
+            </p>
+          </section>
+        ) : null}
       </div>
 
       {/* Rodapé fixo */}

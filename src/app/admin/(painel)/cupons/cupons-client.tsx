@@ -295,7 +295,12 @@ function RejeitarModal({
         className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="animate-fade-up relative w-full max-w-[520px] rounded-card bg-surface p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-rejeitar-titulo"
+        className="animate-fade-up relative w-full max-w-[520px] rounded-card bg-surface p-6 shadow-2xl"
+      >
         <button
           type="button"
           aria-label="Fechar"
@@ -305,7 +310,10 @@ function RejeitarModal({
           <X className="h-4 w-4" />
         </button>
 
-        <h2 className="pr-8 text-lg font-extrabold leading-tight">
+        <h2
+          id="admin-rejeitar-titulo"
+          className="pr-8 text-lg font-extrabold leading-tight"
+        >
           Rejeitar “{cupom.titulo}”
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -426,7 +434,12 @@ function DetalheModal({
         className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="animate-fade-up relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-card bg-surface p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-cupom-titulo"
+        className="animate-fade-up relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-card bg-surface p-6 shadow-2xl"
+      >
         <button
           type="button"
           aria-label="Fechar"
@@ -444,7 +457,10 @@ function DetalheModal({
             <Icon name={cat.icon} className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-extrabold leading-tight">
+            <h2
+              id="admin-cupom-titulo"
+              className="text-lg font-extrabold leading-tight"
+            >
               {cupom.titulo}
             </h2>
             <p className="text-sm text-muted-foreground">
