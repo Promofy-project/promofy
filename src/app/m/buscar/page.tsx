@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 
 import { buscarCuponsBusca } from "@/lib/data/cupons";
-import { buscarFiltrosPublicos } from "@/lib/data/categorias";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
 import {
+  diaDeQuery,
+  filtroDeQuery,
   hrefBusca,
   idsParaConsulta,
   normalizarFiltroUrl,
   precisaCanonicalizar,
+  queryPrecisaLimpeza,
 } from "@/lib/taxonomia-url";
 import { BuscarClient } from "./buscar-client";
 
@@ -17,27 +19,25 @@ export const dynamic = "force-dynamic";
 export default async function BuscarPage({
   searchParams,
 }: {
-  searchParams?: { seg?: string; cat?: string; dia?: string };
+  searchParams?: {
+    seg?: string | string[];
+    cat?: string | string[];
+    dia?: string | string[];
+  };
 }) {
-  const [categorias, filtroTax] = await Promise.all([
-    buscarFiltrosPublicos(),
-    buscarFiltrosTaxonomia(),
-  ]);
+  const filtroTax = await buscarFiltrosTaxonomia();
+  const categorias = filtroTax.catalogo;
 
-  const bruto = { seg: searchParams?.seg, cat: searchParams?.cat };
+  const bruto = filtroDeQuery(searchParams);
   const filtro = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
-  const dias = DIAS_SEMANA as readonly string[];
-  const dia =
-    searchParams?.dia && dias.includes(searchParams.dia)
-      ? searchParams.dia
-      : undefined;
+  const dia = diaDeQuery(searchParams?.dia, DIAS_SEMANA);
 
-  if (precisaCanonicalizar(bruto, filtro)) {
+  if (precisaCanonicalizar(bruto, filtro) || queryPrecisaLimpeza(searchParams)) {
     redirect(hrefBusca(filtro, { dia }));
   }
 
   const ids = idsParaConsulta(filtro, filtroTax.catalogoUrl);
-  const cupons = await buscarCuponsBusca(ids);
+  const cupons = await buscarCuponsBusca(ids, filtroTax);
 
   return (
     <BuscarClient

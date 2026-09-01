@@ -66,12 +66,19 @@ function janelaDeJson(horarios: CupomRow["horarios"]): JanelaConsumo | undefined
  * Linha do banco → tipo `Cupom` do protótipo. Os componentes de UI
  * (CouponCard etc.) continuam intocados: consomem o mesmo shape.
  * rating/avaliacoes/distancia_km são colunas-protótipo POR CUPOM
- * (paridade visual com o mock — ver plano D9).
+ * (paridade visual com o mock — ver plano D9). NÃO alimentam ranking
+ * público: não há GPS nem avaliação agregada de verdade nesses campos.
  */
+function cidadeVisivel(valor: string | null | undefined): string | undefined {
+  const t = valor?.trim();
+  return t || undefined;
+}
+
 export function linhaParaCupom(
   row: CupomRow,
   estabelecimentoNome: string,
   filtro: FiltroTaxonomia,
+  cidade?: string | null,
 ): Cupom {
   // TX-P2A/MARCO 2A: a folha UUID da linha atravessa a fronteira e vira
   // slug PUBLICO de segmento antes de virar visual. Era para este dia que
@@ -107,6 +114,7 @@ export function linhaParaCupom(
     formasConsumo: sanearFormasConsumo(row.formas_consumo),
     precoDe: row.preco_de != null ? Number(row.preco_de) : undefined,
     precoPor: row.preco_por != null ? Number(row.preco_por) : undefined,
+    cidade: cidadeVisivel(cidade),
     distanciaKm: Number(row.distancia_km ?? 0),
     rating: Number(row.rating ?? 0),
     avaliacoes: row.avaliacoes,
@@ -147,7 +155,10 @@ function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
  *   (comparação por data-string YYYY-MM-DD — determinística, sem Date local;
  *   fuso de referência do agendamento é decisão da Fase 2).
  */
-export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
+export async function buscarCuponsHome(
+  limite = 6,
+  filtroJa?: FiltroTaxonomia,
+): Promise<Cupom[]> {
   const supabase = createClient();
 
   // Fase 4: para o usuário logado, cupons de estabelecimentos favoritados
@@ -158,7 +169,7 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
 
   let query = supabase
     .from("cupons")
-    .select("*, estabelecimentos(nome)")
+    .select("*, estabelecimentos(nome, cidade)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
   if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
@@ -171,7 +182,7 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
           .select("estabelecimento_id")
           .then(({ data: favs }) => new Set((favs ?? []).map((f) => f.estabelecimento_id)))
       : Promise.resolve(new Set<string>()),
-    buscarFiltrosTaxonomia(),
+    filtroJa ? Promise.resolve(filtroJa) : buscarFiltrosTaxonomia(),
   ]);
 
   if (error) {
@@ -191,7 +202,14 @@ export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
       : visiveis;
   return ordenados
     .slice(0, limite)
-    .map((row) => linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro));
+    .map((row) =>
+      linhaParaCupom(
+        row,
+        row.estabelecimentos?.nome ?? "",
+        filtro,
+        row.estabelecimentos?.cidade,
+      ),
+    );
 }
 
 // Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
@@ -223,14 +241,19 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
   if (ids.length === 0) return [];
 
   const [{ data: rows }, filtro] = await Promise.all([
-    supabase.from("cupons").select("*, estabelecimentos(nome)").in("id", ids),
+    supabase.from("cupons").select("*, estabelecimentos(nome, cidade)").in("id", ids),
     buscarFiltrosTaxonomia(),
   ]);
 
   const porId = new Map(
     (rows ?? []).map((row) => [
       row.id,
-      linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
+      linhaParaCupom(
+        row,
+        row.estabelecimentos?.nome ?? "",
+        filtro,
+        row.estabelecimentos?.cidade,
+      ),
     ]),
   );
   return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
@@ -246,7 +269,7 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   const [{ data }, filtro] = await Promise.all([
     supabase
       .from("cupons")
-      .select("*, estabelecimentos(nome)")
+      .select("*, estabelecimentos(nome, cidade)")
       .eq("id", id)
       .in("status", ["ativo", "indisponivel"])
       .maybeSingle(),
@@ -254,7 +277,12 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   ]);
   if (!data) return null;
   if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
-  return linhaParaCupom(data, data.estabelecimentos?.nome ?? "", filtro);
+  return linhaParaCupom(
+    data,
+    data.estabelecimentos?.nome ?? "",
+    filtro,
+    data.estabelecimentos?.cidade,
+  );
 }
 
 /**
@@ -353,7 +381,7 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   const [{ data, error }, filtro] = await Promise.all([
     supabase
       .from("cupons")
-      .select("*, estabelecimentos(nome)")
+      .select("*, estabelecimentos(nome, cidade)")
       .in("estabelecimento_id", ids)
       .in("status", ["ativo", "indisponivel"])
       .order("ordem", { ascending: true }),
@@ -364,7 +392,12 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
+    linhaParaCupom(
+      row,
+      row.estabelecimentos?.nome ?? "",
+      filtro,
+      row.estabelecimentos?.cidade,
+    ),
   );
 }
 
@@ -376,20 +409,23 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
  * `null`/omitido = sem filtro de taxonomia; `[]` = filtro válido vazio
  * (não vira "mostra tudo"); lista = `.in(categoria_nova_id, …)`.
  */
-export async function buscarCuponsBusca(idsFolha?: string[] | null): Promise<Cupom[]> {
+export async function buscarCuponsBusca(
+  idsFolha?: string[] | null,
+  filtroJa?: FiltroTaxonomia,
+): Promise<Cupom[]> {
   if (idsFolha && idsFolha.length === 0) return [];
 
   const supabase = createClient();
   let query = supabase
     .from("cupons")
-    .select("*, estabelecimentos(nome)")
+    .select("*, estabelecimentos(nome, cidade)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
   if (idsFolha) query = query.in("categoria_nova_id", idsFolha);
 
   const [{ data, error }, filtro] = await Promise.all([
     query,
-    buscarFiltrosTaxonomia(),
+    filtroJa ? Promise.resolve(filtroJa) : buscarFiltrosTaxonomia(),
   ]);
 
   if (error) {
@@ -397,7 +433,12 @@ export async function buscarCuponsBusca(idsFolha?: string[] | null): Promise<Cup
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(row, row.estabelecimentos?.nome ?? "", filtro),
+    linhaParaCupom(
+      row,
+      row.estabelecimentos?.nome ?? "",
+      filtro,
+      row.estabelecimentos?.cidade,
+    ),
   );
 }
 
@@ -435,7 +476,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
 
   const { data: estabelecimento } = await supabase
     .from("estabelecimentos")
-    .select("id, nome, categoria_principal_id")
+    .select("id, nome, cidade, categoria_principal_id")
     .eq("owner_id", userId)
     .maybeSingle();
   if (!estabelecimento) return { estabelecimento: null, itens: [] };
@@ -488,7 +529,7 @@ export async function buscarCuponsPortal(): Promise<PortalCupons> {
   // coluna quando a data passa (só o trigger da 33, quando o lojista mexe).
   const hoje = hojeBrt();
   const itens: ItemCupomPortal[] = cupons.map((row) => ({
-    cupom: linhaParaCupom(row, estabelecimento.nome, filtro),
+    cupom: linhaParaCupom(row, estabelecimento.nome, filtro, estabelecimento.cidade),
     statusPortal: statusPortalDe(row.status, row.validade_fim, hoje),
     metricas:
       metricasPorCupom.get(row.id) ?? {

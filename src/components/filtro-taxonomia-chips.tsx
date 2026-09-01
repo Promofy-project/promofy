@@ -26,6 +26,7 @@ export function FiltroTaxonomiaChips({
   dia,
   onSelecionar,
   icones = false,
+  base,
 }: {
   catalogo: CatalogoUrl;
   filtro: FiltroUrl;
@@ -33,11 +34,17 @@ export function FiltroTaxonomiaChips({
   onSelecionar?: (prox: FiltroUrl) => void;
   /** Home/busca: o ícone do catálogo viaja com o rótulo (nunca sozinho). */
   icones?: boolean;
+  /** Destino dos Links. Default: `/m/buscar`. */
+  base?: string;
 }) {
   const folhas = folhasAtivasDoSegmento(filtro.seg, catalogo);
 
   function ir(prox: FiltroUrl) {
     if (onSelecionar) onSelecionar(prox);
+  }
+
+  function hrefDe(prox: FiltroUrl) {
+    return hrefBusca(prox, { dia, base });
   }
 
   function Chip({
@@ -102,7 +109,7 @@ export function FiltroTaxonomiaChips({
         <Chip
           selected={!filtro.seg}
           label="Todos"
-          href={hrefBusca({}, { dia })}
+          href={hrefDe({})}
           onClick={onSelecionar ? () => ir({}) : undefined}
         />
         {catalogo.segmentos.map((s) => (
@@ -110,7 +117,7 @@ export function FiltroTaxonomiaChips({
             key={s.slug}
             selected={filtro.seg === s.slug}
             label={s.nome}
-            href={hrefBusca({ seg: s.slug }, { dia })}
+            href={hrefDe({ seg: s.slug })}
             onClick={
               onSelecionar
                 ? () => ir(filtro.seg === s.slug ? {} : { seg: s.slug })
@@ -129,7 +136,7 @@ export function FiltroTaxonomiaChips({
           <Chip
             selected={!filtro.cat}
             label="Todas as categorias"
-            href={hrefBusca({ seg: filtro.seg }, { dia })}
+            href={hrefDe({ seg: filtro.seg })}
             onClick={onSelecionar ? () => ir({ seg: filtro.seg }) : undefined}
           />
           {folhas.map((f) => (
@@ -137,7 +144,7 @@ export function FiltroTaxonomiaChips({
               key={f.uuid}
               selected={filtro.cat === f.slug}
               label={f.nome}
-              href={hrefBusca({ seg: filtro.seg, cat: f.slug }, { dia })}
+              href={hrefDe({ seg: filtro.seg, cat: f.slug })}
               onClick={
                 onSelecionar
                   ? () =>

@@ -44,7 +44,14 @@ export interface Cupom {
   formasConsumo?: string[];
   precoDe?: number;
   precoPor?: number;
+  /**
+   * Cidade REAL do estabelecimento (`estabelecimentos.cidade`).
+   * Rua, telefone e WhatsApp NÃO existem no schema — a UI não inventa.
+   */
+  cidade?: string;
+  /** Coluna-protótipo no cupom — não usar como ranking público. */
   distanciaKm: number;
+  /** Coluna-protótipo no cupom — não é avaliação de consumidor. */
   rating: number; // 0–5
   avaliacoes: number;
   validade: string; // ISO date

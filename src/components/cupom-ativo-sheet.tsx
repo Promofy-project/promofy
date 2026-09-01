@@ -16,7 +16,6 @@ import {
 
 import {
   formatBRLValue,
-  formatDistance,
   formatShortDate,
 } from "@/lib/utils";
 import {
@@ -191,10 +190,12 @@ export function CupomAtivoSheet() {
               <Store className="h-4 w-4 shrink-0" />
               {cupom.estabelecimento}
             </span>
-            <span className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 shrink-0" />
-              {formatDistance(cupom.distanciaKm)}
-            </span>
+            {cupom.cidade ? (
+              <span className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0" />
+                {cupom.cidade}
+              </span>
+            ) : null}
             <span className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 shrink-0" />
               Válido até {formatShortDate(cupom.validade)}

@@ -1,6 +1,12 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { CategoriaVisual } from "@/lib/categoria-visual";
+import { rotuloFolhaOuFallback } from "@/lib/categoria-visual";
+import {
+  buscarFiltrosTaxonomia,
+  type FiltroTaxonomia,
+} from "@/lib/data/taxonomia";
 
 /** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo. */
 function hojeBrt(): string {
@@ -100,9 +106,7 @@ export async function buscarCategoriasEstab(
     const folha = porId.get(r.categoria_id);
     return {
       id: r.categoria_id,
-      // uuid cru é um rótulo péssimo, mas é honesto: significa "esta folha
-      // sumiu do catálogo", e é melhor do que um campo vazio.
-      label: folha?.nome ?? r.categoria_id,
+      label: rotuloFolhaOuFallback(folha?.nome),
       ativo: folha?.ativo ?? false,
       segmentoSlug: folha?.segmentoSlug,
       segmentoLabel: folha?.segmentoLabel,
@@ -167,5 +171,83 @@ export async function buscarResumoEstab(): Promise<ResumoEstab> {
     estabelecimento: { id: est.id, nome: est.nome, status: est.status },
     cuponsAtivos,
     resgatesHoje,
+  };
+}
+
+function cidadeVisivel(valor: string | null | undefined): string | undefined {
+  const t = valor?.trim();
+  return t || undefined;
+}
+
+/** Estabelecimento visível na lista pública do consumidor. Sem rating. */
+export interface EstabPublico {
+  id: string;
+  nome: string;
+  cidade?: string;
+  /** Folha principal (UUID). Só para o predicado de filtro — a UI não mostra. */
+  folhaId: string;
+  categoriaVisual?: CategoriaVisual;
+}
+
+/**
+ * Lista pública: a mesma semântica da RLS `publico le ativos`, aplicada
+ * no query. Sem o `.eq("status","ativo")`, admin/lojista logado veria
+ * pendente/suspenso pela policy extra. Taxonomia pela folha principal
+ * (`categoria_principal_id` + `visualDe`), nunca o legado `categoria_id`.
+ */
+export async function buscarEstabelecimentosPublicos(
+  filtroJa?: FiltroTaxonomia,
+): Promise<EstabPublico[]> {
+  const supabase = createClient();
+  const [{ data, error }, filtro] = await Promise.all([
+    supabase
+      .from("estabelecimentos")
+      .select("id, nome, cidade, categoria_principal_id")
+      .eq("status", "ativo")
+      .order("nome", { ascending: true }),
+    filtroJa ? Promise.resolve(filtroJa) : buscarFiltrosTaxonomia(),
+  ]);
+  if (error) {
+    throw new Error(`Falha ao buscar estabelecimentos públicos: ${error.message}`);
+  }
+
+  return (data ?? []).map((e) => {
+    const folhaId = e.categoria_principal_id ?? "";
+    return {
+      id: e.id,
+      nome: e.nome,
+      cidade: cidadeVisivel(e.cidade),
+      folhaId,
+      categoriaVisual: folhaId ? filtro.visualDe(folhaId) : undefined,
+    };
+  });
+}
+
+/** Estabelecimento do lojista autenticado — autoridade é a sessão, não a URL. */
+export async function buscarEstabelecimentoDaSessao(): Promise<{
+  id: string;
+  nome: string;
+  cidade: string;
+  status: string;
+  categoriaPrincipalId: string | null;
+} | null> {
+  const supabase = createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const uid = claims?.claims?.sub;
+  if (!uid) return null;
+
+  const { data } = await supabase
+    .from("estabelecimentos")
+    .select("id, nome, cidade, status, categoria_principal_id")
+    .eq("owner_id", uid)
+    .maybeSingle();
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    nome: data.nome,
+    cidade: data.cidade,
+    status: data.status,
+    categoriaPrincipalId: data.categoria_principal_id,
   };
 }

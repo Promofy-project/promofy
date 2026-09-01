@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { buscarCuponsHome, contarNovidades } from "@/lib/data/cupons";
-import { buscarFiltrosPublicos } from "@/lib/data/categorias";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import {
+  filtroDeQuery,
   hrefBusca,
   normalizarFiltroUrl,
   precisaCanonicalizar,
+  queryPrecisaLimpeza,
 } from "@/lib/taxonomia-url";
 import { HomeHeader } from "@/components/home-header";
 import { BannerCarousel } from "@/components/banner-carousel";
@@ -24,25 +25,24 @@ export const dynamic = "force-dynamic";
 export default async function MobileHome({
   searchParams,
 }: {
-  searchParams?: { cat?: string; seg?: string };
+  searchParams?: { cat?: string | string[]; seg?: string | string[] };
 }) {
-  // `buscarFiltrosPublicos` permanece: test-tx-p2a exige essa fronteira
-  // nas telas de descoberta. O snapshot de URL vem da mesma view.
-  const [categorias, filtroTax] = await Promise.all([
-    buscarFiltrosPublicos(),
-    buscarFiltrosTaxonomia(),
-  ]);
+  const filtroTax = await buscarFiltrosTaxonomia();
+  const categorias = filtroTax.catalogo;
 
-  const bruto = { seg: searchParams?.seg, cat: searchParams?.cat };
+  const bruto = filtroDeQuery(searchParams);
+  if (queryPrecisaLimpeza(searchParams) && !bruto.seg && !bruto.cat) {
+    redirect("/m");
+  }
   if (bruto.seg || bruto.cat) {
     const canon = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
-    if (precisaCanonicalizar(bruto, canon) || canon.seg) {
+    if (precisaCanonicalizar(bruto, canon) || canon.seg || queryPrecisaLimpeza(searchParams)) {
       redirect(hrefBusca(canon));
     }
   }
 
   const [grid, novidades] = await Promise.all([
-    buscarCuponsHome(6),
+    buscarCuponsHome(6, filtroTax),
     contarNovidades(),
   ]);
 

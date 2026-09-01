@@ -1,7 +1,8 @@
 // ============================================================
-// Categoria — visual (ícone + gradiente) sourced do catálogo real
-// (public.categorias). Módulo puro: sem `server-only`, sem `Intl`, sem
-// DOM — importável tanto pelo Next quanto por um futuro app RN.
+// Categoria — visual (ícone + gradiente) sourced das views de taxonomia
+// (`catalogo_folhas` / `catalogo_filtros`). Módulo puro: sem `server-only`,
+// sem `Intl`, sem DOM — importável tanto pelo Next quanto por um futuro
+// app RN.
 // ============================================================
 
 export interface CategoriaVisual {
@@ -33,6 +34,17 @@ export const CATEGORIA_VISUAL_FALLBACK: CategoriaVisual = {
   gradiente: "linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)",
 };
 
+/**
+ * Rótulo de folha para UI. Nome vazio/ausente NUNCA vira UUID cru —
+ * o fallback é o mesmo da vitrine ("Categoria").
+ */
+export function rotuloFolhaOuFallback(
+  nome: string | null | undefined,
+): string {
+  const t = nome?.trim();
+  return t || CATEGORIA_VISUAL_FALLBACK.label;
+}
+
 /** Lookup tolerante: id fora do catálogo → fallback, nunca undefined/throw. */
 export function resolverCategoriaVisual(
   id: string,
@@ -50,7 +62,7 @@ export function rotuloHierarquico(
   segmentoLabel?: string | null,
   folhaLabel?: string | null,
 ): string {
-  const folha = folhaLabel?.trim() || "Categoria";
+  const folha = folhaLabel?.trim() || CATEGORIA_VISUAL_FALLBACK.label;
   const seg = segmentoLabel?.trim();
   if (!seg || seg === folha) return folha;
   return `${seg} · ${folha}`;
