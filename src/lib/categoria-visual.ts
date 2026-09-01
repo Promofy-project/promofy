@@ -11,6 +11,14 @@ export interface CategoriaVisual {
   icon: string;
   /** CSS gradient usado em placeholders + avatares de categoria. */
   gradiente: string;
+  /** Slug público da folha (URL `?cat=`). Ausente em chips de segmento. */
+  slug?: string;
+  /** Slug do segmento pai — para "Alimentação · Pizzaria". */
+  segmentoSlug?: string;
+  /** Nome do segmento pai. Folha inativa continua resolvendo. */
+  segmentoLabel?: string;
+  /** Folha (e segmento) ativos. Ausente = não se aplica (chip de segmento). */
+  ativo?: boolean;
 }
 
 /**
@@ -31,4 +39,19 @@ export function resolverCategoriaVisual(
   catalogo: readonly CategoriaVisual[],
 ): CategoriaVisual {
   return catalogo.find((c) => c.id === id) ?? CATEGORIA_VISUAL_FALLBACK;
+}
+
+/**
+ * Rótulo de vitrine: a FOLHA primeiro. "Alimentação · Pizzaria" quando o
+ * segmento acrescenta contexto; só "Pizzaria" quando os dois coincidem
+ * ou o segmento não veio.
+ */
+export function rotuloHierarquico(
+  segmentoLabel?: string | null,
+  folhaLabel?: string | null,
+): string {
+  const folha = folhaLabel?.trim() || "Categoria";
+  const seg = segmentoLabel?.trim();
+  if (!seg || seg === folha) return folha;
+  return `${seg} · ${folha}`;
 }

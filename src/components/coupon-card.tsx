@@ -2,7 +2,10 @@ import Link from "next/link";
 import { MapPin, CalendarClock } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
-import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
+import {
+  CATEGORIA_VISUAL_FALLBACK,
+  rotuloHierarquico,
+} from "@/lib/categoria-visual";
 import { cn, formatBRLValue, formatDistance, formatShortDate } from "@/lib/utils";
 import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Button } from "@/components/ui/button";
@@ -120,6 +123,11 @@ export function CouponCard({
         >
           {cupom.titulo}
         </h3>
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          {compact
+            ? categoria.label
+            : rotuloHierarquico(categoria.segmentoLabel, categoria.label)}
+        </p>
 
         {compact ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

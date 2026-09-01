@@ -25,6 +25,8 @@ function dataBrt(iso: string): string {
 export interface CategoriaEstab {
   id: string;
   label: string;
+  segmentoSlug?: string;
+  segmentoLabel?: string;
   /**
    * A folha (e o segmento dela) continuam ativos.
    *
@@ -56,20 +58,40 @@ export async function buscarCategoriasEstab(
   principalId?: string | null,
 ): Promise<CategoriaEstab[]> {
   const supabase = createClient();
-  const [{ data: vinculos }, { data: folhas }] = await Promise.all([
+  const [{ data: vinculos }, { data: folhas }, { data: segmentos }] = await Promise.all([
     supabase
       .from("estabelecimento_categorias_novas")
       .select("categoria_id")
       .eq("estabelecimento_id", estabId),
     supabase
       .from("folha_para_segmento")
-      .select("categoria_id, nome, ativo, segmento_ativo"),
+      .select("categoria_id, nome, slug, ativo, segmento_ativo, segmento_slug"),
+    supabase.from("catalogo_segmentos").select("slug, nome"),
   ]);
+
+  const nomeSeg = new Map(
+    (segmentos ?? []).flatMap((s) =>
+      s.slug && s.nome ? [[s.slug, s.nome] as const] : [],
+    ),
+  );
 
   const porId = new Map(
     (folhas ?? []).flatMap((f) =>
       f.categoria_id
-        ? [[f.categoria_id, { nome: f.nome, ativo: Boolean(f.ativo && f.segmento_ativo) }] as const]
+        ? [
+            [
+              f.categoria_id,
+              {
+                nome: f.nome,
+                ativo: Boolean(f.ativo && f.segmento_ativo),
+                segmentoSlug: f.segmento_slug ?? undefined,
+                segmentoLabel:
+                  (f.segmento_slug && nomeSeg.get(f.segmento_slug)) ||
+                  f.segmento_slug ||
+                  undefined,
+              },
+            ] as const,
+          ]
         : [],
     ),
   );
@@ -82,6 +104,8 @@ export async function buscarCategoriasEstab(
       // sumiu do catálogo", e é melhor do que um campo vazio.
       label: folha?.nome ?? r.categoria_id,
       ativo: folha?.ativo ?? false,
+      segmentoSlug: folha?.segmentoSlug,
+      segmentoLabel: folha?.segmentoLabel,
     };
   });
   lista.sort((a, b) =>

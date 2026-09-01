@@ -1,7 +1,14 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { buscarCuponsHome, contarNovidades } from "@/lib/data/cupons";
-import { buscarFiltrosPublicos, categoriaValida } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos } from "@/lib/data/categorias";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import {
+  hrefBusca,
+  normalizarFiltroUrl,
+  precisaCanonicalizar,
+} from "@/lib/taxonomia-url";
 import { HomeHeader } from "@/components/home-header";
 import { BannerCarousel } from "@/components/banner-carousel";
 import { HomeSearchBar } from "@/components/home-search-bar";
@@ -12,23 +19,30 @@ import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
 import { NpsPendenteCard } from "@/components/nps-pendente-card";
 
-// Dados agora vêm do Supabase: nada de prerender estático no build
-// (o banco não precisa estar de pé para `next build` passar).
 export const dynamic = "force-dynamic";
 
 export default async function MobileHome({
   searchParams,
 }: {
-  searchParams?: { cat?: string };
+  searchParams?: { cat?: string; seg?: string };
 }) {
-  // Fase 6/H5: o chip selecionado vive na URL, não em estado de cliente.
-  // A categoria é saneada contra a tabela ANTES de virar predicado — um
-  // `?cat=xpto` vira "sem filtro" e a home segue cheia, nunca vazia.
-  const categorias = await buscarFiltrosPublicos();
-  const cat = categoriaValida(searchParams?.cat, categorias);
+  // `buscarFiltrosPublicos` permanece: test-tx-p2a exige essa fronteira
+  // nas telas de descoberta. O snapshot de URL vem da mesma view.
+  const [categorias, filtroTax] = await Promise.all([
+    buscarFiltrosPublicos(),
+    buscarFiltrosTaxonomia(),
+  ]);
+
+  const bruto = { seg: searchParams?.seg, cat: searchParams?.cat };
+  if (bruto.seg || bruto.cat) {
+    const canon = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
+    if (precisaCanonicalizar(bruto, canon) || canon.seg) {
+      redirect(hrefBusca(canon));
+    }
+  }
 
   const [grid, novidades] = await Promise.all([
-    buscarCuponsHome(6, cat),
+    buscarCuponsHome(6),
     contarNovidades(),
   ]);
 
@@ -42,36 +56,30 @@ export default async function MobileHome({
         <PointsSummary />
       </div>
 
-      {/* Fase 9/Z1: a nota que o balcão deixou em aberto. Só aparece quando
-          existe uma — some sozinho depois de respondida ou dispensada. */}
       <div className="px-4 empty:hidden">
         <NpsPendenteCard />
       </div>
 
       <div className="px-4">
-        <HomeCategoryChips categorias={categorias} ativa={cat} />
+        {categorias.length === 0 ? (
+          <p className="rounded-card border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
+            Não foi possível carregar os segmentos agora.
+          </p>
+        ) : (
+          <HomeCategoryChips categorias={categorias} />
+        )}
       </div>
 
-      {/* Grid de cupons */}
       <section className="px-4">
         {grid.length === 0 && (
           <p className="rounded-card border border-dashed border-border bg-card/60 px-4 py-8 text-center text-sm text-muted-foreground">
-            Nenhum cupom nesta categoria por enquanto.{" "}
-            <Link href="/m" className="font-bold text-primary hover:underline">
-              Ver todos
+            Nenhum cupom por enquanto.{" "}
+            <Link href="/m/buscar" className="font-bold text-primary hover:underline">
+              Ver busca
             </Link>
           </p>
         )}
         <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
-          {/* O rótulo do CTA NÃO varia por cupom. Até a Fase 9 esta linha era
-              `ctaLabel={i % 3 === 2 ? "Regras de uso" : "Usar agora"}` — o
-              texto mudava pela POSIÇÃO no grid, sem relação com o estado do
-              cupom, e como o botão do card é decorativo (o clique é o stretched
-              link) os dois rótulos levavam ao mesmo detalhe. O cliente leu isso
-              como critério de negócio e pediu explicação nos dois relatórios de
-              QA (v1 §2.1, v2 §3.2). Os estados reais — utilizado, ativo, fora da
-              janela, indisponível — vivem em `cupom-acao-usar.tsx`, na tela de
-              detalhe, que é onde o botão de fato age. */}
           {grid.map((c) => (
             <CouponCard
               key={c.id}
@@ -93,7 +101,6 @@ export default async function MobileHome({
         </div>
       </section>
 
-      {/* Ranking */}
       <div className="px-4">
         <RankingBlock />
       </div>
