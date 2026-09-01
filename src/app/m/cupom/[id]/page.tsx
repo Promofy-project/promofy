@@ -12,7 +12,7 @@ import {
 import { getCupom } from "@/lib/mock-data";
 import { buscarCupomPorId } from "@/lib/data/cupons";
 import { buscarFiltrosPublicos } from "@/lib/data/categorias";
-import { resolverCategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual, rotuloHierarquico } from "@/lib/categoria-visual";
 import { janelaAlcancavel } from "@/lib/janela";
 import { linhasDaJanela, temRestricao } from "@/lib/janela-formato";
 import { diaSemanaBrt } from "@/lib/dias";
@@ -128,6 +128,9 @@ export default async function CupomDetalhe({
               foraDaJanela={foraDaJanela}
             />
           </div>
+          <p className="mt-1.5 text-sm font-semibold text-muted-foreground">
+            {rotuloHierarquico(categoria.segmentoLabel, categoria.label)}
+          </p>
           <p className="mt-2 text-sm text-muted-foreground">
             Estou economizando{" "}
             {rotuloEconomia(formatBRL(cupom.economia), cupom.economiaVariavel)}

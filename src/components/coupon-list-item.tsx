@@ -52,6 +52,7 @@ export function CouponListItem({
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {cupom.estabelecimento}
+          {categoria.label ? ` · ${categoria.label}` : ""}
         </p>
         <p className="mt-1 flex items-center gap-1.5 text-xs">
           <span className="font-bold text-foreground">

@@ -6,7 +6,7 @@ import { Check, X, Eye, ImageOff } from "lucide-react";
 
 import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
-import { resolverCategoriaVisual } from "@/lib/categoria-visual";
+import { resolverCategoriaVisual, rotuloHierarquico } from "@/lib/categoria-visual";
 import { regrasParaExibir } from "@/lib/cupom-campos";
 import { rotuloAcao } from "@/lib/moderacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
@@ -59,14 +59,29 @@ export function CuponsAdminClient({
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = React.useState<string>("todos");
+  const [segFiltro, setSegFiltro] = React.useState<string>("todos");
   const [detalhe, setDetalhe] = React.useState<AdminCupom | null>(null);
   const [processando, setProcessando] = React.useState<string | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
   /** Fase 6.5/C5: cupom aguardando o motivo da rejeição. */
   const [rejeitando, setRejeitando] = React.useState<AdminCupom | null>(null);
 
-  const filtrados =
-    filtro === "todos" ? cupons : cupons.filter((c) => c.status === filtro);
+  const segmentos = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const c of catalogo) {
+      if (c.segmentoSlug && !seen.has(c.segmentoSlug)) {
+        seen.set(c.segmentoSlug, c.segmentoLabel ?? c.segmentoSlug);
+      }
+    }
+    return Array.from(seen, ([slug, label]) => ({ slug, label }));
+  }, [catalogo]);
+
+  const filtrados = cupons.filter((c) => {
+    if (filtro !== "todos" && c.status !== filtro) return false;
+    if (segFiltro === "todos") return true;
+    const cat = resolverCategoriaVisual(c.categoriaId, catalogo);
+    return cat.segmentoSlug === segFiltro;
+  });
 
   async function aprovar(id: string) {
     setProcessando(id);
@@ -114,6 +129,8 @@ export function CuponsAdminClient({
               <p className="truncate font-semibold">{c.titulo}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {c.estabelecimentoNome}
+                {" · "}
+                {rotuloHierarquico(cat.segmentoLabel, cat.label)}
               </p>
             </div>
           </div>
@@ -171,7 +188,8 @@ export function CuponsAdminClient({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
         {FILTROS.map((f) => {
           const n =
             f === "todos"
@@ -182,6 +200,7 @@ export function CuponsAdminClient({
               key={f}
               type="button"
               onClick={() => setFiltro(f)}
+              aria-pressed={filtro === f}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors",
                 filtro === f
@@ -193,6 +212,27 @@ export function CuponsAdminClient({
             </button>
           );
         })}
+      </div>
+      {segmentos.length > 0 && (
+        <div className="flex items-center gap-2">
+          <label htmlFor="admin-cupom-seg" className="text-sm font-semibold">
+            Segmento
+          </label>
+          <select
+            id="admin-cupom-seg"
+            value={segFiltro}
+            onChange={(e) => setSegFiltro(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-3 text-sm"
+          >
+            <option value="todos">Todos</option>
+            {segmentos.map((s) => (
+              <option key={s.slug} value={s.slug}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       </div>
 
       {erro && <p className="mb-3 text-sm font-semibold text-danger">{erro}</p>}
@@ -408,7 +448,8 @@ function DetalheModal({
               {cupom.titulo}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {cupom.estabelecimentoNome} · {cat.label}
+              {cupom.estabelecimentoNome} ·{" "}
+              {rotuloHierarquico(cat.segmentoLabel, cat.label)}
             </p>
           </div>
           <Badge variant={s.variant}>{s.label}</Badge>
@@ -429,7 +470,10 @@ function DetalheModal({
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <Linha label="Benefício" valor={cupom.beneficio || "—"} full />
           <Linha label="Economia" valor={formatBRL(cupom.economia)} />
-          <Linha label="Categoria" valor={cat.label} />
+          <Linha
+            label="Categoria"
+            valor={rotuloHierarquico(cat.segmentoLabel, cat.label)}
+          />
           <Linha
             label="Início"
             valor={

@@ -7,6 +7,7 @@ import { Check, Pencil, X } from "lucide-react";
 import type { AdminEstabelecimento } from "@/lib/data/admin";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
 import { resolverCategoriaVisual } from "@/lib/categoria-visual";
+import { agruparPorSegmento } from "@/lib/taxonomia-url";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -99,11 +100,20 @@ export function EstabAdminClient({
       header: "Categorias",
       render: (e) => (
         <div className="flex flex-wrap items-center gap-1.5">
-          {e.categorias.map((c) => (
-            <Badge key={c} variant="muted">
-              {resolverCategoriaVisual(c, catalogo).label}
-            </Badge>
-          ))}
+          {e.categorias.map((c) => {
+            const vis = resolverCategoriaVisual(c, catalogo);
+            const principal = c === e.categoriaId;
+            return (
+              <Badge
+                key={c}
+                variant={principal ? "success" : vis.ativo === false ? "outline" : "muted"}
+              >
+                {principal ? "Principal: " : ""}
+                {vis.label}
+                {vis.ativo === false ? " (inativa)" : ""}
+              </Badge>
+            );
+          })}
           <button
             type="button"
             aria-label={`Editar categorias de ${e.nome}`}
@@ -298,7 +308,7 @@ function CategoriasModal({
         className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="animate-fade-up relative w-full max-w-[420px] rounded-card bg-surface p-6 shadow-2xl">
+      <div className="animate-fade-up relative w-full max-w-[520px] rounded-card bg-surface p-6 shadow-2xl">
         <button
           type="button"
           aria-label="Fechar"
@@ -310,31 +320,51 @@ function CategoriasModal({
         <h2 className="text-lg font-bold">Categorias</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {estabelecimento.nome} — a categoria principal não pode ser removida.
+          Associações inativas continuam visíveis; não é possível reativá-las
+          por aqui.
         </p>
 
-        <div className="mt-4 flex flex-col gap-2">
-          {opcoes.map((c) => {
-            const principal = c.id === estabelecimento.categoriaId;
-            return (
-              <label
-                key={c.id}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border border-border px-3 py-2.5",
-                  principal ? "bg-muted/60" : "cursor-pointer hover:bg-muted/40",
-                )}
-              >
-                {/* a principal é travada no toggle() — clique vira no-op */}
-                <Checkbox
-                  checked={selecao.has(c.id)}
-                  onCheckedChange={() => toggle(c.id)}
-                />
-                <span className="flex-1 text-sm font-medium">{c.label}</span>
-                {principal && (
-                  <span className="text-xs text-muted-foreground">principal</span>
-                )}
-              </label>
-            );
-          })}
+        <div className="mt-4 max-h-[55vh] overflow-y-auto pr-1">
+          {agruparPorSegmento(opcoes).map((g) => (
+            <div key={g.slug} className="mb-4">
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                {g.label}
+              </p>
+              <div className="flex flex-col gap-2">
+                {g.itens.map((c) => {
+                  const principal = c.id === estabelecimento.categoriaId;
+                  const inativa = c.ativo === false;
+                  return (
+                    <label
+                      key={c.id}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg border border-border px-3 py-2.5",
+                        principal ? "bg-muted/60" : "cursor-pointer hover:bg-muted/40",
+                      )}
+                    >
+                      <Checkbox
+                        checked={selecao.has(c.id)}
+                        onCheckedChange={() => toggle(c.id)}
+                      />
+                      <span className="flex-1 text-sm font-medium">
+                        {c.label}
+                        {inativa ? (
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            (inativa — só auditoria)
+                          </span>
+                        ) : null}
+                      </span>
+                      {principal && (
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          principal
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {erro && <p className="mt-3 text-sm font-semibold text-danger">{erro}</p>}

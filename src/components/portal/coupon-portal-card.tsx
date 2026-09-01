@@ -98,6 +98,11 @@ export function CouponPortalCard({
               {badge.label}
             </Badge>
           </div>
+          <p className="mt-0.5 truncate text-xs font-semibold text-muted-foreground">
+            {categoria.segmentoLabel
+              ? `${categoria.segmentoLabel} · ${categoria.label}`
+              : categoria.label}
+          </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {cupom.beneficio}
           </p>

@@ -2,6 +2,7 @@ import { Store, MapPin, Tag } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
+import { rotuloHierarquico } from "@/lib/categoria-visual";
 import { BotaoSair } from "@/components/botao-sair";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function PerfilPage() {
 
   let est: { nome: string; cidade: string; status: string } | null = null;
   let categoriaLabel: string | null = null;
+  let segmentoLabel: string | null = null;
   if (uid) {
     const { data } = await supabase
       .from("estabelecimentos")
@@ -28,11 +30,10 @@ export default async function PerfilPage() {
     if (data) {
       est = { nome: data.nome, cidade: data.cidade, status: data.status };
       if (data.categoria_principal_id) {
-        // Resolução, não oferta: o rótulo tem de aparecer mesmo se a folha
-        // tiver saído do catálogo depois de o estabelecimento ser criado.
         const catalogo = await buscarCatalogoResolucao();
-        categoriaLabel =
-          catalogo.find((c) => c.id === data.categoria_principal_id)?.label ?? null;
+        const vis = catalogo.find((c) => c.id === data.categoria_principal_id);
+        categoriaLabel = vis?.label ?? null;
+        segmentoLabel = vis?.segmentoLabel ?? null;
       }
     }
   }
@@ -64,7 +65,11 @@ export default async function PerfilPage() {
           </div>
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>{categoriaLabel ?? "—"}</span>
+            <span>
+              {categoriaLabel
+                ? rotuloHierarquico(segmentoLabel, categoriaLabel)
+                : "—"}
+            </span>
           </div>
         </dl>
       </div>

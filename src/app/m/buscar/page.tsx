@@ -1,39 +1,52 @@
+import { redirect } from "next/navigation";
+
 import { buscarCuponsBusca } from "@/lib/data/cupons";
-import { buscarFiltrosPublicos, categoriaValida } from "@/lib/data/categorias";
+import { buscarFiltrosPublicos } from "@/lib/data/categorias";
+import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
+import {
+  hrefBusca,
+  idsParaConsulta,
+  normalizarFiltroUrl,
+  precisaCanonicalizar,
+} from "@/lib/taxonomia-url";
 import { BuscarClient } from "./buscar-client";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Busca do consumidor (Fase 4): sai do mock — o catálogo vem do banco
- * com a mesma visibilidade da home (RLS + validade + agendamento).
- * O dia de "hoje" é resolvido aqui (BRT) e desce por prop.
- *
- * Fase 6/H5: recebe `?cat=` e `?dia=` do "Aplicar" de /m/filtros — antes
- * aquele botão descartava a seleção. Os dois são saneados aqui.
- */
 export default async function BuscarPage({
   searchParams,
 }: {
-  searchParams?: { cat?: string; dia?: string };
+  searchParams?: { seg?: string; cat?: string; dia?: string };
 }) {
-  const [cupons, categorias] = await Promise.all([
-    buscarCuponsBusca(),
+  const [categorias, filtroTax] = await Promise.all([
     buscarFiltrosPublicos(),
+    buscarFiltrosTaxonomia(),
   ]);
+
+  const bruto = { seg: searchParams?.seg, cat: searchParams?.cat };
+  const filtro = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
   const dias = DIAS_SEMANA as readonly string[];
+  const dia =
+    searchParams?.dia && dias.includes(searchParams.dia)
+      ? searchParams.dia
+      : undefined;
+
+  if (precisaCanonicalizar(bruto, filtro)) {
+    redirect(hrefBusca(filtro, { dia }));
+  }
+
+  const ids = idsParaConsulta(filtro, filtroTax.catalogoUrl);
+  const cupons = await buscarCuponsBusca(ids);
+
   return (
     <BuscarClient
       cupons={cupons}
       diaHoje={diaSemanaBrt()}
-      categorias={categorias}
-      catInicial={categoriaValida(searchParams?.cat, categorias)}
-      diaInicial={
-        searchParams?.dia && dias.includes(searchParams.dia)
-          ? searchParams.dia
-          : undefined
-      }
+      catalogo={filtroTax.catalogoUrl}
+      catalogoVazio={categorias.length === 0}
+      filtro={filtro}
+      diaInicial={dia}
     />
   );
 }

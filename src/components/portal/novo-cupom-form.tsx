@@ -22,6 +22,7 @@ import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
 import { CampoImagem } from "@/components/campo-imagem";
+import { SeletorCategoriaEstab } from "@/components/seletor-categoria-estab";
 
 // formato canônico dos dias vive em src/lib/dias.ts (Fase 4)
 const DIAS = DIAS_SEMANA;
@@ -65,7 +66,13 @@ export function NovoCupomForm({
   onCancelar,
 }: {
   estabelecimentoNome: string;
-  categorias: { id: string; label: string }[];
+  categorias: {
+    id: string;
+    label: string;
+    ativo: boolean;
+    segmentoSlug?: string;
+    segmentoLabel?: string;
+  }[];
   categoriaPrincipal: string | null;
   /** Catálogo real (icon+gradiente) usado no preview ao vivo (TX-P1). */
   catalogoVisual: CategoriaVisual[];
@@ -97,11 +104,9 @@ export function NovoCupomForm({
   // Fase 4: o estabelecimento pode ter N categorias — seleção entre elas,
   // principal pré-setada. O servidor valida contra o conjunto (junção).
   const [categoriaSel, setCategoriaSel] = React.useState<string>(
-    cupomInicial?.categoriaId ?? categoriaPrincipal ?? categorias[0]?.id ?? "alimentacao",
+    cupomInicial?.categoriaId ?? categoriaPrincipal ?? categorias[0]?.id ?? "",
   );
   const categoria = categoriaSel;
-  const categoriaLabel =
-    categorias.find((c) => c.id === categoriaSel)?.label ?? categoriaSel;
   const [economia, setEconomia] = React.useState(
     cupomInicial ? String(cupomInicial.economia) : "",
   );
@@ -316,34 +321,13 @@ export function NovoCupomForm({
             />
           )}
 
-          <Field label="Categoria">
-            {categorias.length > 1 ? (
-              <div className="flex flex-wrap gap-2">
-                {categorias.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setCategoriaSel(c.id)}
-                    className={cn(
-                      "h-9 rounded-lg border px-3 text-sm font-semibold transition-colors",
-                      categoriaSel === c.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-surface text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-11 items-center justify-between rounded-btn border border-border bg-muted/60 px-3.5 text-sm">
-                <span className="font-medium text-foreground">{categoriaLabel}</span>
-                <span className="text-xs text-muted-foreground">
-                  definida pelo estabelecimento
-                </span>
-              </div>
-            )}
-          </Field>
+          <SeletorCategoriaEstab
+            categorias={categorias}
+            value={categoriaSel || null}
+            onChange={setCategoriaSel}
+            categoriaInicial={editando ? cupomInicial?.categoriaId : undefined}
+            statusCupom={editando ? cupomInicial?.status : undefined}
+          />
 
           {/* Fase 6/C3: com "variável", o valor deixa de ser exato e vira
               o PISO — o app passa a exibir "a partir de R$ X" no cupom e

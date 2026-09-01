@@ -57,7 +57,13 @@ export function CuponsClient({
   estabelecimentoNome: string;
   /** Fase 7/C4: pasta do bucket de imagens. */
   estabelecimentoId: string | null;
-  categorias: { id: string; label: string }[];
+  categorias: {
+    id: string;
+    label: string;
+    ativo: boolean;
+    segmentoSlug?: string;
+    segmentoLabel?: string;
+  }[];
   categoriaPrincipal: string | null;
   /** Catálogo real (icon+gradiente) para o preview do form (TX-P1). */
   catalogoVisual: CategoriaVisual[];

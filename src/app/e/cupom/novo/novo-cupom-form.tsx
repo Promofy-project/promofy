@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
+import { SeletorCategoriaEstab } from "@/components/seletor-categoria-estab";
 import {
   FORMAS_CONSUMO,
   PRAZO_ATIVACAO_MIN_HORAS,
@@ -79,7 +80,13 @@ export function NovoCupomForm({
   cupomInicial,
   estabelecimentoId,
 }: {
-  categorias: { id: string; label: string }[];
+  categorias: {
+    id: string;
+    label: string;
+    ativo: boolean;
+    segmentoSlug?: string;
+    segmentoLabel?: string;
+  }[];
   categoriaPrincipal: string | null;
   /**
    * Presente = modo EDITAR (edição rápida). Este form é um SUBCONJUNTO
@@ -346,38 +353,13 @@ export function NovoCupomForm({
         />
       )}
 
-      {/* Categoria: travada com 1; chips com 2+ (padrão do seletor de dias) */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-foreground">Categoria</span>
-        {categorias.length > 1 ? (
-          <div className="flex flex-wrap gap-2">
-            {categorias.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategoriaId(c.id)}
-                className={cn(
-                  "h-10 rounded-xl border px-3.5 text-sm font-semibold transition-colors",
-                  categoriaId === c.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-surface text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-12 items-center rounded-xl bg-muted/70 px-3.5 text-sm text-foreground">
-            {categorias[0]?.label ?? "—"}
-          </div>
-        )}
-        <span className="text-xs text-muted-foreground">
-          {categorias.length > 1
-            ? "Escolha entre as categorias do seu estabelecimento."
-            : "Definida pelo seu estabelecimento."}
-        </span>
-      </div>
+      <SeletorCategoriaEstab
+        categorias={categorias}
+        value={categoriaId}
+        onChange={setCategoriaId}
+        categoriaInicial={cupomInicial?.categoriaId}
+        statusCupom={cupomInicial?.status}
+      />
 
       {/* JANELA DE CONSUMO — Fase 9/C2.
           Substitui o bloco "Preservado nesta edição" da Fase 6.5, que

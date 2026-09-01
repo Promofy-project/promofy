@@ -147,10 +147,7 @@ function filtrarVisiveis<T extends CupomRow>(rows: T[], hoje: string): T[] {
  *   (comparação por data-string YYYY-MM-DD — determinística, sem Date local;
  *   fuso de referência do agendamento é decisão da Fase 2).
  */
-export async function buscarCuponsHome(
-  limite = 6,
-  categoriaId?: string,
-): Promise<Cupom[]> {
+export async function buscarCuponsHome(limite = 6): Promise<Cupom[]> {
   const supabase = createClient();
 
   // Fase 4: para o usuário logado, cupons de estabelecimentos favoritados
@@ -159,39 +156,12 @@ export async function buscarCuponsHome(
   const { data: claims } = await supabase.auth.getClaims();
   const logado = Boolean(claims?.claims?.sub);
 
-  // Com filtro, os ids fisicos sao PRE-REQUISITO do predicado: nao ha como
-  // paralelizar essa leitura com a consulta que depende dela. Sem filtro,
-  // nada precisa ser resolvido antes e o filtro volta no Promise.all de
-  // sempre — o caminho quente (home sem chip) nao paga round trip novo.
-  const filtroPre = categoriaId ? await buscarFiltrosTaxonomia() : undefined;
-
   let query = supabase
     .from("cupons")
     .select("*, estabelecimentos(nome)")
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
-  // Fase 6/H5: filtro dos chips da home. Roda NO SERVIDOR (é predicado de
-  // consulta, não `.filter()` no cliente) e o slug já vem saneado contra o
-  // catálogo — ver categoriaValida em src/lib/data/categorias.ts.
-  //
-  // TX-P2A/MARCO 2A: o predicado nunca foi `categoria_id = <slug>`. O slug
-  // é público (segmento); a coluna é FÍSICA (folha uuid). A fronteira agora
-  // devolve as folhas do segmento — e é só por isso que trocar a taxonomia
-  // inteira custou uma linha aqui.
-  //
-  // NÃO filtra `ativo`: cupom vivo numa folha desativada depois continua
-  // aparecendo sob o chip do seu segmento. `ativo` governa nova seleção,
-  // não o acervo.
-  //
-  // Lista vazia NÃO vira "sem filtro": um slug do catálogo sem nenhuma
-  // categoria física é um filtro legítimo com zero resultados. Trocar isso
-  // por "mostra tudo" seria mentir na tela.
-  if (categoriaId) {
-    query = query.in("categoria_nova_id", filtroPre!.idsFisicosDoFiltro(categoriaId));
-  }
-  // com filtro, a folga do limite não vale: o corte por categoria pode
-  // deixar de fora justamente os que sobrariam
-  if (!logado && !categoriaId) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
+  if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
 
   const [{ data, error }, favSet, filtro] = await Promise.all([
     query,
@@ -201,7 +171,7 @@ export async function buscarCuponsHome(
           .select("estabelecimento_id")
           .then(({ data: favs }) => new Set((favs ?? []).map((f) => f.estabelecimento_id)))
       : Promise.resolve(new Set<string>()),
-    filtroPre ?? buscarFiltrosTaxonomia(),
+    buscarFiltrosTaxonomia(),
   ]);
 
   if (error) {
@@ -401,15 +371,24 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
 /**
  * Catálogo completo para a busca do /m (Fase 4) — mesma visibilidade da
  * home, sem limite (max_rows do PostgREST = 1000 cobre o catálogo).
+ *
+ * Marco 3A: `idsFolha` é o predicado em `cupons.categoria_nova_id`.
+ * `null`/omitido = sem filtro de taxonomia; `[]` = filtro válido vazio
+ * (não vira "mostra tudo"); lista = `.in(categoria_nova_id, …)`.
  */
-export async function buscarCuponsBusca(): Promise<Cupom[]> {
+export async function buscarCuponsBusca(idsFolha?: string[] | null): Promise<Cupom[]> {
+  if (idsFolha && idsFolha.length === 0) return [];
+
   const supabase = createClient();
+  let query = supabase
+    .from("cupons")
+    .select("*, estabelecimentos(nome)")
+    .in("status", ["ativo", "indisponivel"])
+    .order("ordem", { ascending: true });
+  if (idsFolha) query = query.in("categoria_nova_id", idsFolha);
+
   const [{ data, error }, filtro] = await Promise.all([
-    supabase
-      .from("cupons")
-      .select("*, estabelecimentos(nome)")
-      .in("status", ["ativo", "indisponivel"])
-      .order("ordem", { ascending: true }),
+    query,
     buscarFiltrosTaxonomia(),
   ]);
 

@@ -38,11 +38,12 @@ export async function buscarFiltrosPublicos(): Promise<CategoriaVisual[]> {
 }
 
 /**
- * Sanea o `?cat=` da URL contra os filtros reais.
+ * Sanea o `?cat=` LEGADO da URL contra os filtros de SEGMENTO.
  *
- * Query param é entrada de usuário: valor desconhecido vira "sem filtro", e
- * NUNCA chega a virar predicado de consulta. Sem isto, um `?cat=xpto`
- * devolveria zero cupons e a home pareceria vazia/quebrada.
+ * Marco 3A: a URL canônica é `?seg=` / `?cat=` (folha). Este helper
+ * continua existindo para o `?cat=<segmento>` do Marco 2, e para qualquer
+ * chamada que ainda trate o param como slug de segmento. Valor
+ * desconhecido vira "sem filtro" e NUNCA chega a virar predicado.
  */
 export function categoriaValida(
   cat: string | undefined,

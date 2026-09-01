@@ -3,6 +3,10 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
 import { gradienteWeb } from "@/lib/tema-visual";
+import {
+  montarCatalogoUrl,
+  type CatalogoUrl,
+} from "../taxonomia-url";
 
 /**
  * MARCO 2A — a ÚNICA porta do app para a taxonomia física.
@@ -36,6 +40,11 @@ import { gradienteWeb } from "@/lib/tema-visual";
 export interface FiltroTaxonomia {
   /** Segmentos ATIVOS, na ordem de produto. Também é a fonte do visual dos chips. */
   catalogo: CategoriaVisual[];
+  /**
+   * Snapshot de slugs para a URL pública (`?seg=` / `?cat=`).
+   * Fonte: as mesmas duas views — nenhum mapping paralelo.
+   */
+  catalogoUrl: CatalogoUrl;
   /** Slug do SEGMENTO que representa esta folha na descoberta. */
   filtroSlugDe(categoriaId: string): string | undefined;
   /**
@@ -73,7 +82,9 @@ export async function buscarFiltrosTaxonomia(): Promise<FiltroTaxonomia> {
       .order("ordem", { ascending: true }),
     supabase
       .from("folha_para_segmento")
-      .select("categoria_id, nome, segmento_slug, icone, tema"),
+      .select(
+        "categoria_id, nome, slug, segmento_slug, icone, tema, ativo, segmento_ativo",
+      ),
   ]);
 
   // Colunas voltam anuláveis porque o gerador não infere NOT NULL através
@@ -87,6 +98,7 @@ export async function buscarFiltrosTaxonomia(): Promise<FiltroTaxonomia> {
           : [],
       );
 
+  const nomeDoSegmento = new Map(catalogo.map((s) => [s.id, s.label]));
   const porFolha = new Map<string, string>();
   const porSegmento = new Map<string, string[]>();
   const visualPorFolha = new Map<string, CategoriaVisual>();
@@ -103,13 +115,23 @@ export async function buscarFiltrosTaxonomia(): Promise<FiltroTaxonomia> {
           label: f.nome,
           icon: f.icone,
           gradiente: gradienteWeb(f.tema),
+          slug: f.slug ?? undefined,
+          segmentoSlug: f.segmento_slug,
+          segmentoLabel: nomeDoSegmento.get(f.segmento_slug) ?? f.segmento_slug,
+          ativo: Boolean(f.ativo) && f.segmento_ativo !== false,
         });
       }
     }
   }
 
+  const catalogoUrl = montarCatalogoUrl({
+    segmentos: catalogo.map((s) => ({ slug: s.id, nome: s.label })),
+    folhas: folhas.error ? [] : (folhas.data ?? []),
+  });
+
   return {
     catalogo,
+    catalogoUrl,
     filtroSlugDe: (id) => porFolha.get(id),
     idsFisicosDoFiltro: (slug) => porSegmento.get(slug) ?? [],
     visualDe: (id) => visualPorFolha.get(id),
@@ -138,13 +160,23 @@ export async function buscarFiltrosTaxonomia(): Promise<FiltroTaxonomia> {
  */
 export async function buscarCatalogoFolhas(): Promise<CategoriaVisual[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("catalogo_folhas")
-    .select("categoria_id, nome, icone, tema, ordem, segmento_ordem")
-    .order("segmento_ordem", { ascending: true })
-    .order("ordem", { ascending: true });
-  if (error) return [];
-  return (data ?? []).flatMap((c) =>
+  const [folhas, segmentos] = await Promise.all([
+    supabase
+      .from("catalogo_folhas")
+      .select(
+        "categoria_id, nome, slug, icone, tema, ordem, segmento_ordem, segmento_slug",
+      )
+      .order("segmento_ordem", { ascending: true })
+      .order("ordem", { ascending: true }),
+    supabase.from("catalogo_segmentos").select("slug, nome"),
+  ]);
+  if (folhas.error) return [];
+  const nomeSeg = new Map(
+    (segmentos.data ?? []).flatMap((s) =>
+      s.slug && s.nome ? [[s.slug, s.nome] as const] : [],
+    ),
+  );
+  return (folhas.data ?? []).flatMap((c) =>
     c.categoria_id && c.nome && c.icone && c.tema
       ? [
           {
@@ -152,6 +184,13 @@ export async function buscarCatalogoFolhas(): Promise<CategoriaVisual[]> {
             label: c.nome,
             icon: c.icone,
             gradiente: gradienteWeb(c.tema),
+            slug: c.slug ?? undefined,
+            segmentoSlug: c.segmento_slug ?? undefined,
+            segmentoLabel:
+              (c.segmento_slug && nomeSeg.get(c.segmento_slug)) ||
+              c.segmento_slug ||
+              undefined,
+            ativo: true,
           },
         ]
       : [],
@@ -172,11 +211,21 @@ export async function buscarCatalogoFolhas(): Promise<CategoriaVisual[]> {
  */
 export async function buscarCatalogoResolucao(): Promise<CategoriaVisual[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("folha_para_segmento")
-    .select("categoria_id, nome, icone, tema");
-  if (error) return [];
-  return (data ?? []).flatMap((c) =>
+  const [folhas, segmentos] = await Promise.all([
+    supabase
+      .from("folha_para_segmento")
+      .select(
+        "categoria_id, nome, slug, icone, tema, segmento_slug, ativo, segmento_ativo",
+      ),
+    supabase.from("catalogo_segmentos").select("slug, nome"),
+  ]);
+  if (folhas.error) return [];
+  const nomeSeg = new Map(
+    (segmentos.data ?? []).flatMap((s) =>
+      s.slug && s.nome ? [[s.slug, s.nome] as const] : [],
+    ),
+  );
+  return (folhas.data ?? []).flatMap((c) =>
     c.categoria_id && c.nome && c.icone && c.tema
       ? [
           {
@@ -184,6 +233,13 @@ export async function buscarCatalogoResolucao(): Promise<CategoriaVisual[]> {
             label: c.nome,
             icon: c.icone,
             gradiente: gradienteWeb(c.tema),
+            slug: c.slug ?? undefined,
+            segmentoSlug: c.segmento_slug ?? undefined,
+            segmentoLabel:
+              (c.segmento_slug && nomeSeg.get(c.segmento_slug)) ||
+              c.segmento_slug ||
+              undefined,
+            ativo: Boolean(c.ativo) && c.segmento_ativo !== false,
           },
         ]
       : [],
