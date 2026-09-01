@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
 import { rotuloFolhaOuFallback } from "@/lib/categoria-visual";
@@ -224,30 +225,32 @@ export async function buscarEstabelecimentosPublicos(
 }
 
 /** Estabelecimento do lojista autenticado — autoridade é a sessão, não a URL. */
-export async function buscarEstabelecimentoDaSessao(): Promise<{
-  id: string;
-  nome: string;
-  cidade: string;
-  status: string;
-  categoriaPrincipalId: string | null;
-} | null> {
-  const supabase = createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  const uid = claims?.claims?.sub;
-  if (!uid) return null;
+export const buscarEstabelecimentoDaSessao = cache(
+  async function buscarEstabelecimentoDaSessao(): Promise<{
+    id: string;
+    nome: string;
+    cidade: string;
+    status: string;
+    categoriaPrincipalId: string | null;
+  } | null> {
+    const supabase = createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return null;
 
-  const { data } = await supabase
-    .from("estabelecimentos")
-    .select("id, nome, cidade, status, categoria_principal_id")
-    .eq("owner_id", uid)
-    .maybeSingle();
-  if (!data) return null;
+    const { data } = await supabase
+      .from("estabelecimentos")
+      .select("id, nome, cidade, status, categoria_principal_id")
+      .eq("owner_id", uid)
+      .maybeSingle();
+    if (!data) return null;
 
-  return {
-    id: data.id,
-    nome: data.nome,
-    cidade: data.cidade,
-    status: data.status,
-    categoriaPrincipalId: data.categoria_principal_id,
-  };
-}
+    return {
+      id: data.id,
+      nome: data.nome,
+      cidade: data.cidade,
+      status: data.status,
+      categoriaPrincipalId: data.categoria_principal_id,
+    };
+  },
+);

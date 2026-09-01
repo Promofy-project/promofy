@@ -29,19 +29,29 @@ import { BotaoSair } from "@/components/botao-sair";
 
 export type SidebarVariant = "portal" | "admin";
 
+/** Nome/papel do chrome — vêm do layout (sessão), nunca de constante de loja. */
+export type ChromeIdentidade = { nome: string; papel: string };
+
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
 }
 
-const navConfig: Record<
-  SidebarVariant,
-  { items: NavItem[]; user: { nome: string; papel: string }; tag: string }
-> = {
+function iniciaisDe(nome: string): string {
+  return (
+    nome
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("") || "E"
+  );
+}
+
+const navConfig: Record<SidebarVariant, { items: NavItem[]; tag: string }> = {
   portal: {
     tag: "Portal do estabelecimento",
-    user: { nome: "Sabor & Cia", papel: "Estabelecimento" },
     items: [
       { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
       { href: "/portal/cupons", label: "Cupons", icon: Ticket },
@@ -55,7 +65,6 @@ const navConfig: Record<
   },
   admin: {
     tag: "Painel administrativo",
-    user: { nome: "Equipe Promofy", papel: "Administrador" },
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/estabelecimentos", label: "Estabelecimentos", icon: Store },
@@ -113,13 +122,14 @@ function NavList({
   );
 }
 
-function UserFooter({ variant }: { variant: SidebarVariant }) {
-  const { user } = navConfig[variant];
-  const initials = user.nome
-    .split(" ")
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("");
+function UserFooter({
+  variant,
+  identidade,
+}: {
+  variant: SidebarVariant;
+  identidade: ChromeIdentidade;
+}) {
+  const initials = iniciaisDe(identidade.nome);
   return (
     <div className="flex items-center gap-3 rounded-btn border border-border p-2.5">
       <Avatar className="h-9 w-9">
@@ -128,8 +138,8 @@ function UserFooter({ variant }: { variant: SidebarVariant }) {
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{user.nome}</p>
-        <p className="truncate text-xs text-muted-foreground">{user.papel}</p>
+        <p className="truncate text-sm font-semibold">{identidade.nome}</p>
+        <p className="truncate text-xs text-muted-foreground">{identidade.papel}</p>
       </div>
       <BotaoSair
         redirect={variant === "portal" ? "/portal/login" : "/admin/login"}
@@ -146,7 +156,13 @@ function UserFooter({ variant }: { variant: SidebarVariant }) {
 }
 
 /** Sidebar reutilizável (portal/admin) — fixa no desktop + drawer no mobile. */
-export function Sidebar({ variant }: { variant: SidebarVariant }) {
+export function Sidebar({
+  variant,
+  identidade,
+}: {
+  variant: SidebarVariant;
+  identidade: ChromeIdentidade;
+}) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface p-4 lg:flex">
       <div className="px-2 py-2">
@@ -155,7 +171,7 @@ export function Sidebar({ variant }: { variant: SidebarVariant }) {
       <div className="mt-4 flex-1 overflow-y-auto">
         <NavList variant={variant} />
       </div>
-      <UserFooter variant={variant} />
+      <UserFooter variant={variant} identidade={identidade} />
     </aside>
   );
 }
@@ -163,16 +179,19 @@ export function Sidebar({ variant }: { variant: SidebarVariant }) {
 /** Casca completa do dashboard: sidebar + top bar + área de conteúdo. */
 export function DashboardShell({
   variant,
+  identidade,
   children,
 }: {
   variant: SidebarVariant;
+  identidade: ChromeIdentidade;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
+  const iniciais = iniciaisDe(identidade.nome);
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar variant={variant} />
+      <Sidebar variant={variant} identidade={identidade} />
 
       {/* Mobile drawer */}
       {open && (
@@ -195,7 +214,7 @@ export function DashboardShell({
             <div className="mt-4 flex-1 overflow-y-auto">
               <NavList variant={variant} onNavigate={() => setOpen(false)} />
             </div>
-            <UserFooter variant={variant} />
+            <UserFooter variant={variant} identidade={identidade} />
           </div>
         </div>
       )}
@@ -223,7 +242,7 @@ export function DashboardShell({
             </button>
             <Avatar className="h-9 w-9">
               <AvatarFallback className="bg-primary/10 text-primary">
-                {variant === "portal" ? "SC" : "PR"}
+                {iniciais}
               </AvatarFallback>
             </Avatar>
           </div>

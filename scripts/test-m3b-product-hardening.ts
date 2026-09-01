@@ -316,7 +316,7 @@ function main(): number {
   );
   check(
     "44. estabelecimento do portal vem da sessão (owner_id)",
-    estab.includes("export async function buscarEstabelecimentoDaSessao") &&
+    estab.includes("function buscarEstabelecimentoDaSessao") &&
       /buscarEstabelecimentoDaSessao[\s\S]*\.eq\("owner_id", uid\)/.test(estab) &&
       !portalEst.includes("searchParams"),
   );
@@ -335,6 +335,31 @@ function main(): number {
       "src/app/portal/(painel)/estabelecimento/page.tsx",
       "src/app/m/cupom/[id]/page.tsx",
     ].some((f) => le(f).includes('from "@/lib/mock-data"')),
+  );
+
+  const sidebar = le("src/components/sidebar.tsx");
+  const portalLayout = le("src/app/portal/(painel)/layout.tsx");
+  check(
+    "47. sidebar do portal não hardcoda Sabor & Cia",
+    !sidebar.includes("Sabor & Cia") && !sidebar.includes('"SC"'),
+  );
+  check(
+    "47b. chrome do portal deriva identidade da sessão",
+    portalLayout.includes("buscarEstabelecimentoDaSessao") &&
+      !portalLayout.includes("searchParams") &&
+      sidebar.includes("identidade"),
+  );
+  check(
+    "47c. ausência de estabelecimento não inventa identidade",
+    portalLayout.includes("Estabelecimento") &&
+      !portalLayout.includes("Sabor") &&
+      !portalLayout.includes("PowerFit"),
+  );
+  check(
+    "47d. chrome do portal não aceita id livre de estabelecimento",
+    !portalLayout.includes("searchParams") &&
+      !sidebar.includes("searchParams") &&
+      !sidebar.includes("estabelecimentoId"),
   );
 
   return encerrar(passed, failed);
