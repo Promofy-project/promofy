@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QrFake } from "@/components/qr-fake";
 import { useCouponState } from "@/components/coupon-state-provider";
+import { formatarExibicaoCodigoCupom } from "@/lib/codigo-cupom";
 
 /**
  * Cupom ATIVO em tela cheia (overlay no nível do aparelho, como o SideMenu).
@@ -132,8 +133,8 @@ export function CupomAtivoSheet() {
           <p className="mt-4 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Código do cupom
           </p>
-          <p className="mt-1 text-center font-mono text-2xl font-extrabold tracking-[0.12em] text-foreground">
-            {estado.codigo}
+          <p className="mt-1 text-center font-mono text-2xl font-extrabold text-foreground">
+            {formatarExibicaoCodigoCupom(estado.codigo)}
           </p>
           <div className="mt-3 flex justify-center">
             <Button

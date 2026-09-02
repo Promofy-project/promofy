@@ -6,7 +6,12 @@ import { X, QrCode, BadgeCheck, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validarCupomAction, type ValidarDadosDTO } from "@/lib/actions/cupons";
-import { normalizarCodigoCupom } from "@/lib/codigo-cupom";
+import {
+  formatarEntradaCodigoCupom,
+  formatarExibicaoCodigoCupom,
+  normalizarCodigoCupom,
+  significativosCodigoCupom,
+} from "@/lib/codigo-cupom";
 import { ValidarPorCpf } from "@/components/estab/validar-por-cpf";
 
 // Mensagem amigável por motivo retornado pelo servidor.
@@ -101,14 +106,24 @@ export function ValidarCupomDialog({
                   id="codigo-cupom"
                   value={codigo}
                   onChange={(e) => {
-                    setCodigo(e.target.value.toUpperCase());
+                    setCodigo(formatarEntradaCodigoCupom(e.target.value));
                     if (erro) setErro(null);
                   }}
-                  placeholder="PRMF-XXXX-XXXX"
-                  className="font-mono uppercase tracking-wider"
+                  placeholder="PRMF - XXXX - XXXX"
+                  className="text-center font-mono text-lg font-semibold uppercase"
                   aria-invalid={!!erro}
+                  aria-describedby="codigo-cupom-ajuda-portal"
                   autoFocus
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
                 />
+                <p
+                  id="codigo-cupom-ajuda-portal"
+                  className="text-xs text-muted-foreground"
+                >
+                  Digite os 8 caracteres do código. A formatação é automática.
+                </p>
                 {erro && (
                   <p className="flex items-center gap-1.5 text-sm font-medium text-danger">
                     <AlertCircle className="h-4 w-4" />
@@ -117,7 +132,11 @@ export function ValidarCupomDialog({
                 )}
               </div>
 
-              <Button type="submit" className="mt-5 w-full" disabled={validando || !codigo.trim()}>
+              <Button
+                type="submit"
+                className="mt-5 w-full"
+                disabled={validando || significativosCodigoCupom(codigo).length === 0}
+              >
                 {validando ? "Validando…" : "Validar cupom"}
               </Button>
             </form>
@@ -143,7 +162,9 @@ export function ValidarCupomDialog({
             </h2>
             <p className="mt-1 text-center text-sm text-muted-foreground">
               Cupom{" "}
-              <span className="font-mono font-bold">{sucesso.codigo}</span>{" "}
+              <span className="font-mono font-bold">
+                {formatarExibicaoCodigoCupom(sucesso.codigo)}
+              </span>{" "}
               validado com sucesso.
             </p>
 

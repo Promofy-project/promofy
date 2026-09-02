@@ -7,7 +7,11 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validarCupomAction } from "@/lib/actions/cupons";
-import { normalizarCodigoCupom } from "@/lib/codigo-cupom";
+import {
+  formatarEntradaCodigoCupom,
+  normalizarCodigoCupom,
+  significativosCodigoCupom,
+} from "@/lib/codigo-cupom";
 import {
   ResultadoValidacao,
   type ResultadoValidar,
@@ -23,10 +27,8 @@ export function ValidarClient() {
 
   async function validar(e: React.FormEvent) {
     e.preventDefault();
-    // No balcão ninguém quer caçar hífen no teclado: aceita "KK8P8U6Q",
-    // "prmf kk8p 8u6q" ou o código colado inteiro. A reconstituição do
-    // formato canônico é função pura (src/lib), e a RPC + o formato
-    // gravado no banco continuam exatamente como eram.
+    // UI mostra "PRMF - XXXX - XXXX"; a Action/RPC recebe o canônico
+    // `PRMF-XXXX-XXXX` via normalizarCodigoCupom — banco/generator intactos.
     const codigoLimpo = normalizarCodigoCupom(codigo);
     if (!codigoLimpo) return;
     setValidando(true);
@@ -67,20 +69,20 @@ export function ValidarClient() {
           id="codigo-cupom"
           ref={inputRef}
           value={codigo}
-          onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-          placeholder="PRMF-XXXX-XXXX"
+          onChange={(e) => setCodigo(formatarEntradaCodigoCupom(e.target.value))}
+          placeholder="PRMF - XXXX - XXXX"
           // Código é ALFANUMÉRICO — nada de inputMode="numeric" (bloquearia as
-          // letras no teclado do celular). uppercase automático + autofocus.
-          // Sem maxLength: com ou sem hífens muda o comprimento, e cortar
-          // atrapalharia a colagem.
+          // letras no teclado do celular). Máscara no helper puro; sem
+          // tracking-widest (os espaços da máscara já agrupam a leitura).
           autoFocus
           autoCapitalize="characters"
           autoComplete="off"
           spellCheck={false}
-          className="mt-2 h-16 text-center font-mono text-2xl uppercase tracking-widest"
+          aria-describedby="codigo-cupom-ajuda"
+          className="mt-2 h-16 text-center font-mono text-2xl font-semibold uppercase"
         />
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Pode digitar só os 8 caracteres, sem os hífens.
+        <p id="codigo-cupom-ajuda" className="mt-2 text-center text-xs text-muted-foreground">
+          Digite os 8 caracteres do código. A formatação é automática.
         </p>
 
         <QrScanner className="mt-4" />
@@ -96,7 +98,7 @@ export function ValidarClient() {
             type="submit"
             size="xl"
             className="w-full"
-            disabled={validando || !codigo.trim()}
+            disabled={validando || significativosCodigoCupom(codigo).length === 0}
           >
             {validando ? "Validando…" : "Validar"}
           </Button>

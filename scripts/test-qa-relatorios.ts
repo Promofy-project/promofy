@@ -27,7 +27,12 @@
  */
 import { readFileSync } from "node:fs";
 
-import { normalizarCodigoCupom } from "../src/lib/codigo-cupom";
+import {
+  formatarEntradaCodigoCupom,
+  formatarExibicaoCodigoCupom,
+  normalizarCodigoCupom,
+  significativosCodigoCupom,
+} from "../src/lib/codigo-cupom";
 import { rotuloEconomia } from "../src/lib/cupom-campos";
 import { encerrar } from "./_qa-conta";
 
@@ -55,11 +60,11 @@ function fonteSemComentarios(caminho: string): string {
 }
 
 // ---------------------------------------------------------------
-// v1 §3.2 — código de validação sem hífens
+// v1 §3.2 — código de validação sem hífens + máscara visual PRE-CALL-FIX-01
 //
 // O relatório fala em "12 dígitos"; são 8 caracteres significativos num
-// alfabeto de 32 sem 0/O/1/I, mais o prefixo PRMF. O que ele pede de fato —
-// não obrigar o lojista a digitar hífen — já valia antes dos dois relatórios.
+// alfabeto de 32 sem 0/O/1/I, mais o prefixo PRMF. O lojista digita só os
+// 8; a UI mostra `PRMF - XXXX - XXXX`; o backend recebe `PRMF-XXXX-XXXX`.
 // ---------------------------------------------------------------
 console.log("v1 §3.2 — validação aceita o código sem formatação manual");
 
@@ -83,6 +88,107 @@ check(
   normalizarCodigoCupom("UD2RN7") === "UD2RN7",
   normalizarCodigoCupom("UD2RN7"),
 );
+
+console.log("\nPRE-CALL-FIX-01 — máscara PRMF - XXXX - XXXX");
+
+check(
+  'formatar("UD2RN7ER")',
+  formatarEntradaCodigoCupom("UD2RN7ER") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("UD2RN7ER"),
+);
+check(
+  'formatar("ud2rn7er")',
+  formatarEntradaCodigoCupom("ud2rn7er") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("ud2rn7er"),
+);
+check(
+  'formatar("PRMFUD2RN7ER")',
+  formatarEntradaCodigoCupom("PRMFUD2RN7ER") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("PRMFUD2RN7ER"),
+);
+check(
+  'formatar("PRMF-UD2R-N7ER")',
+  formatarEntradaCodigoCupom("PRMF-UD2R-N7ER") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("PRMF-UD2R-N7ER"),
+);
+check(
+  'formatar("PRMF UD2R N7ER")',
+  formatarEntradaCodigoCupom("PRMF UD2R N7ER") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("PRMF UD2R N7ER"),
+);
+check(
+  'formatar("PRMF - UD2R - N7ER") mascara → normalizar canônico',
+  normalizarCodigoCupom("PRMF - UD2R - N7ER") === "PRMF-UD2R-N7ER",
+  normalizarCodigoCupom("PRMF - UD2R - N7ER"),
+);
+check(
+  "parcial progressiva U → PRMF - U",
+  formatarEntradaCodigoCupom("U") === "PRMF - U",
+  formatarEntradaCodigoCupom("U"),
+);
+check(
+  "parcial UD2R → PRMF - UD2R",
+  formatarEntradaCodigoCupom("UD2R") === "PRMF - UD2R",
+  formatarEntradaCodigoCupom("UD2R"),
+);
+check(
+  "parcial UD2RN → PRMF - UD2R - N",
+  formatarEntradaCodigoCupom("UD2RN") === "PRMF - UD2R - N",
+  formatarEntradaCodigoCupom("UD2RN"),
+);
+check(
+  "mais de 8 significativos são truncados",
+  formatarEntradaCodigoCupom("UD2RN7ERXXXX") === "PRMF - UD2R - N7ER" &&
+    significativosCodigoCupom("UD2RN7ERXXXX").length === 8,
+  formatarEntradaCodigoCupom("UD2RN7ERXXXX"),
+);
+check(
+  "vazio não inventa prefixo (placeholder fala)",
+  formatarEntradaCodigoCupom("") === "" &&
+    formatarEntradaCodigoCupom("   ") === "",
+);
+check(
+  "prefixo duplicado na limpeza ainda formata certo",
+  formatarEntradaCodigoCupom("PRMFPRMFUD2RN7ER") === "PRMF - UD2R - N7ER",
+  formatarEntradaCodigoCupom("PRMFPRMFUD2RN7ER"),
+);
+check(
+  "só o prefixo digitado não gruda PRMF - PRMF",
+  formatarEntradaCodigoCupom("PRMF") === "",
+);
+check(
+  "exibição reutiliza a mesma máscara",
+  formatarExibicaoCodigoCupom("PRMF-UD2R-N7ER") === "PRMF - UD2R - N7ER",
+);
+
+{
+  const e = fonteSemComentarios("src/app/e/validar/validar-client.tsx");
+  const portal = fonteSemComentarios(
+    "src/components/portal/validar-cupom-dialog.tsx",
+  );
+  const sheet = fonteSemComentarios("src/components/cupom-ativo-sheet.tsx");
+  check(
+    "/e/validar usa formatarEntradaCodigoCupom",
+    /formatarEntradaCodigoCupom/.test(e),
+  );
+  check(
+    "portal validar usa formatarEntradaCodigoCupom",
+    /formatarEntradaCodigoCupom/.test(portal),
+  );
+  check(
+    "consumidor exibe formatarExibicaoCodigoCupom",
+    /formatarExibicaoCodigoCupom/.test(sheet),
+  );
+  check(
+    "QR do consumidor continua com estado.codigo canônico",
+    /QrFake\s+value=\{estado\.codigo\}/.test(sheet),
+  );
+  check(
+    "/e e portal NÃO usam inputMode numeric",
+    !/inputMode\s*=\s*["']numeric["']/.test(e) &&
+      !/inputMode\s*=\s*["']numeric["']/.test(portal),
+  );
+}
 
 // ---------------------------------------------------------------
 // v1 §3.4 — economia variável exibe "a partir de"

@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { ValidarDadosDTO } from "@/lib/actions/cupons";
+import { formatarExibicaoCodigoCupom } from "@/lib/codigo-cupom";
 
 export type ResultadoValidar =
   | { ok: true; dados: ValidarDadosDTO }
@@ -67,7 +68,9 @@ export function ResultadoValidacao({
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <CheckCircle2 className="h-24 w-24" strokeWidth={2.2} />
           <h1 className="mt-4 text-3xl font-extrabold">Cupom validado!</h1>
-          <p className="mt-1 font-mono text-base text-white/85">{d.codigo}</p>
+          <p className="mt-1 font-mono text-base text-white/85">
+            {formatarExibicaoCodigoCupom(d.codigo)}
+          </p>
 
           <div className="mt-8 w-full rounded-card bg-white/15 p-5 text-left">
             <p className="text-xl font-bold leading-tight">{d.titulo}</p>
