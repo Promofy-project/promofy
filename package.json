@@ -33,7 +33,7 @@
     "vercel:env:rm": "tsx scripts/vercel-api.ts env:rm",
     "vercel:rollback": "tsx scripts/vercel-api.ts rollback",
     "verify:fase1": "npm run db:reset && npm run test:rls && npm run build",
-    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run test:fase9c && npm run test:fase9d1 && npm run test:fase9d2 && npm run test:qa && npm run test:tx-p1 && npm run test:tx-p2a && npm run test:tx-p2b && npm run test:tx-p2c && npm run test:tx-p2d1 && npm run test:m1-taxonomia && npm run test:m2-cutover && npm run test:m3a-taxonomia-ux && npm run test:m3b-product-hardening && npm run test:client-returns && npm run build",
+    "verify": "npm run db:reset && npm run test:rls && npm run test:fase2 && npm run test:fase3 && npm run test:fase4 && npm run test:fase5 && npm run test:fase6 && npm run test:fase65 && npm run test:fase7 && npm run test:fase8 && npm run test:fase9 && npm run test:fase9c && npm run test:fase9d1 && npm run test:fase9d2 && npm run test:qa && npm run test:tx-p1 && npm run test:tx-p2a && npm run test:tx-p2b && npm run test:tx-p2c && npm run test:tx-p2d1 && npm run test:m1-taxonomia && npm run test:m2-cutover && npm run test:m3a-taxonomia-ux && npm run test:m3b-product-hardening && npm run test:client-returns && npm run test:client-returns-consumidor && npm run build",
     "test:fase7:storage": "tsx scripts/test-fase7-storage.ts --qa",
     "test:fase8": "tsx scripts/test-fase8.ts",
     "test:fase8:hosted": "tsx scripts/test-fase8.ts --hosted",
@@ -56,7 +56,8 @@
     "test:m2-cutover": "tsx scripts/test-m2-cutover.ts",
     "test:m3a-taxonomia-ux": "tsx scripts/test-m3a-taxonomia-ux.ts",
     "test:m3b-product-hardening": "tsx scripts/test-m3b-product-hardening.ts",
-    "test:client-returns": "tsx scripts/test-client-returns-estab-admin.ts"
+    "test:client-returns": "tsx scripts/test-client-returns-estab-admin.ts",
+    "test:client-returns-consumidor": "tsx scripts/test-client-returns-consumidor.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",
