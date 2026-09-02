@@ -8,7 +8,7 @@ import {
   Ticket,
   Store,
   Star,
-  // CreditCard, // usado apenas pelo item "Planos", ocultado temporariamente
+  // CreditCard, // Planos de parceiro removidos do menu (CLIENT-RETURNS-02)
   Settings,
   Users,
   DollarSign,
@@ -58,7 +58,8 @@ const navConfig: Record<SidebarVariant, { items: NavItem[]; tag: string }> = {
       { href: "/portal/estabelecimento", label: "Estabelecimento", icon: Store },
       { href: "/portal/avaliacoes", label: "Avaliações", icon: Star },
       { href: "/portal/mural", label: "Mural", icon: Megaphone },
-      // Ocultado temporariamente: estabelecimento é gratuito por ora. A página /portal/planos permanece intacta.
+      // CLIENT-RETURNS-02: parceiro é gratuito — sem item "Planos" pagos. /portal/planos
+      // existe como página de participação gratuita (URL direta), não como oferta.
       // { href: "/portal/planos", label: "Planos", icon: CreditCard },
       { href: "/portal/configuracoes", label: "Configurações", icon: Settings },
     ],

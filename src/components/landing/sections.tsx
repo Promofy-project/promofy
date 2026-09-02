@@ -14,7 +14,6 @@ import {
 
 import {
   cupons,
-  planos,
   landingStats,
   resgatesMensais,
 } from "@/lib/mock-data";
@@ -25,6 +24,7 @@ import { CouponCard } from "@/components/coupon-card";
 import { PlanCard } from "@/components/plan-card";
 import { AppMockup } from "@/components/app-mockup";
 import { BarChart } from "@/components/bar-chart";
+import { buscarPlanosConsumidor } from "@/lib/data/planos";
 
 // ───────────────────────── Copy compartilhada (provisória) ─────────────────────────
 
@@ -289,7 +289,8 @@ export function LandingMerchantBlock({
 
 // ───────────────────────── Planos ─────────────────────────
 
-export function LandingPlans({ id }: { id?: string }) {
+export async function LandingPlans({ id }: { id?: string }) {
+  const planos = await buscarPlanosConsumidor();
   return (
     <section id={id} className="bg-surface">
       <div className="container py-16 lg:py-20">
@@ -298,8 +299,8 @@ export function LandingPlans({ id }: { id?: string }) {
             Escolha seu plano
           </h2>
           <p className="mt-2 text-muted-foreground">
-            Comece simples e faça upgrade quando quiser. Cancele a qualquer
-            momento.
+            Planos pagos são contrato anual de 12 meses. O valor mostrado é a
+            parcela — não um plano mensal avulso.
           </p>
         </div>
         <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">

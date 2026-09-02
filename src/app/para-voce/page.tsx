@@ -135,7 +135,7 @@ const PLANOS_LINHA2: PlanoLP[] = [
 const FAQ: FaqItem[] = [
   {
     q: "O app é gratuito?",
-    a: "Sim. Você baixa e usa a Promofy de graça no plano Promo, com cupons selecionados e 1 resgate por mês. Para ver todas as ofertas da cidade e resgatar mais, há planos a partir de R$ 9,90/mês.",
+    a: "Sim. Você baixa e usa a Promofy de graça no plano Promo. Planos pagos são contrato anual de 12 meses; o valor exibido é a parcela, não um plano mensal avulso. A cobrança entra no ar no fluxo de Billing.",
   },
   {
     q: "Preciso imprimir os cupons?",
@@ -332,7 +332,7 @@ export default function ParaVocePage() {
         <div className={cn(LP_CONTAINER, "pb-16 sm:pb-24")}>
           <SectionHeader
             title="Planos"
-            subtitle="Comece de graça e faça upgrade quando quiser. Sem fidelidade escondida — planos anuais a partir de R$ 9,90/mês."
+            subtitle="Comece de graça. Planos pagos são contrato anual de 12 meses; o valor é a parcela, não um plano mensal avulso."
           />
           <div className="mx-auto grid max-w-5xl gap-5 sm:gap-6 md:grid-cols-3">
             {PLANOS_LINHA1.map((p) => (

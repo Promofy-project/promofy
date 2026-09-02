@@ -1,64 +1,31 @@
-import type { Plano } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
-import { PlanCard } from "@/components/plan-card";
+import { Card } from "@/components/ui/card";
 
-// Planos de assinatura do estabelecimento (visão do lojista) — só do portal.
-const planosEstabelecimento: Plano[] = [
-  {
-    id: "divulgacao",
-    nome: "Divulgação",
-    preco: 0,
-    periodo: "/mês",
-    descricao: "Para começar a aparecer no app.",
-    beneficios: [
-      "Perfil do estabelecimento no app",
-      "Até 2 cupons ativos",
-      "Métricas básicas de desempenho",
-    ],
-  },
-  {
-    id: "profissional",
-    nome: "Profissional",
-    preco: 149,
-    periodo: "/mês",
-    descricao: "O plano de quem leva os cupons a sério.",
-    beneficios: [
-      "Cupons ilimitados",
-      "Métricas avançadas e funil por cupom",
-      "Validação por código e QR",
-      "Destaque nas buscas do app",
-    ],
-    destaque: true,
-    badge: "Plano atual",
-  },
-  {
-    id: "premium",
-    nome: "Premium",
-    preco: 349,
-    periodo: "/mês",
-    descricao: "Máxima exposição e suporte dedicado.",
-    beneficios: [
-      "Tudo do Profissional",
-      "Campanhas patrocinadas na home",
-      "Gerente de conta dedicado",
-      "Relatórios mensais personalizados",
-    ],
-  },
-];
-
+/**
+ * Participação do estabelecimento é gratuita. Planos pagos de parceiro
+ * (R$149 / R$349) não são produto vigente — não se apresentam como reais.
+ */
 export default function PortalPlanos() {
   return (
     <>
       <PageHeader
-        title="Planos"
-        description="Escolha o plano que mais combina com o seu negócio."
+        title="Participação"
+        description="O estabelecimento participa do Promofy sem mensalidade."
       />
 
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {planosEstabelecimento.map((p) => (
-          <PlanCard key={p.id} plano={p} />
-        ))}
-      </div>
+      <Card className="max-w-xl p-6">
+        <h2 className="text-lg font-extrabold">Gratuito para o parceiro</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Publicar cupons, validar no balcão e acompanhar o desempenho da
+          loja não exige plano pago. Não há assinatura Profissional ou
+          Premium à venda neste momento.
+        </p>
+        <ul className="mt-4 flex flex-col gap-2 text-sm">
+          <li>Perfil do estabelecimento no app</li>
+          <li>Criação e moderação de cupons</li>
+          <li>Validação por código no balcão e no portal</li>
+        </ul>
+      </Card>
     </>
   );
 }
