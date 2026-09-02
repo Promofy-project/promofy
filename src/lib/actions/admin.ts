@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/supabase/database.types";
 
 // Nenhuma action lança: erros viram { ok:false, motivo } para a UI tratar.
 // A checagem de papel (admin) vive DENTRO da RPC security definer
@@ -183,5 +184,78 @@ export async function moderarEstabelecimentoAction(
     return r;
   } catch {
     return { ok: false, motivo: "erro" };
+  }
+}
+
+const ACOES_PONTOS = ["resgate", "nps", "indicacao", "visita"] as const;
+
+/**
+ * Admin grava a tabela de pontos (`config_pontos`). A RLS já restringe
+ * escrita a `private.is_admin()`; aqui a checagem de papel é defesa em
+ * profundidade e a whitelist impede inventar ação nova pelo client.
+ */
+export async function salvarConfigPontosAction(
+  pontos: Record<string, number>,
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  try {
+    const supabase = createClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const uid = claims?.claims?.sub;
+    if (!uid) return { ok: false, erro: "Sessão expirada." };
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", uid)
+      .maybeSingle();
+    if (perfil?.role !== "admin") return { ok: false, erro: "Sem permissão." };
+
+    for (const acao of ACOES_PONTOS) {
+      const n = Math.trunc(Number(pontos[acao]));
+      if (!Number.isFinite(n) || n < 0) {
+        return { ok: false, erro: `Valor inválido em ${acao}.` };
+      }
+      const { error } = await supabase
+        .from("config_pontos")
+        .update({ pontos: n })
+        .eq("acao", acao);
+      if (error) return { ok: false, erro: "Não foi possível salvar a tabela de pontos." };
+    }
+
+    revalidatePath("/admin/configuracoes");
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "Não foi possível salvar a tabela de pontos." };
+  }
+}
+
+export async function adminEditarCupomAction(
+  cupomId: string,
+  patch: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  try {
+    if (!cupomId) return { ok: false, erro: "Cupom não informado." };
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("admin_editar_cupom", {
+      p_cupom_id: cupomId,
+      p_patch: patch as Json,
+    });
+    if (error) return { ok: false, erro: "Não foi possível salvar." };
+    const r = data as { ok?: boolean; motivo?: string } | null;
+    if (r?.ok) {
+      revalidatePath("/admin/cupons");
+      return { ok: true };
+    }
+    const MSG: Record<string, string> = {
+      sem_permissao: "Sua conta não tem permissão de moderação.",
+      nao_encontrado: "Cupom não encontrado.",
+      campo_proibido: "Este campo não pode ser alterado.",
+      titulo_vazio: "Informe o título.",
+      validade_vazia: "Informe a validade.",
+      categoria_invalida: "Categoria inválida para este estabelecimento.",
+      patch_invalido: "Nada para alterar.",
+    };
+    return { ok: false, erro: MSG[r?.motivo ?? ""] ?? "Não foi possível salvar." };
+  } catch {
+    return { ok: false, erro: "Não foi possível salvar." };
   }
 }

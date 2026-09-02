@@ -6,10 +6,10 @@
  * PONTO DE TROCA NATIVO↔WEB — mesmo papel de `password-input.tsx`.
  *
  * O que é só-web mora aqui e em nenhum outro lugar: `<input type="file">`,
- * `URL.createObjectURL` para a pré-visualização e o `FormData` do envio. No app
- * nativo este arquivo é reescrito com picker/câmera; a Server Action e a
- * validação (`src/lib/imagem-cupom.ts`) são reaproveitadas sem uma linha de
- * mudança. O gatilho migra; o arquivo não.
+ * o recorte (`crop-imagem.tsx`), `URL.createObjectURL` e o `FormData` do
+ * envio. No app nativo este arquivo é reescrito com picker/câmera; a Server
+ * Action e a validação (`src/lib/imagem-cupom.ts`) são reaproveitadas sem
+ * uma linha de mudança. O gatilho migra; o arquivo não.
  *
  * CONTRATO PARCIAL (Fase 6.5) — a razão de `onChange` só disparar quando o
  * usuário mexe: um formulário que sempre emitisse `imagem` reintroduziria o
@@ -22,6 +22,7 @@ import { ImagePlus, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { uploadImagemCupomAction } from "@/lib/actions/cupons";
 import { urlPublicaImagem, TAMANHO_MAX_IMAGEM } from "@/lib/imagem-cupom";
 import { Button } from "@/components/ui/button";
+import { CropImagem } from "@/components/crop-imagem";
 
 interface CampoImagemProps {
   /** Caminho já gravado (edição). */
@@ -31,6 +32,7 @@ interface CampoImagemProps {
   onChange: (valor: string | undefined) => void;
   /** Cupom `ativo`: trocar a imagem manda para nova análise. */
   avisarRemoderacao?: boolean;
+  rotulo?: string;
 }
 
 export function CampoImagem({
@@ -38,12 +40,14 @@ export function CampoImagem({
   estabelecimentoId,
   onChange,
   avisarRemoderacao,
+  rotulo = "Imagem do cupom",
 }: CampoImagemProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
   const [previa, setPrevia] = React.useState<string | null>(null);
   const [removida, setRemovida] = React.useState(false);
+  const [pendente, setPendente] = React.useState<File | null>(null);
 
   const urlAtual = urlPublicaImagem(
     valorAtual,
@@ -74,6 +78,11 @@ export function CampoImagem({
       return;
     }
 
+    setPendente(arquivo);
+  }
+
+  async function enviarRecorte(arquivo: File) {
+    setPendente(null);
     setEnviando(true);
     try {
       const fd = new FormData();
@@ -104,10 +113,10 @@ export function CampoImagem({
 
   return (
     <div className="space-y-2">
-      <span className="text-sm font-medium text-foreground">Imagem do cupom</span>
+      <span className="text-sm font-medium text-foreground">{rotulo}</span>
 
       <div className="flex items-start gap-3">
-        <div className="grid h-20 w-28 shrink-0 place-items-center overflow-hidden rounded-xl bg-muted/70">
+        <div className="grid h-20 w-40 shrink-0 place-items-center overflow-hidden rounded-xl bg-muted/70">
           {mostrando ? (
             // eslint-disable-next-line @next/next/no-img-element -- next/image não é
             // usado em lugar nenhum do repo e exigiria remotePatterns; fora do escopo.
@@ -147,7 +156,9 @@ export function CampoImagem({
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">JPG, PNG ou WebP · até 2 MB</p>
+          <p className="text-xs text-muted-foreground">
+            JPG, PNG ou WebP · até 2 MB · recorte no formato do card
+          </p>
         </div>
       </div>
 
@@ -158,6 +169,14 @@ export function CampoImagem({
         mas não pode ser surpresa: sem este aviso o lojista tira o próprio
         cupom do ar sem entender por quê.
       */}
+      {pendente && (
+        <CropImagem
+          arquivo={pendente}
+          onCancelar={() => setPendente(null)}
+          onConfirmar={(f) => void enviarRecorte(f)}
+        />
+      )}
+
       {avisarRemoderacao && mexeu && (
         <p className="flex items-start gap-1.5 rounded-md border border-yellow/40 bg-yellow-soft px-2.5 py-2 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -742,6 +742,7 @@ export type Database = {
           cidade: string
           criado_em: string
           id: string
+          logo: string
           nome: string
           owner_id: string | null
           rating: number
@@ -755,6 +756,7 @@ export type Database = {
           cidade: string
           criado_em?: string
           id?: string
+          logo?: string
           nome: string
           owner_id?: string | null
           rating?: number
@@ -768,6 +770,7 @@ export type Database = {
           cidade?: string
           criado_em?: string
           id?: string
+          logo?: string
           nome?: string
           owner_id?: string | null
           rating?: number
@@ -1190,6 +1193,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_editar_cupom: {
+        Args: { p_cupom_id: string; p_patch: Json }
+        Returns: Json
+      }
       aprovar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       avisos_nao_lidos: { Args: never; Returns: number }

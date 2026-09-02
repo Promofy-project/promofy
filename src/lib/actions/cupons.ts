@@ -257,6 +257,8 @@ export interface NovoCupomInput {
   /** Fase 6: ids de src/lib/cupom-campos (saneados aqui no servidor). */
   taxas?: string[];
   formasConsumo?: string[];
+  /** Regras extras (não copiar o benefício). */
+  regras?: string[];
 }
 type CriarResult = { ok: true; item: ItemCupomPortal } | { ok: false; erro: string };
 
@@ -392,7 +394,7 @@ export async function criarCupomAction(input: NovoCupomInput): Promise<CriarResu
       // fazia a folha do cupom exibir o mesmo texto duas vezes (o detalhe
       // concatena benefício + regras). `regras` é campo próprio e opcional;
       // vazio é o default honesto.
-      regras: [],
+      regras: (input.regras ?? []).map((r) => r.trim()).filter(Boolean),
       horarios,
       // O trigger `forcar_status_pendente` (migration 19) garante isto
       // mesmo se alguém chamar o PostgREST direto; aqui é explícito.

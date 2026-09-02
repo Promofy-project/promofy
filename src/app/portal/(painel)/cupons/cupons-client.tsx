@@ -19,7 +19,14 @@ import {
   reenviarCupomAction,
 } from "@/lib/actions/cupons";
 import { cn } from "@/lib/utils";
-import { abaEfetiva, contarPorAba, filtrarPorAba } from "@/lib/portal-listagem";
+import { abaEfetiva, contarPorAba } from "@/lib/portal-listagem";
+import {
+  FILTROS_ATRIBUTO_VAZIOS,
+  filtrarListagemLojista,
+  type FiltrosAtributoLojista,
+} from "@/lib/lojista-filtros";
+import { DIAS_SEMANA } from "@/lib/dias";
+import { FORMAS_CONSUMO } from "@/lib/cupom-campos";
 
 /**
  * Os filtros de status do portal (Fase 9/C3).
@@ -99,6 +106,8 @@ export function CuponsClient({
    */
   const [prorrogandoExpirado, setProrrogandoExpirado] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
+  const [filtrosAtributo, setFiltrosAtributo] =
+    React.useState<FiltrosAtributoLojista>(FILTROS_ATRIBUTO_VAZIOS);
 
   /**
    * Abrir a edição BUSCA o cupom no servidor em vez de reaproveitar o item
@@ -255,9 +264,29 @@ export function CuponsClient({
   );
 
   const listaFiltrada = React.useMemo(
-    () => filtrarPorAba(lista, filtroEfetivo),
-    [lista, filtroEfetivo],
+    () =>
+      filtrarListagemLojista(
+        lista.map((i) => ({
+          ...i,
+          categoriaId: i.cupom.categoriaVisual?.id ?? null,
+          dias: i.cupom.dias,
+          formasConsumo: i.cupom.formasConsumo,
+        })),
+        filtroEfetivo,
+        filtrosAtributo,
+      ),
+    [lista, filtroEfetivo, filtrosAtributo],
   );
+
+  const categoriasFiltro = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const it of lista) {
+      const id = it.cupom.categoriaVisual?.id;
+      const label = it.cupom.categoriaVisual?.label;
+      if (id && label) map.set(id, label);
+    }
+    return Array.from(map, ([id, label]) => ({ id, label }));
+  }, [lista]);
 
   return (
     <>
@@ -370,6 +399,54 @@ export function CuponsClient({
             </div>
           )}
 
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <select
+              aria-label="Categoria"
+              value={filtrosAtributo.categoriaId}
+              onChange={(e) =>
+                setFiltrosAtributo((f) => ({ ...f, categoriaId: e.target.value }))
+              }
+              className="h-11 rounded-xl border border-border bg-surface px-3 text-sm"
+            >
+              <option value="">Todas as categorias</option>
+              {categoriasFiltro.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Dia da semana"
+              value={filtrosAtributo.dia}
+              onChange={(e) =>
+                setFiltrosAtributo((f) => ({ ...f, dia: e.target.value }))
+              }
+              className="h-11 rounded-xl border border-border bg-surface px-3 text-sm"
+            >
+              <option value="">Todos os dias</option>
+              {DIAS_SEMANA.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Forma de consumo"
+              value={filtrosAtributo.formaConsumo}
+              onChange={(e) =>
+                setFiltrosAtributo((f) => ({ ...f, formaConsumo: e.target.value }))
+              }
+              className="h-11 rounded-xl border border-border bg-surface px-3 text-sm"
+            >
+              <option value="">Todas as formas</option>
+              {FORMAS_CONSUMO.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Lista */}
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             {listaFiltrada.map((item) => (
@@ -394,7 +471,10 @@ export function CuponsClient({
               Nenhum cupom com este status.{" "}
               <button
                 type="button"
-                onClick={() => setFiltroStatus("todos")}
+                onClick={() => {
+                  setFiltroStatus("todos");
+                  setFiltrosAtributo(FILTROS_ATRIBUTO_VAZIOS);
+                }}
                 className="font-bold text-primary hover:underline"
               >
                 Ver todos

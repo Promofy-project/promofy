@@ -67,12 +67,12 @@ function Chips({
 }
 
 /**
- * Form reduzido de criação de cupom para o /e. Coleta só o essencial;
- * os campos avançados vão com defaults sensatos (prazo 5h da regra de
- * negócio; horário "todos os dias"). Fase 4: o estabelecimento pode ter
- * N categorias — com 1, o campo fica travado como antes; com 2+, vira
- * seleção por chips (a principal pré-selecionada). O servidor valida
- * contra o conjunto de qualquer forma.
+ * Form de criação/edição de cupom no /e. Janela de validade, limites
+ * e regras persistem no mesmo contrato do portal; o layout é de
+ * balcão. Fase 4: o estabelecimento pode ter N categorias — com 1, o
+ * campo fica travado; com 2+, vira seleção por chips (a principal
+ * pré-selecionada). O servidor valida contra o conjunto de qualquer
+ * forma.
  */
 export function NovoCupomForm({
   categorias,
@@ -101,6 +101,9 @@ export function NovoCupomForm({
   const editando = Boolean(cupomInicial);
   const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
   const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
+  const [regrasTexto, setRegrasTexto] = React.useState(
+    (cupomInicial?.regras ?? []).join("\n"),
+  );
   const [economia, setEconomia] = React.useState(
     cupomInicial ? String(cupomInicial.economia) : "",
   );
@@ -203,6 +206,7 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      regras: regrasTexto.split("\n").map((r) => r.trim()).filter(Boolean),
       // CONTRATO PARCIAL: a chave só entra quando o usuário mexeu na imagem.
       ...(imagem !== undefined ? { imagem } : {}),
     };
@@ -219,12 +223,21 @@ export function NovoCupomForm({
       dias,
       horaInicio,
       horaFim,
-      ...(dataInicio ? { dataInicio } : {}),
     };
 
     const r = cupomInicial
-      ? await editarCupomAction({ id: cupomInicial.id, ...controlados, ...janela })
-      : await criarCupomAction({ ...controlados, ...janela });
+      ? await editarCupomAction({
+          id: cupomInicial.id,
+          ...controlados,
+          ...janela,
+          // vazio no form = limpar validade_inicio (não omitir)
+          dataInicio: dataInicio ? dataInicio : null,
+        })
+      : await criarCupomAction({
+          ...controlados,
+          ...janela,
+          ...(dataInicio ? { dataInicio } : {}),
+        });
     setSalvando(false);
     if (r.ok) {
       router.push("/e/cupons");
@@ -249,6 +262,18 @@ export function NovoCupomForm({
         value={beneficio}
         onChange={(e) => setBeneficio(e.target.value)}
       />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="e-regras" className="text-sm font-semibold text-foreground">
+          Regras adicionais
+        </label>
+        <textarea
+          id="e-regras"
+          value={regrasTexto}
+          onChange={(e) => setRegrasTexto(e.target.value)}
+          placeholder="Uma regra por linha (opcional)"
+          className="min-h-[88px] rounded-xl border border-transparent bg-muted/70 px-3.5 py-2.5 text-sm focus-visible:border-primary focus-visible:outline-none"
+        />
+      </div>
       <Field
         label={
           economiaVariavel

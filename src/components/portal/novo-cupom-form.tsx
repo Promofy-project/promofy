@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { CouponCard } from "@/components/coupon-card";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
@@ -101,6 +102,9 @@ export function NovoCupomForm({
   const editando = Boolean(cupomInicial) && !duplicar;
   const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
   const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
+  const [regrasTexto, setRegrasTexto] = React.useState(
+    (cupomInicial?.regras ?? []).join("\n"),
+  );
   // Fase 4: o estabelecimento pode ter N categorias — seleção entre elas,
   // principal pré-setada. O servidor valida contra o conjunto (junção).
   const [categoriaSel, setCategoriaSel] = React.useState<string>(
@@ -246,6 +250,7 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      regras: regrasTexto.split("\n").map((r) => r.trim()).filter(Boolean),
       // CONTRATO PARCIAL: só entra quando o usuário mexeu na imagem.
       ...(imagem !== undefined ? { imagem } : {}),
     };
@@ -257,8 +262,6 @@ export function NovoCupomForm({
           // `null` (e não `undefined`) para LIMPAR o agendamento de propósito:
           // no contrato parcial, `undefined` significaria "não mexer".
           dataInicio: dataInicio || null,
-          // `regras` é campo próprio (EXTRA da fase) e este form ainda não o
-          // edita — fica de fora do payload em vez de virar cópia do benefício.
         })
       : await criarCupomAction({ ...campos, dataInicio: dataInicio || undefined });
     setSalvando(false);
@@ -308,6 +311,15 @@ export function NovoCupomForm({
               value={beneficio}
               onChange={(e) => setBeneficio(e.target.value)}
               placeholder="Ex.: 2 rodízios pelo preço de 1"
+            />
+          </Field>
+
+          <Field label="Regras adicionais" htmlFor="f-regras">
+            <Textarea
+              id="f-regras"
+              value={regrasTexto}
+              onChange={(e) => setRegrasTexto(e.target.value)}
+              placeholder="Uma regra por linha (opcional)"
             />
           </Field>
 

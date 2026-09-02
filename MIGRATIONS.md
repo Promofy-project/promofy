@@ -1714,6 +1714,21 @@ deploy neste trabalho. Confirmações:
   `show log_statement`); nenhum insert/update/delete/DDL.
 - **O CONTRACT FINAL NÃO REMOVEU NENHUMA ESTRUTURA LEGADA.**
 
+---
+
+## CLIENT-RETURNS-01 — logo do estabelecimento + edição admin de cupom
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 36 | `20260902120000_cr01_estab_logo.sql` | Coluna `estabelecimentos.logo` (path no bucket `cupom-imagens`, mesmo contrato de `cupons.imagem`) + `grant update (logo)`. |
+| 37 | `20260902130000_cr01_admin_editar_cupom.sql` | RPC `admin_editar_cupom(text, jsonb)` — admin corrige campos permitidos; recusa `estabelecimento_id`/`status`/`categoria_id`/`moderacao_historico`; append `editado_admin`. |
+
+> **Obs. 36:** nome e cidade já eram graváveis (migration 12). A logo reusa o bucket e as policies da Fase 7 — pasta por `estabelecimento_id`, magic bytes na Action. Galeria (várias fotos) ficou de fora: exigiria ordem/legenda/lugar×produto.
+
+> **Obs. 37:** admin não tem policy de UPDATE em `cupons`. O trigger `checar_edicao_cupom` isenta admin e portanto não grava histórico — a RPC grava à mão. Não rebaixa para pendente: o admin é o revisor (pedido do cliente era corrigir sem rejeitar e recriar). `categoria_id` legado continua congelado.
+
+> **Não hospedada neste WP.** Local only até autorização de deploy.
+
 ### Preflight de hospedagem — read-only, aguardando autorização
 
 Rodado depois das duas correções documentais acima e da adição da postcondition do Gate 8. Tudo

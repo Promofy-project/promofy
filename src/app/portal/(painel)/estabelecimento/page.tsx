@@ -3,9 +3,11 @@ import { Store, MapPin, Tag } from "lucide-react";
 import { buscarEstabelecimentoDaSessao } from "@/lib/data/estab";
 import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { rotuloHierarquico } from "@/lib/categoria-visual";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { EstabelecimentoForm } from "./estabelecimento-form";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +24,9 @@ const STATUS_VARIANT: Record<string, "success" | "yellow-soft" | "danger"> = {
 };
 
 /**
- * Identidade do estabelecimento da SESSÃO. Sem save: nome/cidade/status
- * existem no schema; descrição, Instagram, WhatsApp e telefone não.
- * O CTA "Salvar" anterior só setava estado local e fingia persistência.
+ * Identidade do estabelecimento da SESSÃO. Nome, cidade e logo persistem
+ * de verdade (grant + coluna `logo`). Categoria e status não se editam
+ * aqui — são do cadastro/moderação.
  */
 export default async function PortalEstabelecimento() {
   const est = await buscarEstabelecimentoDaSessao();
@@ -38,11 +40,19 @@ export default async function PortalEstabelecimento() {
     segmentoLabel = vis?.segmentoLabel ?? null;
   }
 
+  const logoUrl = est
+    ? urlPublicaImagem(
+        est.logo,
+        est.id,
+        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+      )
+    : null;
+
   return (
     <>
       <PageHeader
         title="Estabelecimento"
-        description="Dados cadastrados do seu negócio. A edição ainda não está disponível nesta tela."
+        description="Dados do seu negócio. Nome, cidade e logo são gravados no cadastro."
       />
 
       {!est ? (
@@ -56,9 +66,18 @@ export default async function PortalEstabelecimento() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
           <Card className="flex flex-col items-center p-6 text-center lg:self-start">
-            <div className="grid h-20 w-20 place-items-center rounded-2xl bg-primary/10 text-primary">
-              <Store className="h-9 w-9" />
-            </div>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-20 w-20 rounded-2xl object-cover"
+              />
+            ) : (
+              <div className="grid h-20 w-20 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <Store className="h-9 w-9" />
+              </div>
+            )}
             <h2 className="mt-4 text-lg font-bold">{est.nome}</h2>
             <p className="text-sm text-muted-foreground">{est.cidade || "—"}</p>
             <Badge
@@ -70,18 +89,13 @@ export default async function PortalEstabelecimento() {
           </Card>
 
           <Card className="p-5 lg:p-6">
-            <dl className="flex flex-col gap-4 text-sm">
-              <div>
-                <dt className="font-semibold text-foreground">Nome</dt>
-                <dd className="mt-1 text-muted-foreground">{est.nome}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">Cidade</dt>
-                <dd className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  {est.cidade || "—"}
-                </dd>
-              </div>
+            <EstabelecimentoForm
+              id={est.id}
+              nomeInicial={est.nome}
+              cidadeInicial={est.cidade}
+              logoInicial={est.logo}
+            />
+            <dl className="mt-6 flex flex-col gap-4 border-t border-border pt-4 text-sm">
               <div>
                 <dt className="font-semibold text-foreground">Categoria</dt>
                 <dd className="mt-1 flex items-center gap-1.5 text-muted-foreground">
@@ -91,10 +105,17 @@ export default async function PortalEstabelecimento() {
                     : "—"}
                 </dd>
               </div>
+              <div>
+                <dt className="font-semibold text-foreground">Cidade cadastrada</dt>
+                <dd className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {est.cidade || "—"}
+                </dd>
+              </div>
             </dl>
             <p className="mt-6 text-xs text-muted-foreground">
-              Telefone, WhatsApp, Instagram e descrição ainda não têm cadastro
-              neste app. Alterações não são gravadas por esta tela.
+              Telefone, WhatsApp, Instagram, descrição e galeria ainda não
+              têm cadastro neste app.
             </p>
           </Card>
         </div>

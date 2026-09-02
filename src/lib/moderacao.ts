@@ -18,7 +18,8 @@ export type AcaoModeracao =
   | "aprovado"
   | "reenviado"
   | "editado"
-  | "editado_material";
+  | "editado_material"
+  | "editado_admin";
 
 export interface EntradaModeracao {
   em: string;
@@ -41,6 +42,7 @@ const ROTULOS: Record<AcaoModeracao, string> = {
   reenviado: "Reenviado para análise",
   editado: "Editado",
   editado_material: "Editado (volta para análise)",
+  editado_admin: "Corrigido pelo admin",
 };
 
 export function rotuloAcao(acao: string): string {

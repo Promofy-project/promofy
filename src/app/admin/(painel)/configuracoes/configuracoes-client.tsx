@@ -6,22 +6,22 @@ import { Check, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { salvarConfigPontosAction } from "@/lib/actions/admin";
 
 interface Opcao {
   key: string;
   label: string;
   descricao: string;
-  inicial: boolean;
 }
 
 const OPCOES: Opcao[] = [
-  { key: "cadastro", label: "Cadastro de estabelecimentos aberto", descricao: "Novos parceiros podem se inscrever pelo portal.", inicial: true },
-  { key: "aprovacao", label: "Aprovação manual de cupons", descricao: "Cupons novos passam por moderação antes de publicar.", inicial: true },
-  { key: "ranking", label: "Ranking público de usuários", descricao: "Exibir o ranking de pontos no app do consumidor.", inicial: true },
-  { key: "push", label: "Notificações push da plataforma", descricao: "Envio de campanhas e avisos globais.", inicial: false },
-  { key: "manutencao", label: "Modo manutenção", descricao: "Suspende o app e o portal temporariamente.", inicial: false },
+  { key: "cadastro", label: "Cadastro de estabelecimentos aberto", descricao: "Novos parceiros podem se inscrever pelo portal." },
+  { key: "aprovacao", label: "Aprovação manual de cupons", descricao: "Cupons novos passam por moderação antes de publicar." },
+  { key: "ranking", label: "Ranking público de usuários", descricao: "Exibir o ranking de pontos no app do consumidor." },
+  { key: "push", label: "Notificações push da plataforma", descricao: "Envio de campanhas e avisos globais." },
+  { key: "manutencao", label: "Modo manutenção", descricao: "Suspende o app e o portal temporariamente." },
 ];
 
 interface RegraPontos {
@@ -29,7 +29,6 @@ interface RegraPontos {
   acao: string;
 }
 
-// Rótulos das ações; os VALORES vêm da config_pontos do banco (prop).
 const REGRAS: RegraPontos[] = [
   { key: "resgate", acao: "Resgatar um cupom" },
   { key: "nps", acao: "Responder NPS" },
@@ -42,19 +41,30 @@ export function ConfiguracoesClient({
 }: {
   configPontos: Record<string, number>;
 }) {
-  const [toggles, setToggles] = React.useState<Record<string, boolean>>(() =>
-    Object.fromEntries(OPCOES.map((o) => [o.key, o.inicial])),
-  );
   const [pontos, setPontos] = React.useState<Record<string, number>>(() =>
     Object.fromEntries(REGRAS.map((r) => [r.key, configPontos[r.key] ?? 0])),
   );
+  const [salvando, setSalvando] = React.useState(false);
   const [salvo, setSalvo] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!salvo) return;
     const t = window.setTimeout(() => setSalvo(false), 4000);
     return () => window.clearTimeout(t);
   }, [salvo]);
+
+  async function salvar() {
+    setErro(null);
+    setSalvando(true);
+    const r = await salvarConfigPontosAction(pontos);
+    setSalvando(false);
+    if (r.ok) {
+      setSalvo(true);
+    } else {
+      setErro(r.erro);
+    }
+  }
 
   return (
     <>
@@ -64,11 +74,10 @@ export function ConfiguracoesClient({
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Plataforma */}
         <Card className="p-5 lg:p-6">
           <h2 className="text-lg font-bold">Plataforma</h2>
           <p className="text-sm text-muted-foreground">
-            Controles globais do app e do portal.
+            Controles globais ainda sem backend — não alteram o app.
           </p>
           <div className="mt-4 divide-y divide-border">
             {OPCOES.map((o) => (
@@ -77,19 +86,12 @@ export function ConfiguracoesClient({
                   <p className="text-sm font-semibold text-foreground">{o.label}</p>
                   <p className="text-xs text-muted-foreground">{o.descricao}</p>
                 </div>
-                <Switch
-                  checked={toggles[o.key]}
-                  onCheckedChange={(v) =>
-                    setToggles((prev) => ({ ...prev, [o.key]: v }))
-                  }
-                  aria-label={o.label}
-                />
+                <Badge variant="muted">Em breve</Badge>
               </div>
             ))}
           </div>
         </Card>
 
-        {/* Tabela de pontos */}
         <Card className="p-5 lg:p-6">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -98,20 +100,18 @@ export function ConfiguracoesClient({
             <div>
               <h2 className="text-lg font-bold">Tabela de pontos</h2>
               <p className="text-sm text-muted-foreground">
-                Quantos pontos cada ação concede.
+                Quantos pontos cada ação concede. Gravado na tabela de pontos.
               </p>
             </div>
           </div>
-
-          <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-            Valores lidos da configuração do banco (fonte única). A edição
-            será liberada em uma próxima fase.
-          </p>
 
           {salvo && (
             <div className="mt-4 flex items-center gap-2 rounded-card border border-success/30 bg-success-soft px-4 py-2.5 text-sm font-semibold text-success">
               <Check className="h-4 w-4" /> Tabela de pontos salva.
             </div>
+          )}
+          {erro && (
+            <p className="mt-4 text-sm font-semibold text-danger">{erro}</p>
           )}
 
           <div className="mt-4 divide-y divide-border">
@@ -138,8 +138,9 @@ export function ConfiguracoesClient({
             ))}
           </div>
 
-          <Button className="mt-5" onClick={() => setSalvo(true)}>
-            <Check className="h-4 w-4" /> Salvar tabela de pontos
+          <Button className="mt-5" onClick={() => void salvar()} disabled={salvando}>
+            <Check className="h-4 w-4" />
+            {salvando ? "Salvando…" : "Salvar tabela de pontos"}
           </Button>
         </Card>
       </div>

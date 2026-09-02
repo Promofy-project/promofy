@@ -232,6 +232,7 @@ export const buscarEstabelecimentoDaSessao = cache(
     cidade: string;
     status: string;
     categoriaPrincipalId: string | null;
+    logo: string;
   } | null> {
     const supabase = createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -240,7 +241,7 @@ export const buscarEstabelecimentoDaSessao = cache(
 
     const { data } = await supabase
       .from("estabelecimentos")
-      .select("id, nome, cidade, status, categoria_principal_id")
+      .select("id, nome, cidade, status, categoria_principal_id, logo")
       .eq("owner_id", uid)
       .maybeSingle();
     if (!data) return null;
@@ -251,6 +252,7 @@ export const buscarEstabelecimentoDaSessao = cache(
       cidade: data.cidade,
       status: data.status,
       categoriaPrincipalId: data.categoria_principal_id,
+      logo: data.logo ?? "",
     };
   },
 );

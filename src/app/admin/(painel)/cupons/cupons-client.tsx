@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Eye, ImageOff } from "lucide-react";
+import { Check, X, Eye, ImageOff, Pencil } from "lucide-react";
 
 import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
@@ -12,6 +12,7 @@ import { rotuloAcao } from "@/lib/moderacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { cn, formatBRL, formatShortDate, formatDateTimeBRT } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
@@ -19,6 +20,7 @@ import { DataTable, type Column } from "@/components/admin/data-table";
 import {
   aprovarCupomAction,
   rejeitarCupomAction,
+  adminEditarCupomAction,
 } from "@/lib/actions/admin";
 
 const STATUS: Record<string, { variant: BadgeProps["variant"]; label: string }> = {
@@ -252,6 +254,10 @@ export function CuponsAdminClient({
           onClose={() => setDetalhe(null)}
           onAprovar={aprovar}
           onRejeitar={setRejeitando}
+          onAtualizado={() => {
+            setDetalhe(null);
+            router.refresh();
+          }}
         />
       )}
 
@@ -418,6 +424,7 @@ function DetalheModal({
   onClose,
   onAprovar,
   onRejeitar,
+  onAtualizado,
 }: {
   cupom: AdminCupom;
   catalogo: CategoriaVisual[];
@@ -425,9 +432,34 @@ function DetalheModal({
   onClose: () => void;
   onAprovar: (id: string) => void;
   onRejeitar: (cupom: AdminCupom) => void;
+  onAtualizado: () => void;
 }) {
   const cat = resolverCategoriaVisual(cupom.categoriaId, catalogo);
   const s = STATUS[cupom.status] ?? STATUS.ativo;
+  const [editando, setEditando] = React.useState(false);
+  const [titulo, setTitulo] = React.useState(cupom.titulo);
+  const [beneficio, setBeneficio] = React.useState(cupom.beneficio);
+  const [validadeFim, setValidadeFim] = React.useState(cupom.validadeFim);
+  const [regrasTexto, setRegrasTexto] = React.useState(cupom.regras.join("\n"));
+  const [salvando, setSalvando] = React.useState(false);
+  const [erroEdit, setErroEdit] = React.useState<string | null>(null);
+
+  async function salvarEdicao() {
+    setErroEdit(null);
+    setSalvando(true);
+    const r = await adminEditarCupomAction(cupom.id, {
+      titulo,
+      beneficio,
+      validade_fim: validadeFim,
+      regras: regrasTexto.split("\n").map((x) => x.trim()).filter(Boolean),
+    });
+    setSalvando(false);
+    if (!r.ok) {
+      setErroEdit(r.erro);
+      return;
+    }
+    onAtualizado();
+  }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -482,6 +514,76 @@ function DetalheModal({
             fora de proporção. É a mesma queixa do relatório v2 §1.2 sobre o
             card, e aqui ela seria um defeito de moderação, não de estética. */}
         <ImagemModeracao cupom={cupom} />
+
+        {cupom.status !== "excluido" && (
+          <div className="mt-4">
+            {!editando ? (
+              <Button size="sm" variant="outline" onClick={() => setEditando(true)}>
+                <Pencil className="h-4 w-4" /> Corrigir campos
+              </Button>
+            ) : (
+              <div className="space-y-3 rounded-xl border border-border p-3">
+                <p className="text-xs text-muted-foreground">
+                  A correção fica registrada no histórico. O estabelecimento
+                  dono e o status não mudam.
+                </p>
+                <label className="block text-sm font-semibold">
+                  Título
+                  <Input
+                    className="mt-1"
+                    value={titulo}
+                    onChange={(e) => setTitulo(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Benefício
+                  <Input
+                    className="mt-1"
+                    value={beneficio}
+                    onChange={(e) => setBeneficio(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Validade
+                  <Input
+                    className="mt-1"
+                    type="date"
+                    value={validadeFim}
+                    onChange={(e) => setValidadeFim(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Regras (uma por linha)
+                  <Textarea
+                    className="mt-1"
+                    value={regrasTexto}
+                    onChange={(e) => setRegrasTexto(e.target.value)}
+                  />
+                </label>
+                {erroEdit && (
+                  <p className="text-sm font-semibold text-danger">{erroEdit}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void salvarEdicao()}
+                    disabled={salvando}
+                  >
+                    {salvando ? "Salvando…" : "Salvar correção"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditando(false)}
+                    disabled={salvando}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <Linha label="Benefício" valor={cupom.beneficio || "—"} full />
