@@ -1,24 +1,24 @@
 "use client";
 
 import * as React from "react";
-import { Search, ArrowDownUp, SearchX } from "lucide-react";
+import { Search, ArrowDownUp, SearchX, MapPin } from "lucide-react";
 
 import type { Cupom } from "@/lib/types";
 import type { CatalogoUrl, FiltroUrl } from "@/lib/taxonomia-url";
 import { nomeDaFolha, nomeDoSegmento } from "@/lib/taxonomia-url";
 import { DIAS_SEMANA, cupomDisponivelNoDia } from "@/lib/dias";
+import { distanciaKm, TEXTO_GEO_NEGADO } from "@/lib/distancia";
+import { extraDeFiltro, type FiltroConsumidor } from "@/lib/filtros-consumidor";
+import { ehEscassez, noContextoRegional } from "@/lib/descoberta";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { CouponListItem } from "@/components/coupon-list-item";
 import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { FiltroTaxonomiaChips } from "@/components/filtro-taxonomia-chips";
+import { useLocalizacaoDispositivo } from "@/components/localizacao-dispositivo";
 
-const chips = ["Ordenar", "Maior economia"] as const;
+const chips = ["Ordenar", "Maior economia", "Perto de mim"] as const;
 
-/**
- * Corpo client da busca. O filtro de taxonomia já veio do servidor
- * (`categoria_nova_id`); aqui só restam texto e dia da semana.
- */
 export function BuscarClient({
   cupons,
   diaHoje,
@@ -26,6 +26,7 @@ export function BuscarClient({
   catalogoVazio,
   filtro,
   diaInicial,
+  filtroCons,
 }: {
   cupons: Cupom[];
   diaHoje: string;
@@ -33,13 +34,27 @@ export function BuscarClient({
   catalogoVazio: boolean;
   filtro: FiltroUrl;
   diaInicial?: string;
+  filtroCons: FiltroConsumidor;
 }) {
   const [query, setQuery] = React.useState("");
-  const [chip, setChip] = React.useState<(typeof chips)[number]>("Ordenar");
+  const [chip, setChip] = React.useState<(typeof chips)[number]>(
+    filtroCons.perto ? "Perto de mim" : "Ordenar",
+  );
   const [dia, setDia] = React.useState<string>(diaInicial ?? "Todos");
+  const geo = useLocalizacaoDispositivo();
+
+  React.useEffect(() => {
+    if (chip === "Perto de mim" && geo.estado.status === "idle") {
+      void geo.pedir();
+    }
+    // pedir/estado.status: não incluir o objeto inteiro (nova ref a cada render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chip, geo.estado.status]);
+
+  const origem = geo.estado.status === "ok" ? { lat: geo.estado.lat, lng: geo.estado.lng } : null;
 
   const termo = query.trim().toLowerCase();
-  const filtrados = cupons
+  let filtrados = cupons
     .filter(
       (c) =>
         !termo ||
@@ -48,14 +63,45 @@ export function BuscarClient({
     )
     .filter((c) => dia === "Todos" || cupomDisponivelNoDia(c.dias, dia));
 
-  const resultados =
-    chip === "Maior economia"
-      ? [...filtrados].sort((a, b) => b.economia - a.economia)
-      : filtrados;
+  if (filtroCons.trilho === "novos") {
+    filtrados = filtrados.filter((c) => Boolean(c.publicadoEm));
+  }
+  if (filtroCons.trilho === "unidades") {
+    filtrados = filtrados.filter((c) => ehEscassez(c.limiteTotal, c.restantes));
+  }
+  if (filtroCons.trilho === "populares") {
+    filtrados = filtrados.filter((c) =>
+      noContextoRegional(c, filtroCons.cidade, filtroCons.bairro),
+    );
+  }
+
+  const comDistancia: Cupom[] = filtrados.map((c) => {
+    if (!origem || c.latitude == null || c.longitude == null) {
+      return { ...c, distanciaKm: undefined };
+    }
+    const km = distanciaKm(origem.lat, origem.lng, c.latitude, c.longitude);
+    return { ...c, distanciaKm: km ?? undefined };
+  });
+
+  let resultados = comDistancia;
+  if (chip === "Maior economia") {
+    resultados = [...comDistancia].sort((a, b) => b.economia - a.economia);
+  } else if (chip === "Perto de mim" && origem) {
+    resultados = [...comDistancia].sort((a, b) => {
+      if (a.distanciaKm == null && b.distanciaKm == null) return 0;
+      if (a.distanciaKm == null) return 1;
+      if (b.distanciaKm == null) return -1;
+      return a.distanciaKm - b.distanciaKm;
+    });
+  }
 
   const labelSeg = nomeDoSegmento(filtro.seg, catalogo);
   const labelCat = nomeDaFolha(filtro, catalogo);
   const labelFiltro = labelCat ?? labelSeg;
+  const extra = extraDeFiltro(filtroCons, dia === "Todos" ? undefined : dia);
+  const geoNegado =
+    chip === "Perto de mim" &&
+    (geo.estado.status === "negado" || geo.estado.status === "indisponivel");
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-6 pt-5">
@@ -89,11 +135,18 @@ export function BuscarClient({
               )}
             >
               {i === 0 && <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />}
+              {c === "Perto de mim" && <MapPin className="h-3.5 w-3.5" aria-hidden />}
               {c}
             </button>
           );
         })}
       </div>
+
+      {geoNegado && (
+        <p className="rounded-card border border-dashed border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+          {TEXTO_GEO_NEGADO}
+        </p>
+      )}
 
       {catalogoVazio ? (
         <p className="rounded-card border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
@@ -105,6 +158,7 @@ export function BuscarClient({
           catalogo={catalogo}
           filtro={filtro}
           dia={dia === "Todos" ? undefined : dia}
+          extra={extra}
         />
       )}
 
@@ -145,6 +199,10 @@ export function BuscarClient({
         })}
       </div>
 
+      {labelFiltro && (
+        <p className="text-xs font-semibold text-muted-foreground">{labelFiltro}</p>
+      )}
+
       {resultados.length > 0 ? (
         <div className="flex flex-col gap-3">
           {resultados.map((c) => (
@@ -152,25 +210,14 @@ export function BuscarClient({
               key={c.id}
               cupom={c}
               href={`/m/cupom/${c.id}`}
-              overlay={<CupomSeloUtilizado cupomId={c.id} variante="lista" />}
+              overlay={<CupomSeloUtilizado cupomId={c.id} />}
             />
           ))}
         </div>
       ) : (
-        <div className="grid place-items-center rounded-card border border-dashed border-border bg-card/60 px-6 py-16 text-center">
-          <div className="max-w-[240px]">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-muted text-muted-foreground">
-              <SearchX className="h-6 w-6" aria-hidden />
-            </div>
-            <h2 className="mt-4 text-base font-bold">Nenhum cupom encontrado</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {termo
-                ? `Não encontramos resultados para “${query}”. Tente outro termo de busca.`
-                : labelFiltro
-                  ? `Nenhum cupom de “${labelFiltro}”${dia !== "Todos" ? ` em “${dia}”` : ""}. Tente outro filtro.`
-                  : `Nenhum cupom disponível${dia !== "Todos" ? ` em “${dia}”` : ""}.`}
-            </p>
-          </div>
+        <div className="flex flex-col items-center gap-2 py-12 text-center">
+          <SearchX className="h-10 w-10 text-muted-foreground" />
+          <p className="text-sm font-semibold">Nenhum cupom encontrado</p>
         </div>
       )}
     </div>

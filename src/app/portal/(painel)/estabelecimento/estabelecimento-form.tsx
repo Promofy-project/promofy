@@ -13,16 +13,29 @@ export function EstabelecimentoForm({
   id,
   nomeInicial,
   cidadeInicial,
+  bairroInicial,
+  latitudeInicial,
+  longitudeInicial,
   logoInicial,
 }: {
   id: string;
   nomeInicial: string;
   cidadeInicial: string;
+  bairroInicial: string;
+  latitudeInicial: number | null;
+  longitudeInicial: number | null;
   logoInicial: string;
 }) {
   const router = useRouter();
   const [nome, setNome] = React.useState(nomeInicial);
   const [cidade, setCidade] = React.useState(cidadeInicial);
+  const [bairro, setBairro] = React.useState(bairroInicial);
+  const [latitude, setLatitude] = React.useState(
+    latitudeInicial != null ? String(latitudeInicial) : "",
+  );
+  const [longitude, setLongitude] = React.useState(
+    longitudeInicial != null ? String(longitudeInicial) : "",
+  );
   const [logo, setLogo] = React.useState<string | undefined>(undefined);
   const [salvando, setSalvando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -33,9 +46,14 @@ export function EstabelecimentoForm({
     setErro(null);
     setOk(false);
     setSalvando(true);
+    const lat = latitude.trim() === "" ? null : Number(latitude.replace(",", "."));
+    const lng = longitude.trim() === "" ? null : Number(longitude.replace(",", "."));
     const r = await salvarPerfilEstabAction({
       nome,
       cidade,
+      bairro,
+      latitude: lat,
+      longitude: lng,
       ...(logo !== undefined ? { logo } : {}),
     });
     setSalvando(false);
@@ -69,6 +87,40 @@ export function EstabelecimentoForm({
           value={cidade}
           onChange={(e) => setCidade(e.target.value)}
         />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="est-bairro" className="text-sm font-semibold">
+          Bairro
+        </label>
+        <Input
+          id="est-bairro"
+          value={bairro}
+          onChange={(e) => setBairro(e.target.value)}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="est-lat" className="text-sm font-semibold">
+            Latitude
+          </label>
+          <Input
+            id="est-lat"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            placeholder="-23.55"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="est-lng" className="text-sm font-semibold">
+            Longitude
+          </label>
+          <Input
+            id="est-lng"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            placeholder="-46.63"
+          />
+        </div>
       </div>
       <CampoImagem
         rotulo="Logo"

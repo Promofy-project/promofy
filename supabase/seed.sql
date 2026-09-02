@@ -21,14 +21,16 @@ insert into public.categorias (id, label, icon, gradiente, ordem) values
   ('pet',         'Pet',         'PawPrint',        'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)', 6);
 
 -- ESTABELECIMENTOS (6) — owner_id null até o seed de usuários --
+-- bairro/lat/lng: backfill de TESTE (CLIENT-RETURNS-02). e5 é remoto —
+-- coords NULL de propósito; runtime NÃO inventa localização.
 insert into public.estabelecimentos
-  (id, nome, categoria_id, cidade, status, rating, rating_count) values
-  ('e1', 'Sabor & Cia',          'alimentacao', 'São Paulo, SP',   'ativo',    4.8, 1240),
-  ('e2', 'PowerFit Academia',    'fitness',     'São Paulo, SP',   'ativo',    4.7,  890),
-  ('e3', 'Studio Bella',         'beleza',      'Campinas, SP',    'ativo',    4.9,  654),
-  ('e4', 'TechMais Eletrônicos', 'eletronicos', 'São Paulo, SP',   'pendente', 4.4, 2130),
-  ('e5', 'Saber+ Cursos',        'educacao',    'Remoto / Online', 'ativo',    4.8,  412),
-  ('e6', 'Mundo Pet',            'pet',         'Santo André, SP', 'suspenso', 4.7,  738);
+  (id, nome, categoria_id, cidade, bairro, latitude, longitude, status, rating, rating_count) values
+  ('e1', 'Sabor & Cia',          'alimentacao', 'São Paulo, SP',   'Bela Vista',  -23.5614, -46.6558, 'ativo',    4.8, 1240),
+  ('e2', 'PowerFit Academia',    'fitness',     'São Paulo, SP',   'Pinheiros',   -23.5617, -46.6825, 'ativo',    4.7,  890),
+  ('e3', 'Studio Bella',         'beleza',      'Campinas, SP',    'Centro',      -22.9056, -47.0608, 'ativo',    4.9,  654),
+  ('e4', 'TechMais Eletrônicos', 'eletronicos', 'São Paulo, SP',   'República',   -23.5430, -46.6420, 'pendente', 4.4, 2130),
+  ('e5', 'Saber+ Cursos',        'educacao',    'Remoto / Online', '',            null,     null,     'ativo',    4.8,  412),
+  ('e6', 'Mundo Pet',            'pet',         'Santo André, SP', 'Centro',      -23.6639, -46.5383, 'suspenso', 4.7,  738);
 
 -- CATEGORIAS POR ESTABELECIMENTO (Fase 4) ---------------------
 -- Junção obrigatória ANTES dos cupons (trigger checa categoria ∈ conjunto).
@@ -178,22 +180,32 @@ insert into public.cupons
    '{"descricao":"Seg a Sex, 11h às 15h"}'::jsonb,
    'expirado', false, 1.2, '', 101, 4.6, 210);
 
--- PLANOS (4 — copy do app, planosMobile) ---------------------
+-- PLANOS consumidor — fonte `public.planos`. Pagos = contrato ANUAL
+-- (12 meses). `periodo` é o rótulo da PARCELA, não um produto mensal.
+-- Promo = gratuito. VIP = convite. Cobrança (Mercado Pago) = WP BILLING.
 insert into public.planos
   (id, nome, preco, periodo, descricao, beneficios, destaque, bloqueado, badge, legenda, ordem) values
-  ('basico', 'Plano Básico', 9.9, '/mês', '',
+  ('promo', 'Plano Promo', 0, '',
+   'Gratuito. 1 cupom por mês quando a cobrança estiver no ar — até lá, o catálogo visível não finge cota.',
+   '["Acesso ao app e ao catálogo da sua cidade","Participação no ranking de pontuação","Sem mensalidade"]'::jsonb,
+   false, false, 'Gratuito', 'Plano gratuito. A cota de 1 cupom/mês depende da cobrança (Billing).', 0),
+  ('basico', 'Plano Básico', 9.9, '/mês',
+   'Contrato anual de 12 meses. Pague à vista ou em 12 parcelas. A parcela não é um plano mensal avulso.',
    '["Acesso a todas as ofertas disponíveis na cidade","Possibilidade de resgatar até 5 cupons por mês","Participação no ranking de pontuação para premiações","Notificações personalizadas de ofertas na sua região"]'::jsonb,
-   false, false, null, null, 1),
-  ('plus', 'Plano Plus', 19.9, '/mês', '',
+   false, false, null, 'Valor da parcela do contrato anual (12 meses).', 1),
+  ('plus', 'Plano Plus', 19.9, '/mês',
+   'Contrato anual de 12 meses. Pague à vista ou em 12 parcelas. A parcela não é um plano mensal avulso.',
    '["Acesso a todas as ofertas disponíveis na cidade e regiões próximas","Cupons ilimitados por mês","Participação no ranking de pontuação para premiações","Notificações personalizadas de ofertas na sua região"]'::jsonb,
-   true, false, 'Mais popular', null, 2),
-  ('familia', 'Plano Família', 29.9, '/mês', '',
+   true, false, 'Mais popular', 'Valor da parcela do contrato anual (12 meses).', 2),
+  ('familia', 'Plano Família', 29.9, '/mês',
+   'Contrato anual de 12 meses. Pague à vista ou em 12 parcelas. A parcela não é um plano mensal avulso.',
    '["Acesso a todas as ofertas para até 4 perfis cadastrados","Cupons ilimitados por mês, compartilhados entre os membros","Participação de todos os membros no ranking de pontuação","Benefícios exclusivos como cupons bônus a cada 3 meses"]'::jsonb,
-   false, false, null, null, 3),
-  ('vip', 'Plano VIP', 0, '', '',
+   false, false, null, 'Valor da parcela do contrato anual (12 meses).', 3),
+  ('vip', 'Plano VIP', 0, '',
+   'Somente por convite. Contrato anual quando liberado.',
    '["Acesso antecipado às ofertas mais exclusivas","Cupons ilimitados e sem restrições geográficas (cidades da mesma rede Promofy)","Participação no ranking de pontuação para premiações (com pontuação dobrada)","Convites para eventos e promoções especiais com parceiros"]'::jsonb,
-   false, true, 'Em breve',
-   'Plano exclusivo — liberado apenas para membros convidados ou por conquista. Saiba mais.', 4);
+   false, true, 'Convite',
+   'Plano exclusivo — liberado apenas para membros convidados ou por conquista.', 4);
 
 -- CONFIG_PONTOS (fonte única — espelha PONTOS_POR_ACAO) -------
 insert into public.config_pontos (acao, pontos) values
@@ -233,6 +245,39 @@ cross join lateral generate_series(1, v.qtd);
 update public.cupons
    set publicado_em = criado_em
  where status not in ('pendente', 'rejeitado');
+
+-- CLIENT-RETURNS-02: tipo/mínimo/formas EXPLÍCITOS no seed (não inferidos).
+-- c03/c04/c05/c06 ilimitados (limite_total null) — nunca recebem selo de escassez.
+-- c06 é o frete_gratis PÚBLICO (c07 mora em e4 pendente, fora do catálogo).
+update public.cupons set
+  tipo_promocao = 'leve_mais_pague_menos',
+  formas_consumo = '["local"]'::jsonb
+ where id = 'c01';
+update public.cupons set
+  tipo_promocao = 'desconto',
+  valor_compra_minimo = 40,
+  formas_consumo = '["local"]'::jsonb
+ where id = 'c02';
+update public.cupons set
+  tipo_promocao = 'desconto',
+  formas_consumo = '["local"]'::jsonb
+ where id in ('c03', 'c05');
+update public.cupons set
+  tipo_promocao = 'desconto',
+  formas_consumo = '["retirada"]'::jsonb
+ where id = 'c04';
+update public.cupons set
+  tipo_promocao = 'frete_gratis',
+  formas_consumo = '["delivery"]'::jsonb
+ where id = 'c06';
+update public.cupons set
+  tipo_promocao = 'frete_gratis',
+  formas_consumo = '["delivery"]'::jsonb
+ where id = 'c07';
+update public.cupons set
+  tipo_promocao = 'desconto',
+  formas_consumo = '["retirada"]'::jsonb
+ where id = 'c08';
 
 -- MARCO 1 (migration 20260830160000/170000) — backfill dos shadows UUID
 -- e dos snapshots de taxonomia.

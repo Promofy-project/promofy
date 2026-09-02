@@ -8,79 +8,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useMobileFlow } from "@/components/mobile-flow-provider";
+import { salvarOnboardingAction } from "@/lib/actions/preferencias";
+import { OPCOES_ONBOARDING } from "@/lib/preferencias";
 
-interface Step {
-  q: string;
-  options: string[];
-}
-
-const STEPS: Step[] = [
-  {
-    q: "Qual o seu principal objetivo usando promofy?",
-    options: [
-      "Economizar em restaurantes e cafés",
-      "Cuidar da saúde e bem-estar",
-      "Aproveitar lazer e entretenimento",
-      "Encontrar serviços essenciais com desconto",
-      "Comprar produtos com vantagens",
-    ],
-  },
-  {
-    q: "Quais tipos de lugares você mais costuma frequentar?",
-    options: [
-      "Restaurantes",
-      "Hamburguerias e Lanchonetes",
-      "Cafeterias e Docerias",
-      "Academias e Centros Esportivos",
-      "Salões de Beleza e Barbearias",
-      "Clínicas de Estética ou Spas",
-      "Cinemas e Eventos Culturais",
-      "Lojas de Moda",
-      "Petshops e Serviços para Animais",
-      "Serviços automotivos",
-    ],
-  },
-  {
-    q: "Qual seu estilo de consumo favorito?",
-    options: [
-      "Prático e rápido (delivery, take away)",
-      "Experiência completa no local (refeições, estética, lazer)",
-      "Produtos e serviços para usar em casa",
-    ],
-  },
-  {
-    q: "Em quais dias da semana você mais costuma consumir ofertas?",
-    options: [
-      "Segunda a sexta (dias úteis)",
-      "Sábados",
-      "Domingos e feriados",
-    ],
-  },
-  {
-    q: "Você prefere cupons de:",
-    options: [
-      "Descontos diretos (ex: 20% off)",
-      "Benefícios extra (ex: 2 por 1, brinde grátis)",
-      "Combos promocionais (ex: refeição + sobremesa)",
-    ],
-  },
-  {
-    q: "Você gostaria de receber sugestões especiais próximas da sua localização?",
-    options: [
-      "Sim, sempre!",
-      "Sim, mas apenas em horários comerciais",
-      "Não, prefiro ver manualmente",
-    ],
-  },
-  {
-    q: "Você gostaria de acumular pontos ou recompensas ao consumir cupons?",
-    options: [
-      "Sim, adoro programas de fidelidade!",
-      "Talvez, só se for vantajoso",
-      "Não me interesso",
-    ],
-  },
-];
+const STEPS = OPCOES_ONBOARDING;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -108,7 +39,18 @@ export default function OnboardingPage() {
     else setDone(true);
   }
 
-  function aplicarCodigo() {
+  const [salvando, setSalvando] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
+
+  async function aplicarCodigo() {
+    setErro(null);
+    setSalvando(true);
+    const r = await salvarOnboardingAction(answers);
+    setSalvando(false);
+    if (!r.ok) {
+      setErro(r.erro);
+      return;
+    }
     triggerTutorial();
     router.push("/m");
   }
@@ -127,11 +69,15 @@ export default function OnboardingPage() {
           <p className="mt-2 text-sm text-white/80">
             Tudo pronto para você economizar de verdade na sua cidade.
           </p>
+          {erro && (
+            <p className="mt-3 text-sm font-semibold text-yellow">{erro}</p>
+          )}
           <Button
-            onClick={aplicarCodigo}
+            onClick={() => void aplicarCodigo()}
+            disabled={salvando}
             className="mt-7 w-full bg-white text-primary hover:bg-white/90"
           >
-            Aplicar código
+            {salvando ? "Salvando…" : "Começar"}
           </Button>
         </div>
       </div>

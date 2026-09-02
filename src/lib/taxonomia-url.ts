@@ -16,6 +16,8 @@
  * pública — se chegar, é ignorado.
  */
 
+import type { ExtraBusca } from "./filtros-consumidor";
+
 export interface SegmentoUrl {
   slug: string;
   nome: string;
@@ -213,13 +215,20 @@ export function precisaCanonicalizar(bruto: FiltroUrl, canon: FiltroUrl): boolea
 
 export function hrefBusca(
   filtro: FiltroUrl,
-  extra?: { dia?: string; base?: string },
+  extra?: ExtraBusca,
 ): string {
   const origem = extra?.base?.trim() || "/m/buscar";
   const p = new URLSearchParams();
   if (filtro.seg && !ehUuid(filtro.seg)) p.set("seg", filtro.seg);
   if (filtro.cat && !ehUuid(filtro.cat)) p.set("cat", filtro.cat);
   if (extra?.dia) p.set("dia", extra.dia);
+  if (extra?.cidade) p.set("cidade", extra.cidade);
+  if (extra?.bairro) p.set("bairro", extra.bairro);
+  if (extra?.promo) p.set("promo", extra.promo);
+  if (extra?.consumo) p.set("consumo", extra.consumo);
+  if (extra?.min) p.set("min", extra.min);
+  if (extra?.perto) p.set("perto", extra.perto);
+  if (extra?.trilho) p.set("trilho", extra.trilho);
   const q = p.toString();
   return q ? `${origem}?${q}` : origem;
 }

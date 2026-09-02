@@ -34,6 +34,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      aceites_documento: {
+        Row: {
+          aceito_em: string
+          documento: string
+          id: number
+          usuario_id: string
+          versao: string
+        }
+        Insert: {
+          aceito_em?: string
+          documento: string
+          id?: never
+          usuario_id: string
+          versao: string
+        }
+        Update: {
+          aceito_em?: string
+          documento?: string
+          id?: never
+          usuario_id?: string
+          versao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aceites_documento_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assinaturas: {
         Row: {
           criado_em: string
@@ -308,6 +340,38 @@ export type Database = {
         }
         Relationships: []
       }
+      consentimentos_usuario: {
+        Row: {
+          concedido_em: string | null
+          finalidade: string
+          revogado_em: string | null
+          usuario_id: string
+          versao: string
+        }
+        Insert: {
+          concedido_em?: string | null
+          finalidade: string
+          revogado_em?: string | null
+          usuario_id: string
+          versao: string
+        }
+        Update: {
+          concedido_em?: string | null
+          finalidade?: string
+          revogado_em?: string | null
+          usuario_id?: string
+          versao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consentimentos_usuario_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cupom_eventos: {
         Row: {
           categoria_id: string
@@ -401,9 +465,11 @@ export type Database = {
           regras: Json
           status: Database["public"]["Enums"]["status_cupom"]
           taxas: Json
+          tipo_promocao: Database["public"]["Enums"]["tipo_promocao"]
           titulo: string
           validade_fim: string
           validade_inicio: string | null
+          valor_compra_minimo: number | null
         }
         Insert: {
           atualizado_em?: string
@@ -434,9 +500,11 @@ export type Database = {
           regras?: Json
           status?: Database["public"]["Enums"]["status_cupom"]
           taxas?: Json
+          tipo_promocao?: Database["public"]["Enums"]["tipo_promocao"]
           titulo: string
           validade_fim: string
           validade_inicio?: string | null
+          valor_compra_minimo?: number | null
         }
         Update: {
           atualizado_em?: string
@@ -467,9 +535,11 @@ export type Database = {
           regras?: Json
           status?: Database["public"]["Enums"]["status_cupom"]
           taxas?: Json
+          tipo_promocao?: Database["public"]["Enums"]["tipo_promocao"]
           titulo?: string
           validade_fim?: string
           validade_inicio?: string | null
+          valor_compra_minimo?: number | null
         }
         Relationships: [
           {
@@ -737,12 +807,15 @@ export type Database = {
       estabelecimentos: {
         Row: {
           atualizado_em: string
+          bairro: string
           categoria_id: string
           categoria_principal_id: string | null
           cidade: string
           criado_em: string
           id: string
+          latitude: number | null
           logo: string
+          longitude: number | null
           nome: string
           owner_id: string | null
           rating: number
@@ -751,12 +824,15 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string
+          bairro?: string
           categoria_id: string
           categoria_principal_id?: string | null
           cidade: string
           criado_em?: string
           id?: string
+          latitude?: number | null
           logo?: string
+          longitude?: number | null
           nome: string
           owner_id?: string | null
           rating?: number
@@ -765,12 +841,15 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string
+          bairro?: string
           categoria_id?: string
           categoria_principal_id?: string | null
           cidade?: string
           criado_em?: string
           id?: string
+          latitude?: number | null
           logo?: string
+          longitude?: number | null
           nome?: string
           owner_id?: string | null
           rating?: number
@@ -978,6 +1057,53 @@ export type Database = {
             foreignKeyName: "pontos_transacoes_usuario_id_fkey"
             columns: ["usuario_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preferencias_usuario: {
+        Row: {
+          atualizado_em: string
+          beneficio_preferido: string[]
+          categorias: string[]
+          dias: string[]
+          estilo_consumo: string[]
+          gamificacao: string[]
+          locais: Json
+          objetivos: string[]
+          segmentos: string[]
+          usuario_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          beneficio_preferido?: string[]
+          categorias?: string[]
+          dias?: string[]
+          estilo_consumo?: string[]
+          gamificacao?: string[]
+          locais?: Json
+          objetivos?: string[]
+          segmentos?: string[]
+          usuario_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          beneficio_preferido?: string[]
+          categorias?: string[]
+          dias?: string[]
+          estilo_consumo?: string[]
+          gamificacao?: string[]
+          locais?: Json
+          objetivos?: string[]
+          segmentos?: string[]
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preferencias_usuario_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1218,6 +1344,14 @@ export type Database = {
         Args: { p_row: Database["public"]["Tables"]["cupons_usuario"]["Row"] }
         Returns: Json
       }
+      estoque_cupons: {
+        Args: never
+        Returns: {
+          consumidos: number
+          cupom_id: string
+          limite_total: number
+        }[]
+      }
       excluir_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       favoritar_estabelecimento: { Args: { p_est_id: string }; Returns: Json }
       gerar_codigo_cupom: { Args: never; Returns: string }
@@ -1248,6 +1382,14 @@ export type Database = {
         Returns: Json
       }
       saldo_pontos: { Args: never; Returns: number }
+      sinais_descoberta: {
+        Args: { p_desde: string }
+        Returns: {
+          ativacoes: number
+          cupom_id: string
+          validacoes: number
+        }[]
+      }
       validar_cupom: { Args: { p_codigo: string }; Returns: Json }
       validar_cupom_por_ativacao: {
         Args: { p_cpf: string; p_row_id: number }
@@ -1269,6 +1411,7 @@ export type Database = {
       status_cupom_usuario: "ativo" | "validado" | "expirado"
       status_estabelecimento: "ativo" | "pendente" | "suspenso"
       tipo_evento_cupom: "visualizacao" | "clique" | "ativacao" | "validacao"
+      tipo_promocao: "desconto" | "leve_mais_pague_menos" | "frete_gratis"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1414,6 +1557,7 @@ export const Constants = {
       status_cupom_usuario: ["ativo", "validado", "expirado"],
       status_estabelecimento: ["ativo", "pendente", "suspenso"],
       tipo_evento_cupom: ["visualizacao", "clique", "ativacao", "validacao"],
+      tipo_promocao: ["desconto", "leve_mais_pague_menos", "frete_gratis"],
     },
   },
 } as const

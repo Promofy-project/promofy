@@ -93,6 +93,9 @@ export default async function PortalEstabelecimento() {
               id={est.id}
               nomeInicial={est.nome}
               cidadeInicial={est.cidade}
+              bairroInicial={est.bairro}
+              latitudeInicial={est.latitude}
+              longitudeInicial={est.longitude}
               logoInicial={est.logo}
             />
             <dl className="mt-6 flex flex-col gap-4 border-t border-border pt-4 text-sm">

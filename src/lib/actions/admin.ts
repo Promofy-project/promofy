@@ -251,8 +251,9 @@ export async function adminEditarCupomAction(
       campo_proibido: "Este campo não pode ser alterado.",
       titulo_vazio: "Informe o título.",
       validade_vazia: "Informe a validade.",
-      categoria_invalida: "Categoria inválida para este estabelecimento.",
-      patch_invalido: "Nada para alterar.",
+                    categoria_invalida: "Categoria inválida para este estabelecimento.",
+                    tipo_invalido: "Tipo de promoção inválido.",
+                    patch_invalido: "Nada para alterar.",
     };
     return { ok: false, erro: MSG[r?.motivo ?? ""] ?? "Não foi possível salvar." };
   } catch {

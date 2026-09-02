@@ -8,6 +8,7 @@ import type { AdminCupom } from "@/lib/data/admin";
 import type { CategoriaVisual } from "@/lib/categoria-visual";
 import { resolverCategoriaVisual, rotuloHierarquico } from "@/lib/categoria-visual";
 import { regrasParaExibir } from "@/lib/cupom-campos";
+import { TIPOS_PROMOCAO } from "@/lib/tipo-promocao";
 import { rotuloAcao } from "@/lib/moderacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { cn, formatBRL, formatShortDate, formatDateTimeBRT } from "@/lib/utils";
@@ -440,6 +441,10 @@ function DetalheModal({
   const [titulo, setTitulo] = React.useState(cupom.titulo);
   const [beneficio, setBeneficio] = React.useState(cupom.beneficio);
   const [validadeFim, setValidadeFim] = React.useState(cupom.validadeFim);
+  const [tipoPromocao, setTipoPromocao] = React.useState(cupom.tipoPromocao);
+  const [valorMinimo, setValorMinimo] = React.useState(
+    cupom.valorCompraMinimo != null ? String(cupom.valorCompraMinimo) : "",
+  );
   const [regrasTexto, setRegrasTexto] = React.useState(cupom.regras.join("\n"));
   const [salvando, setSalvando] = React.useState(false);
   const [erroEdit, setErroEdit] = React.useState<string | null>(null);
@@ -451,6 +456,8 @@ function DetalheModal({
       titulo,
       beneficio,
       validade_fim: validadeFim,
+      tipo_promocao: tipoPromocao,
+      valor_compra_minimo: valorMinimo.trim() === "" ? null : valorMinimo,
       regras: regrasTexto.split("\n").map((x) => x.trim()).filter(Boolean),
     });
     setSalvando(false);
@@ -550,6 +557,31 @@ function DetalheModal({
                     type="date"
                     value={validadeFim}
                     onChange={(e) => setValidadeFim(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Tipo de promoção
+                  <select
+                    className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={tipoPromocao}
+                    onChange={(e) => setTipoPromocao(e.target.value)}
+                  >
+                    {TIPOS_PROMOCAO.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold">
+                  Valor mínimo (vazio = sem mínimo)
+                  <Input
+                    className="mt-1"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={valorMinimo}
+                    onChange={(e) => setValorMinimo(e.target.value)}
                   />
                 </label>
                 <label className="block text-sm font-semibold">

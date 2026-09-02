@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { buscarCuponsBusca } from "@/lib/data/cupons";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import { buscarCatalogoFiltrado } from "@/lib/data/descoberta";
 import { DIAS_SEMANA, diaSemanaBrt } from "@/lib/dias";
 import {
   diaDeQuery,
@@ -12,6 +12,10 @@ import {
   precisaCanonicalizar,
   queryPrecisaLimpeza,
 } from "@/lib/taxonomia-url";
+import {
+  extraDeFiltro,
+  filtroConsumidorDeQuery,
+} from "@/lib/filtros-consumidor";
 import { BuscarClient } from "./buscar-client";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +27,13 @@ export default async function BuscarPage({
     seg?: string | string[];
     cat?: string | string[];
     dia?: string | string[];
+    cidade?: string | string[];
+    bairro?: string | string[];
+    promo?: string | string[];
+    consumo?: string | string[];
+    min?: string | string[];
+    perto?: string | string[];
+    trilho?: string | string[];
   };
 }) {
   const filtroTax = await buscarFiltrosTaxonomia();
@@ -31,13 +42,14 @@ export default async function BuscarPage({
   const bruto = filtroDeQuery(searchParams);
   const filtro = normalizarFiltroUrl(bruto, filtroTax.catalogoUrl);
   const dia = diaDeQuery(searchParams?.dia, DIAS_SEMANA);
+  const filtroCons = filtroConsumidorDeQuery(searchParams);
 
   if (precisaCanonicalizar(bruto, filtro) || queryPrecisaLimpeza(searchParams)) {
-    redirect(hrefBusca(filtro, { dia }));
+    redirect(hrefBusca(filtro, extraDeFiltro(filtroCons, dia)));
   }
 
   const ids = idsParaConsulta(filtro, filtroTax.catalogoUrl);
-  const cupons = await buscarCuponsBusca(ids, filtroTax);
+  const cupons = await buscarCatalogoFiltrado(ids, filtroCons, filtroTax);
 
   return (
     <BuscarClient
@@ -47,6 +59,7 @@ export default async function BuscarPage({
       catalogoVazio={categorias.length === 0}
       filtro={filtro}
       diaInicial={dia}
+      filtroCons={filtroCons}
     />
   );
 }

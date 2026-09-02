@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/icon";
 import { FavoriteButton } from "@/components/favorite-button";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
+import { ehEscassez } from "@/lib/descoberta";
 
 export function CouponCard({
   cupom,
@@ -98,6 +99,15 @@ export function CouponCard({
             Oferta exclusiva
           </Badge>
         )}
+        {ehEscassez(cupom.limiteTotal, cupom.restantes) && (
+          <Badge
+            variant="danger"
+            className="absolute left-3 top-3 z-[2] shadow-sm"
+            style={cupom.destaque ? { top: "2.5rem" } : undefined}
+          >
+            Últimas unidades
+          </Badge>
+        )}
         <FavoriteButton
           estabelecimentoId={cupom.estabelecimentoId}
           className="absolute right-3 top-3 z-[2]"
@@ -129,10 +139,14 @@ export function CouponCard({
         </p>
 
         {compact ? (
-          cupom.cidade ? (
+          cupom.cidade || cupom.distanciaKm != null ? (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{cupom.cidade}</span>
+              <span className="truncate">
+                {cupom.distanciaKm != null
+                  ? `${cupom.distanciaKm < 10 ? cupom.distanciaKm.toFixed(1) : Math.round(cupom.distanciaKm)} km`
+                  : cupom.cidade}
+              </span>
             </div>
           ) : null
         ) : (

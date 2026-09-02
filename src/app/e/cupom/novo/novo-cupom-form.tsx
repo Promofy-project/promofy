@@ -11,6 +11,7 @@ import {
   PRAZO_ATIVACAO_MIN_HORAS,
   TAXAS,
 } from "@/lib/cupom-campos";
+import { TIPOS_PROMOCAO } from "@/lib/tipo-promocao";
 import { DIAS_SEMANA } from "@/lib/dias";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,14 @@ export function NovoCupomForm({
   const [formasConsumo, setFormasConsumo] = React.useState<string[]>(
     cupomInicial?.formasConsumo ?? [],
   );
+  const [tipoPromocao, setTipoPromocao] = React.useState(
+    cupomInicial?.tipoPromocao ?? "desconto",
+  );
+  const [valorMinimo, setValorMinimo] = React.useState(
+    cupomInicial?.valorCompraMinimo != null
+      ? String(cupomInicial.valorCompraMinimo)
+      : "",
+  );
   // `undefined` = o usuário não mexeu na imagem. Nunca vira "" sozinho: era
   // assim que o form reduzido apagaria a foto em silêncio (Fase 6.5).
   const [imagem, setImagem] = React.useState<string | undefined>(undefined);
@@ -206,6 +215,8 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      tipoPromocao,
+      valorCompraMinimo: valorMinimo.trim() ? Number(valorMinimo.replace(",", ".")) : null,
       regras: regrasTexto.split("\n").map((r) => r.trim()).filter(Boolean),
       // CONTRATO PARCIAL: a chave só entra quando o usuário mexeu na imagem.
       ...(imagem !== undefined ? { imagem } : {}),
@@ -308,6 +319,38 @@ export function NovoCupomForm({
         selecionados={formasConsumo}
         onToggle={(id) => toggleEm(setFormasConsumo, id)}
         ajuda="Onde o cupom vale."
+      />
+
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm font-semibold">Tipo de promoção</p>
+        <div className="flex flex-wrap gap-2">
+          {TIPOS_PROMOCAO.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTipoPromocao(t.id)}
+              aria-pressed={tipoPromocao === t.id}
+              className={cn(
+                "h-9 rounded-lg border px-3 text-sm font-semibold",
+                tipoPromocao === t.id
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-surface text-muted-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Field
+        label="Valor mínimo de compra (opcional)"
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step="0.01"
+        placeholder="Sem mínimo"
+        value={valorMinimo}
+        onChange={(e) => setValorMinimo(e.target.value)}
       />
 
       <Chips

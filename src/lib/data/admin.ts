@@ -55,6 +55,8 @@ export interface AdminCupom {
   prazoAtivacaoHoras: number;
   regras: string[];
   horarios: string;
+  tipoPromocao: string;
+  valorCompraMinimo: number | null;
   criadoEm: string;
   /** Trilha de moderação, cronológica. Vazia nos cupons anteriores à Fase 6.5. */
   historico: EntradaHistoricoAdmin[];
@@ -116,6 +118,8 @@ export async function buscarCuponsAdmin(): Promise<AdminCupom[]> {
     prazoAtivacaoHoras: row.prazo_ativacao_horas,
     regras: regrasArr(row.regras),
     horarios: horariosDesc(row.horarios),
+    tipoPromocao: (row as { tipo_promocao?: string }).tipo_promocao ?? "desconto",
+    valorCompraMinimo: (row as { valor_compra_minimo?: number | null }).valor_compra_minimo ?? null,
     criadoEm: row.criado_em,
     historico: (historicos.get(row.id) ?? []).map((e) => ({
       ...e,

@@ -12,6 +12,7 @@ import {
   PRAZO_ATIVACAO_MIN_HORAS,
   TAXAS,
 } from "@/lib/cupom-campos";
+import { TIPOS_PROMOCAO } from "@/lib/tipo-promocao";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -122,6 +123,14 @@ export function NovoCupomForm({
   const [taxas, setTaxas] = React.useState<string[]>(cupomInicial?.taxas ?? []);
   const [formasConsumo, setFormasConsumo] = React.useState<string[]>(
     cupomInicial?.formasConsumo ?? [],
+  );
+  const [tipoPromocao, setTipoPromocao] = React.useState(
+    cupomInicial?.tipoPromocao ?? "desconto",
+  );
+  const [valorMinimo, setValorMinimo] = React.useState(
+    cupomInicial?.valorCompraMinimo != null
+      ? String(cupomInicial.valorCompraMinimo)
+      : "",
   );
   const [limiteUsuarioIlimitado, setLimiteUsuarioIlimitado] = React.useState(
     cupomInicial ? cupomInicial.limiteUsuario === null : false,
@@ -250,6 +259,8 @@ export function NovoCupomForm({
       limiteTotalIlimitado,
       taxas,
       formasConsumo,
+      tipoPromocao,
+      valorCompraMinimo: valorMinimo.trim() ? Number(valorMinimo.replace(",", ".")) : null,
       regras: regrasTexto.split("\n").map((r) => r.trim()).filter(Boolean),
       // CONTRATO PARCIAL: só entra quando o usuário mexeu na imagem.
       ...(imagem !== undefined ? { imagem } : {}),
@@ -399,6 +410,43 @@ export function NovoCupomForm({
             <span className="text-xs text-muted-foreground">
               Onde o cupom vale. Sem seleção, o app não exibe esta informação.
             </span>
+          </Field>
+
+          <Field label="Tipo de promoção">
+            <div className="flex flex-wrap gap-2">
+              {TIPOS_PROMOCAO.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTipoPromocao(t.id)}
+                  aria-pressed={tipoPromocao === t.id}
+                  className={cn(
+                    "h-9 rounded-lg border px-3 text-sm font-semibold transition-colors",
+                    tipoPromocao === t.id
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Escolha explícita — o app não adivinha pelo título.
+            </span>
+          </Field>
+
+          <Field label="Valor mínimo de compra (opcional)" htmlFor="f-minimo">
+            <Input
+              id="f-minimo"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="Sem mínimo"
+              value={valorMinimo}
+              onChange={(e) => setValorMinimo(e.target.value)}
+            />
           </Field>
 
           <Field label="Taxas NÃO cobertas pelo benefício">

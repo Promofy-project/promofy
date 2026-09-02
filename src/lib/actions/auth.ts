@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { MENSAGEM_CADASTRO_GENERICA, type EstadoAuth } from "@/lib/auth-estado";
+import {
+  DOCUMENTO_TERMOS_CONSUMIDOR,
+  VERSAO_TERMOS_CONSUMIDOR,
+} from "@/lib/documentos-legais";
 
 /**
  * Autenticação no SERVIDOR (Fase 8, correção do achado do smoke).
@@ -162,8 +166,15 @@ export async function cadastrarAction(
     email,
     password: senha,
     options: {
-      // yyyy-mm-dd do input type=date — validado no trigger.
-      data: { nome, cpf, telefone: celular, nascimento },
+      data: {
+        nome,
+        cpf,
+        telefone: celular,
+        nascimento,
+        aceito_termos: "1",
+        termos_documento: DOCUMENTO_TERMOS_CONSUMIDOR,
+        termos_versao: VERSAO_TERMOS_CONSUMIDOR,
+      },
     },
   });
 

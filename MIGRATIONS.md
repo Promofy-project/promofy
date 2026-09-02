@@ -1748,3 +1748,15 @@ read-only contra o hospedado; nada aplicado.
 - **Runtime em produção:** `dpl_8mhXYvQhQPUTR2PGmmeGMSG2LGt3` continua `READY`, `production`, commit
   `038fac4`/`main` — sem novo deployment desde o Marco 2A. Não foi feito novo smoke de escrita (só
   confirmação de saúde/identidade do deployment).
+
+---
+
+## CLIENT-RETURNS-02 — descoberta do consumidor (filtros, geo, preferências, planos)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 38 | `20260902140000_cr02_descoberta_consumidor.sql` | Enum `tipo_promocao` + `cupons.valor_compra_minimo`; `estabelecimentos.bairro/latitude/longitude` (par + range); tabelas `preferencias_usuario`, `consentimentos_usuario`, `aceites_documento` (RLS dono); `handle_new_user` grava aceite versionado; RPCs batch `sinais_descoberta` / `estoque_cupons`; `checar_edicao_cupom` e `admin_editar_cupom` passam a enxergar tipo/mínimo. |
+
+> **Obs. 38:** lat/lng do **consumidor** não entram no banco — só as coordenadas públicas do ponto de venda. Default `tipo_promocao='desconto'` é o tipo genérico do schema (janela código-antigo), não adivinhação de título. `valor_compra_minimo` NULL = sem piso. Consentimento é `(usuario, finalidade, versao, concedido_em, revogado_em)`, não um boolean solto. Recusar personalização não bloqueia o app.
+
+> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita `20260902120000` nem `20260902130000`.

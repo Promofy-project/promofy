@@ -49,8 +49,8 @@ export interface Cupom {
    * Rua, telefone e WhatsApp NÃO existem no schema — a UI não inventa.
    */
   cidade?: string;
-  /** Coluna-protótipo no cupom — não usar como ranking público. */
-  distanciaKm: number;
+  /** Coluna-protótipo no cupom — NÃO usar como ranking. Distância real só no cliente, após geolocalização. */
+  distanciaKm?: number;
   /** Coluna-protótipo no cupom — não é avaliação de consumidor. */
   rating: number; // 0–5
   avaliacoes: number;
@@ -82,19 +82,28 @@ export interface Cupom {
    */
   prazoAtivacaoHoras?: number;
   destaque?: boolean; // "Oferta exclusiva"
+  bairro?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  tipoPromocao?: string;
+  valorCompraMinimo?: number | null;
+  limiteTotal?: number | null;
+  restantes?: number | null;
+  publicadoEm?: string | null;
+  categoriaFolhaSlug?: string;
 }
 
 export interface Plano {
   id: string;
   nome: string;
-  preco: number; // mensal
-  periodo: string; // "/mês"
+  preco: number; // parcela do contrato anual, ou 0 se gratuito
+  periodo: string; // rótulo da parcela ("/mês"), não um produto mensal
   descricao: string;
   beneficios: string[];
-  destaque?: boolean; // plano em evidência
-  bloqueado?: boolean; // VIP — em breve
+  destaque?: boolean;
+  bloqueado?: boolean;
   badge?: string;
-  legenda?: string; // nota abaixo do botão (ex.: regra do plano VIP)
+  legenda?: string;
 }
 
 export interface Estabelecimento {

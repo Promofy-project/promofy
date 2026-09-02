@@ -21,6 +21,7 @@ export interface CheckboxProps {
    */
   name?: string;
   required?: boolean;
+  value?: string;
 }
 
 const BASE =

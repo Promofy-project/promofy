@@ -10,6 +10,7 @@ import {
   type CatalogoUrl,
   type FiltroUrl,
 } from "@/lib/taxonomia-url";
+import type { ExtraBusca } from "@/lib/filtros-consumidor";
 
 /**
  * Filtro hierárquico SEGMENTO → CATEGORIA.
@@ -24,6 +25,7 @@ export function FiltroTaxonomiaChips({
   catalogo,
   filtro,
   dia,
+  extra,
   onSelecionar,
   icones = false,
   base,
@@ -31,6 +33,7 @@ export function FiltroTaxonomiaChips({
   catalogo: CatalogoUrl;
   filtro: FiltroUrl;
   dia?: string;
+  extra?: ExtraBusca;
   onSelecionar?: (prox: FiltroUrl) => void;
   /** Home/busca: o ícone do catálogo viaja com o rótulo (nunca sozinho). */
   icones?: boolean;
@@ -44,7 +47,7 @@ export function FiltroTaxonomiaChips({
   }
 
   function hrefDe(prox: FiltroUrl) {
-    return hrefBusca(prox, { dia, base });
+    return hrefBusca(prox, { ...extra, dia, base });
   }
 
   function Chip({
