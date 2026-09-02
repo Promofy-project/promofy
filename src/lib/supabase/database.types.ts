@@ -1328,6 +1328,29 @@ export type Database = {
       avisos_nao_lidos: { Args: never; Returns: number }
       buscar_ativacoes_por_cpf: { Args: { p_cpf: string }; Returns: Json }
       cpf_dv_valido: { Args: { p_cpf: string }; Returns: boolean }
+      crm_cliente_detalhe: { Args: { p_usuario_id: string }; Returns: Json }
+      crm_clientes: {
+        Args: {
+          p_filtro?: string
+          p_pagina?: number
+          p_por_pagina?: number
+          p_q?: string
+        }
+        Returns: Json
+      }
+      crm_export_dados: {
+        Args: { p_filtro?: string; p_q?: string }
+        Returns: Json
+      }
+      crm_registrar_exportacao: {
+        Args: {
+          p_filtros?: Json
+          p_formato: string
+          p_linhas_clientes: number
+          p_linhas_historico: number
+        }
+        Returns: Json
+      }
       definir_status_estabelecimento: {
         Args: { p_est_id: string; p_status: string }
         Returns: Json

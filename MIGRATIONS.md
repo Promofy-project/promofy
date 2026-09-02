@@ -1780,3 +1780,16 @@ read-only contra o hospedado; nada aplicado.
 | 40 | `20260907120000_client_call_coupon_pause_metrics.sql` | RPCs `pausar_cupom` / `retomar_cupom` (owner only, `indisponivel` = pausado); RPC batch `indicadores_vitrine_cupons` (ocupados/disponíveis/resgates confirmados, sem PII); `ativar_cupom` trava a linha sempre (fronteira pausa×ativação); `validar_cupom` carimba `esgotado` também a partir de pausado. |
 
 > **Obs. 40:** Não reescreve `janela_alcance` nem a conta de reserva (`validado + ativo vigente`). A pausa não invalida códigos já emitidos. Retomar recusa expirado/esgotado/excluído/pendente/rejeitado — não pula moderação nem validade. **Obrigação CRM:** a migration local `20260902150000_product_complete_web_crm.sql` (ainda não hospedada) deve ser RENUMERADA para depois de `20260907120000` no rebase da branch CRM.
+
+---
+
+## PRODUCT-COMPLETE-WEB / CRM-01 — clientes do estabelecimento (portal)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 41 | `20260902150000_product_complete_web_crm.sql` | Índice parcial `cupons_usuario` (validado); `private.crm_exportacoes` (auditoria sem PII); RPCs `crm_clientes`, `crm_cliente_detalhe`, `crm_export_dados`, `crm_registrar_exportacao` (SECURITY DEFINER, posse via `owner_id = auth.uid()`, e-mail só via `auth.users`, sem CPF). |
+
+> **Obs. 41:** relação CRM = só `cupons_usuario.status = 'validado'` nos cupons do estabelecimento da sessão. Ativo/expirado sem validação não entra. Sem tabela desnormalizada de clientes. Exportação xlsx/pdf no app; a tabela private só guarda metadados (formato, contagens, filtros não-PII).
+
+> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260907120000`.
+

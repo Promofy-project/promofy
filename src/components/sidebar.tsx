@@ -55,6 +55,7 @@ const navConfig: Record<SidebarVariant, { items: NavItem[]; tag: string }> = {
     items: [
       { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
       { href: "/portal/cupons", label: "Cupons", icon: Ticket },
+      { href: "/portal/clientes", label: "Clientes", icon: Users },
       { href: "/portal/estabelecimento", label: "Estabelecimento", icon: Store },
       { href: "/portal/avaliacoes", label: "Avaliações", icon: Star },
       { href: "/portal/mural", label: "Mural", icon: Megaphone },
