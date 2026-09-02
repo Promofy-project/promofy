@@ -122,11 +122,16 @@ async function main() {
     console.log("+ convidado.cpf (demo)");
   }
 
-  // Liga e1 (Sabor & Cia) ao lojista e e2 (PowerFit) ao lojista2 —
-  // dois donos distintos p/ provar isolamento entre estabelecimentos.
+  // Liga e1 (Sabor & Cia) + catálogo órfão e3..e6 ao lojista; e2 ao lojista2.
+  // PRE-CALL-FIX-02: e3..e6 nasciam sem dono — validar_cupom falhava aberto
+  // (NULL <> uid) e a busca por CPF (estabs_do_dono) não os enxergava.
   for (const [estId, dono] of [
     ["e1", ids.lojista],
     ["e2", ids.lojista2],
+    ["e3", ids.lojista],
+    ["e4", ids.lojista],
+    ["e5", ids.lojista],
+    ["e6", ids.lojista],
   ] as const) {
     const { error } = await admin
       .from("estabelecimentos")
@@ -176,7 +181,7 @@ async function main() {
 
   console.log("\nSeed de usuários OK. Credenciais (local/teste):");
   for (const u of USUARIOS) console.log(`  ${u.email} / ${SENHA} (${u.role})`);
-  console.log("  (lojista = e1 Sabor & Cia · lojista2 = e2 PowerFit)");
+  console.log("  (lojista = e1 + e3..e6 · lojista2 = e2 PowerFit)");
 }
 
 main().catch((err) => {
