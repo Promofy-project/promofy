@@ -308,11 +308,13 @@ function main(): number {
       adminFin.includes("ainda não estão no ar"),
   );
   check(
-    "43. portal estabelecimento não usa identidade hardcoded",
+    "43. portal estabelecimento persiste a sessão, sem identidade hardcoded",
     !portalEst.includes("Sabor & Cia") &&
       !portalEst.includes('from "@/lib/mock-data"') &&
-      !portalEst.includes("Salvar alterações") &&
-      portalEst.includes("buscarEstabelecimentoDaSessao"),
+      portalEst.includes("buscarEstabelecimentoDaSessao") &&
+      le("src/app/portal/(painel)/estabelecimento/estabelecimento-form.tsx").includes(
+        "salvarPerfilEstabAction",
+      ),
   );
   check(
     "44. estabelecimento do portal vem da sessão (owner_id)",
