@@ -3,6 +3,7 @@ import "server-only";
 import type { Cupom, CupomStatus, MetricasCupom } from "@/lib/types";
 import type { JanelaConsumo } from "@/lib/janela";
 import { sanearTaxas, sanearFormasConsumo } from "@/lib/cupom-campos";
+import { sanearTipoPromocao, sanearValorCompraMinimo } from "@/lib/tipo-promocao";
 import { motivoAtual } from "@/lib/moderacao";
 import { statusPortalDe } from "@/lib/ciclo-cupom";
 import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
@@ -74,48 +75,71 @@ function cidadeVisivel(valor: string | null | undefined): string | undefined {
   return t || undefined;
 }
 
+type EstabJoin = {
+  nome: string;
+  cidade: string | null;
+  bairro?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+type CupomRowCr02 = CupomRow & {
+  tipo_promocao?: string;
+  valor_compra_minimo?: number | string | null;
+  publicado_em?: string | null;
+  estabelecimentos?: EstabJoin | EstabJoin[] | null;
+};
+
+export const SELECT_CUPOM_CATALOGO =
+  "*, estabelecimentos(nome, cidade, bairro, latitude, longitude)";
+
+function estabDe(row: CupomRowCr02): EstabJoin | null {
+  const e = row.estabelecimentos;
+  if (!e) return null;
+  return Array.isArray(e) ? (e[0] ?? null) : e;
+}
+
 export function linhaParaCupom(
   row: CupomRow,
   estabelecimentoNome: string,
   filtro: FiltroTaxonomia,
   cidade?: string | null,
+  extra?: {
+    bairro?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    restantes?: number | null;
+  },
 ): Cupom {
-  // TX-P2A/MARCO 2A: a folha UUID da linha atravessa a fronteira e vira
-  // slug PUBLICO de segmento antes de virar visual. Era para este dia que
-  // a traducao existia — sem ela, trocar a coluna faria TODO card cair no
-  // fallback cinza, em silencio e sem erro nenhum.
-  //
-  // `?? ""` mantem a tolerancia de sempre: folha fora do mapa nao quebra a
-  // tela, so nao acha visual. `categoria_nova_id` segue nullable ate a
-  // migration de CONTRACT (pos-deploy), entao o null e um estado real do
-  // schema aqui, nao uma hipotese defensiva.
+  const cr = row as CupomRowCr02;
   const folhaId = row.categoria_nova_id ?? "";
   const slug = filtro.filtroSlugDe(folhaId) ?? "";
+  const folhaSlug = filtro.catalogoUrl.folhas.find((f) => f.uuid === folhaId)?.slug;
+  const est = extra ?? {};
   return {
     id: row.id,
     titulo: row.titulo,
     estabelecimento: estabelecimentoNome,
     estabelecimentoId: row.estabelecimento_id,
     categoria: slug,
-    // O visual e o da FOLHA, nao o do segmento: e o nome da categoria real
-    // que o consumidor le no card. `visualDe` resolve inclusive folha
-    // desativada depois — `filtro.catalogo` (segmentos ativos) fica como
-    // ultimo recurso para dado fora do mapa.
     categoriaVisual:
       filtro.visualDe(folhaId) ?? resolverCategoriaVisual(slug, filtro.catalogo),
     economia: Number(row.economia),
     economiaVariavel: row.economia_variavel,
-    // Fase 6: jsonb saneado contra o vocabulário canônico JÁ NA LEITURA.
-    // As duas colunas estão no grant de UPDATE do lojista, então o
-    // PostgREST direto pode gravar qualquer array — valor desconhecido
-    // é ignorado na exibição, nunca quebra a tela (mesma doutrina de
-    // `horarios` na Fase 5).
     taxas: sanearTaxas(row.taxas),
     formasConsumo: sanearFormasConsumo(row.formas_consumo),
     precoDe: row.preco_de != null ? Number(row.preco_de) : undefined,
     precoPor: row.preco_por != null ? Number(row.preco_por) : undefined,
     cidade: cidadeVisivel(cidade),
-    distanciaKm: Number(row.distancia_km ?? 0),
+    bairro: cidadeVisivel(est.bairro),
+    latitude: est.latitude ?? null,
+    longitude: est.longitude ?? null,
+    tipoPromocao: sanearTipoPromocao(cr.tipo_promocao),
+    valorCompraMinimo: sanearValorCompraMinimo(cr.valor_compra_minimo),
+    limiteTotal: row.limite_total,
+    restantes: est.restantes ?? null,
+    publicadoEm: cr.publicado_em ?? null,
+    categoriaFolhaSlug: folhaSlug,
     rating: Number(row.rating ?? 0),
     avaliacoes: row.avaliacoes,
     validade: row.validade_fim,
@@ -126,11 +150,29 @@ export function linhaParaCupom(
     horarios: horariosDeJson(row.horarios),
     dias: diasDeJson(row.horarios),
     janela: janelaDeJson(row.horarios),
-    // null no banco = "use o default"; quem aplica o 5 é `janelaAlcancavel`
-    // e o `coalesce` de `ativar_cupom`, não este mapper.
     prazoAtivacaoHoras: row.prazo_ativacao_horas ?? undefined,
     destaque: row.destaque,
   };
+}
+
+export function linhaCatalogoParaCupom(
+  row: CupomRowCr02,
+  filtro: FiltroTaxonomia,
+  restantes?: number | null,
+): Cupom {
+  const est = estabDe(row);
+  return linhaParaCupom(
+    row,
+    est?.nome ?? "",
+    filtro,
+    est?.cidade,
+    {
+      bairro: est?.bairro,
+      latitude: est?.latitude != null ? Number(est.latitude) : null,
+      longitude: est?.longitude != null ? Number(est.longitude) : null,
+      restantes: restantes ?? null,
+    },
+  );
 }
 
 /**
@@ -169,7 +211,7 @@ export async function buscarCuponsHome(
 
   let query = supabase
     .from("cupons")
-    .select("*, estabelecimentos(nome, cidade)")
+    .select(SELECT_CUPOM_CATALOGO)
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
   if (!logado) query = query.limit(limite * 2); // folga p/ o filtro de agendamento
@@ -202,14 +244,7 @@ export async function buscarCuponsHome(
       : visiveis;
   return ordenados
     .slice(0, limite)
-    .map((row) =>
-      linhaParaCupom(
-        row,
-        row.estabelecimentos?.nome ?? "",
-        filtro,
-        row.estabelecimentos?.cidade,
-      ),
-    );
+    .map((row) => linhaCatalogoParaCupom(row, filtro));
 }
 
 // Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
@@ -241,19 +276,14 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
   if (ids.length === 0) return [];
 
   const [{ data: rows }, filtro] = await Promise.all([
-    supabase.from("cupons").select("*, estabelecimentos(nome, cidade)").in("id", ids),
+    supabase.from("cupons").select(SELECT_CUPOM_CATALOGO).in("id", ids),
     buscarFiltrosTaxonomia(),
   ]);
 
   const porId = new Map(
     (rows ?? []).map((row) => [
       row.id,
-      linhaParaCupom(
-        row,
-        row.estabelecimentos?.nome ?? "",
-        filtro,
-        row.estabelecimentos?.cidade,
-      ),
+      linhaCatalogoParaCupom(row, filtro),
     ]),
   );
   return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
@@ -269,7 +299,7 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   const [{ data }, filtro] = await Promise.all([
     supabase
       .from("cupons")
-      .select("*, estabelecimentos(nome, cidade)")
+      .select(SELECT_CUPOM_CATALOGO)
       .eq("id", id)
       .in("status", ["ativo", "indisponivel"])
       .maybeSingle(),
@@ -277,12 +307,7 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   ]);
   if (!data) return null;
   if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
-  return linhaParaCupom(
-    data,
-    data.estabelecimentos?.nome ?? "",
-    filtro,
-    data.estabelecimentos?.cidade,
-  );
+  return linhaCatalogoParaCupom(data, filtro);
 }
 
 /**
@@ -308,6 +333,8 @@ export interface CupomParaEdicao {
   economiaVariavel: boolean;
   taxas: string[];
   formasConsumo: string[];
+  tipoPromocao: string;
+  valorCompraMinimo: number | null;
   regras: string[];
   imagem: string;
   validadeInicio: string | null;
@@ -348,6 +375,12 @@ export async function buscarCupomParaEdicao(
     economiaVariavel: data.economia_variavel,
     taxas: sanearTaxas(data.taxas),
     formasConsumo: sanearFormasConsumo(data.formas_consumo),
+    tipoPromocao: sanearTipoPromocao(
+      (data as { tipo_promocao?: string }).tipo_promocao,
+    ),
+    valorCompraMinimo: sanearValorCompraMinimo(
+      (data as { valor_compra_minimo?: number | null }).valor_compra_minimo,
+    ),
     regras: regrasDeJson(data.regras),
     imagem: data.imagem,
     validadeInicio: data.validade_inicio,
@@ -381,7 +414,7 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   const [{ data, error }, filtro] = await Promise.all([
     supabase
       .from("cupons")
-      .select("*, estabelecimentos(nome, cidade)")
+      .select(SELECT_CUPOM_CATALOGO)
       .in("estabelecimento_id", ids)
       .in("status", ["ativo", "indisponivel"])
       .order("ordem", { ascending: true }),
@@ -392,12 +425,7 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(
-      row,
-      row.estabelecimentos?.nome ?? "",
-      filtro,
-      row.estabelecimentos?.cidade,
-    ),
+    linhaCatalogoParaCupom(row, filtro),
   );
 }
 
@@ -418,7 +446,7 @@ export async function buscarCuponsBusca(
   const supabase = createClient();
   let query = supabase
     .from("cupons")
-    .select("*, estabelecimentos(nome, cidade)")
+    .select(SELECT_CUPOM_CATALOGO)
     .in("status", ["ativo", "indisponivel"])
     .order("ordem", { ascending: true });
   if (idsFolha) query = query.in("categoria_nova_id", idsFolha);
@@ -433,12 +461,7 @@ export async function buscarCuponsBusca(
   }
 
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaParaCupom(
-      row,
-      row.estabelecimentos?.nome ?? "",
-      filtro,
-      row.estabelecimentos?.cidade,
-    ),
+    linhaCatalogoParaCupom(row, filtro),
   );
 }
 

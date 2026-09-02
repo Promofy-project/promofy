@@ -33,6 +33,7 @@ import {
   sanearPrazoAtivacao,
   sanearTaxas,
 } from "./cupom-campos";
+import { sanearTipoPromocao, sanearValorCompraMinimo } from "./tipo-promocao";
 
 export type PatchCupom = Database["public"]["Tables"]["cupons"]["Update"];
 
@@ -56,6 +57,8 @@ export interface CamposEdicaoCupom {
   limiteTotalIlimitado?: boolean;
   taxas?: string[];
   formasConsumo?: string[];
+  tipoPromocao?: string;
+  valorCompraMinimo?: number | null;
   regras?: string[];
   imagem?: string;
 }
@@ -109,6 +112,12 @@ export function montarPatchCupom(campos: CamposEdicaoCupom): PatchResult {
   if (campos.taxas !== undefined) patch.taxas = sanearTaxas(campos.taxas);
   if (campos.formasConsumo !== undefined) {
     patch.formas_consumo = sanearFormasConsumo(campos.formasConsumo);
+  }
+  if (campos.tipoPromocao !== undefined) {
+    patch.tipo_promocao = sanearTipoPromocao(campos.tipoPromocao);
+  }
+  if (campos.valorCompraMinimo !== undefined) {
+    patch.valor_compra_minimo = sanearValorCompraMinimo(campos.valorCompraMinimo);
   }
   if (campos.regras !== undefined) {
     patch.regras = campos.regras.map((r) => r.trim()).filter(Boolean);

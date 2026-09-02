@@ -230,8 +230,12 @@ export const buscarEstabelecimentoDaSessao = cache(
     id: string;
     nome: string;
     cidade: string;
+    bairro: string;
+    latitude: number | null;
+    longitude: number | null;
     status: string;
     categoriaPrincipalId: string | null;
+    logo: string;
   } | null> {
     const supabase = createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -240,7 +244,7 @@ export const buscarEstabelecimentoDaSessao = cache(
 
     const { data } = await supabase
       .from("estabelecimentos")
-      .select("id, nome, cidade, status, categoria_principal_id")
+      .select("id, nome, cidade, bairro, latitude, longitude, status, categoria_principal_id, logo")
       .eq("owner_id", uid)
       .maybeSingle();
     if (!data) return null;
@@ -249,8 +253,12 @@ export const buscarEstabelecimentoDaSessao = cache(
       id: data.id,
       nome: data.nome,
       cidade: data.cidade,
+      bairro: data.bairro ?? "",
+      latitude: data.latitude != null ? Number(data.latitude) : null,
+      longitude: data.longitude != null ? Number(data.longitude) : null,
       status: data.status,
       categoriaPrincipalId: data.categoria_principal_id,
+      logo: data.logo ?? "",
     };
   },
 );

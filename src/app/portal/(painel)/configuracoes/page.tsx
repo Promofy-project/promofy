@@ -1,58 +1,49 @@
 "use client";
 
-import * as React from "react";
-
 import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 
 interface Opcao {
   key: string;
   label: string;
   descricao: string;
-  inicial: boolean;
 }
 
 const SECOES: { titulo: string; descricao: string; opcoes: Opcao[] }[] = [
   {
     titulo: "Notificações",
-    descricao: "Escolha o que você quer receber.",
+    descricao: "Ainda não disparamos estes avisos. Quando existirem, esta tela passa a gravá-los.",
     opcoes: [
-      { key: "n-resgates", label: "Novos resgates", descricao: "Avise quando um cliente resgatar um cupom.", inicial: true },
-      { key: "n-avaliacoes", label: "Novas avaliações", descricao: "Avise quando alguém avaliar seu estabelecimento.", inicial: true },
-      { key: "n-resumo", label: "Resumo semanal por e-mail", descricao: "Um panorama do desempenho toda segunda.", inicial: false },
+      { key: "n-resgates", label: "Novos resgates", descricao: "Avise quando um cliente resgatar um cupom." },
+      { key: "n-avaliacoes", label: "Novas avaliações", descricao: "Avise quando alguém avaliar seu estabelecimento." },
+      { key: "n-resumo", label: "Resumo semanal por e-mail", descricao: "Um panorama do desempenho toda segunda." },
     ],
   },
   {
     titulo: "Visibilidade no app",
-    descricao: "Controle como você aparece para os clientes.",
+    descricao: "A vitrine hoje segue o status do estabelecimento no cadastro, não um interruptor aqui.",
     opcoes: [
-      { key: "v-exibir", label: "Exibir estabelecimento no app", descricao: "Seus cupons aparecem nas buscas e na home.", inicial: true },
-      { key: "v-destaque", label: "Destacar como recomendado", descricao: "Maior visibilidade em troca de impulsionamento.", inicial: false },
+      { key: "v-exibir", label: "Exibir estabelecimento no app", descricao: "Seus cupons aparecem nas buscas e na home." },
+      { key: "v-destaque", label: "Destacar como recomendado", descricao: "Maior visibilidade em troca de impulsionamento." },
     ],
   },
   {
     titulo: "Funcionamento",
-    descricao: "Disponibilidade para resgates.",
+    descricao: "Horário de consumo vive no cupom, não nesta tela.",
     opcoes: [
-      { key: "f-aberto", label: "Aberto agora", descricao: "Aceitar resgates no horário atual.", inicial: true },
-      { key: "f-feriados", label: "Funcionar em feriados", descricao: "Manter cupons ativos em feriados.", inicial: false },
+      { key: "f-aberto", label: "Aberto agora", descricao: "Aceitar resgates no horário atual." },
+      { key: "f-feriados", label: "Funcionar em feriados", descricao: "Manter cupons ativos em feriados." },
     ],
   },
 ];
 
 export default function PortalConfiguracoes() {
-  const [estado, setEstado] = React.useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      SECOES.flatMap((s) => s.opcoes.map((o) => [o.key, o.inicial])),
-    ),
-  );
-
   return (
     <>
       <PageHeader
         title="Configurações"
-        description="Preferências de notificações, visibilidade e funcionamento."
+        description="Preferências ainda não operacionais — nada aqui altera o app."
       />
 
       <div className="flex flex-col gap-6">
@@ -75,13 +66,7 @@ export default function PortalConfiguracoes() {
                       {o.descricao}
                     </p>
                   </div>
-                  <Switch
-                    checked={estado[o.key]}
-                    onCheckedChange={(v) =>
-                      setEstado((prev) => ({ ...prev, [o.key]: v }))
-                    }
-                    aria-label={o.label}
-                  />
+                  <Badge variant="muted">Em breve</Badge>
                 </div>
               ))}
             </div>

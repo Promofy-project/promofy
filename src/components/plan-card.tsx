@@ -87,8 +87,9 @@ export function PlanCard({
         <Button
           className="mt-6 w-full"
           variant={yellow ? "secondary" : destaque ? "default" : "outline"}
+          disabled
         >
-          Assinar plano
+          Pagamento em breve
         </Button>
       )}
 

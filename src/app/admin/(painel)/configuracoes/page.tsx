@@ -4,8 +4,9 @@ import { ConfiguracoesClient } from "./configuracoes-client";
 /**
  * Server component: lê a tabela de pontos (config_pontos) do banco — a
  * FONTE ÚNICA que o app do consumidor também consome. Encerra a
- * duplicação que existia entre gamification.ts e esta tela. A edição
- * (escrita) fica para a Fase 3.
+ * duplicação que existia entre gamification.ts e esta tela. A tabela
+ * de pontos agora grava de verdade; interruptores de plataforma
+ * permanecem "em breve".
  */
 export default async function AdminConfiguracoes() {
   const supabase = createClient();

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { validarCupomAction, type ValidarDadosDTO } from "@/lib/actions/cupons";
 import { normalizarCodigoCupom } from "@/lib/codigo-cupom";
+import { ValidarPorCpf } from "@/components/estab/validar-por-cpf";
 
 // Mensagem amigável por motivo retornado pelo servidor.
 const MENSAGEM: Record<string, string> = {
@@ -17,6 +18,9 @@ const MENSAGEM: Record<string, string> = {
   cupom_proprio: "Você não pode validar o seu próprio cupom.",
   esgotado: "Este cupom atingiu o limite de resgates.",
   sem_permissao: "Sua conta não tem um estabelecimento vinculado.",
+  sem_ativacao_aqui: "Nenhum cupom ativo para este CPF aqui.",
+  cpf_invalido: "CPF inválido. Confira os números.",
+  muitas_tentativas: "Muitas consultas seguidas. Aguarde um instante e tente de novo.",
   erro: "Não foi possível validar agora. Tente novamente.",
 };
 
@@ -117,6 +121,17 @@ export function ValidarCupomDialog({
                 {validando ? "Validando…" : "Validar cupom"}
               </Button>
             </form>
+
+            <ValidarPorCpf
+              onResultado={(r) => {
+                if (r.ok) {
+                  setErro(null);
+                  setSucesso(r.dados);
+                } else {
+                  setErro(MENSAGEM[r.motivo] ?? MENSAGEM.erro);
+                }
+              }}
+            />
           </>
         ) : (
           <>

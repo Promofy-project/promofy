@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useFormState } from "react-dom";
-import { CheckCircle2 } from "lucide-react";
 
 import { cadastrarAction } from "@/lib/actions/auth";
 import { ESTADO_AUTH_INICIAL } from "@/lib/auth-estado";
@@ -29,7 +28,6 @@ export default function CadastroPage() {
     cadastrarAction,
     ESTADO_AUTH_INICIAL,
   );
-  const [promo, setPromo] = React.useState("");
   const [aceito, setAceito] = React.useState(false);
 
   return (
@@ -86,22 +84,19 @@ export default function CadastroPage() {
           />
           <Field
             label="Código Promocional"
-            placeholder="Ex.: PROMOFY30"
-            value={promo}
-            onChange={(e) => setPromo(e.target.value)}
+            placeholder="Em breve"
+            disabled
+            autoComplete="off"
           />
-
-          {promo.trim().length > 0 && (
-            <div className="flex items-center gap-2 rounded-xl bg-success-soft px-3 py-2.5 text-sm font-semibold text-success">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Parabéns! Seu plano VIP está ativado por 30 dias.
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Código promocional em breve. Não aplicamos benefício fictício.
+          </p>
         </div>
 
         <label className="mt-5 flex items-start gap-3 text-sm text-muted-foreground">
           <Checkbox
             name="aceito"
+            value="1"
             required
             checked={aceito}
             onCheckedChange={setAceito}

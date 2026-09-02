@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-import { buscarCuponsHome, contarNovidades } from "@/lib/data/cupons";
+import { contarNovidades } from "@/lib/data/cupons";
 import { buscarFiltrosTaxonomia } from "@/lib/data/taxonomia";
+import {
+  buscarGradeDestaque,
+  buscarLocaisPublicos,
+  buscarTrilhosDescoberta,
+} from "@/lib/data/descoberta";
+import { filtroConsumidorDeQuery } from "@/lib/filtros-consumidor";
 import {
   filtroDeQuery,
   hrefBusca,
@@ -19,16 +25,23 @@ import { CupomSeloUtilizado } from "@/components/cupom-selo-utilizado";
 import { RankingBlock } from "@/components/ranking-block";
 import { PointsSummary } from "@/components/points-summary";
 import { NpsPendenteCard } from "@/components/nps-pendente-card";
+import { TrilhosDescoberta } from "@/components/trilhos-descoberta";
 
 export const dynamic = "force-dynamic";
 
 export default async function MobileHome({
   searchParams,
 }: {
-  searchParams?: { cat?: string | string[]; seg?: string | string[] };
+  searchParams?: {
+    cat?: string | string[];
+    seg?: string | string[];
+    cidade?: string | string[];
+    bairro?: string | string[];
+  };
 }) {
   const filtroTax = await buscarFiltrosTaxonomia();
   const categorias = filtroTax.catalogo;
+  const filtroCons = filtroConsumidorDeQuery(searchParams);
 
   const bruto = filtroDeQuery(searchParams);
   if (queryPrecisaLimpeza(searchParams) && !bruto.seg && !bruto.cat) {
@@ -41,16 +54,23 @@ export default async function MobileHome({
     }
   }
 
-  const [grid, novidades] = await Promise.all([
-    buscarCuponsHome(6, filtroTax),
+  const [novidades, locais, trilhos] = await Promise.all([
     contarNovidades(),
+    buscarLocaisPublicos(),
+    buscarTrilhosDescoberta(filtroCons.cidade, filtroCons.bairro),
   ]);
+  const grade = await buscarGradeDestaque(
+    filtroTax,
+    trilhos.sinais,
+    filtroCons.cidade,
+  );
+  const grid = grade.cupons;
 
   return (
     <div className="flex flex-col gap-5 pb-6">
       <HomeHeader novidades={novidades} />
       <BannerCarousel />
-      <HomeSearchBar />
+      <HomeSearchBar cidades={locais.cidades} filtro={filtroCons} />
 
       <div className="px-4">
         <PointsSummary />
@@ -70,7 +90,18 @@ export default async function MobileHome({
         )}
       </div>
 
+      <TrilhosDescoberta
+        novos={trilhos.novos}
+        emAlta={trilhos.emAlta}
+        popularesRegiao={trilhos.popularesRegiao}
+        cidade={filtroCons.cidade}
+        ultimasUnidades={trilhos.ultimasUnidades}
+      />
+
       <section className="px-4">
+        <h2 className="mb-3 text-sm font-extrabold uppercase tracking-wide">
+          {grade.rotulo}
+        </h2>
         {grid.length === 0 && (
           <p className="rounded-card border border-dashed border-border bg-card/60 px-4 py-8 text-center text-sm text-muted-foreground">
             Nenhum cupom por enquanto.{" "}

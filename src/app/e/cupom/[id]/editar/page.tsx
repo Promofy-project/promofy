@@ -12,12 +12,9 @@ export const dynamic = "force-dynamic";
 /**
  * Edição RÁPIDA de cupom no /e (Fase 6.5/C2).
  *
- * O form do totem é um subconjunto declarado desde a Fase 4 ("campos
- * avançados ficam só na plataforma web"), e continua sendo: janela,
- * agendamento e prazo de ativação NÃO entram no payload — são exibidos
- * como leitura, com a nota de que se ajustam pelo portal. É por isso que
- * `editarCupomAction` recebe um input PARCIAL: campo que este form não
- * controla não pode ser sobrescrito por um default.
+ * O form do totem cobre o mesmo conjunto persistido do portal (janela,
+ * agendamento, prazo, regras). O layout é do totem; a regra gravada é a
+ * mesma. Campo que este form não controla não entra no payload.
  *
  * A posse é garantida pela RLS (`cupons: lojista le os proprios`): cupom de
  * outro estabelecimento simplesmente não volta da consulta → 404.

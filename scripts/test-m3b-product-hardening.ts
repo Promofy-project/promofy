@@ -130,16 +130,17 @@ function main(): number {
   );
   check(
     "16c. home e busca reusam o catálogo já carregado",
-    home.includes("buscarCuponsHome(6, filtroTax)") &&
-      buscarPage.includes("buscarCuponsBusca(ids, filtroTax)"),
+    home.includes("buscarGradeDestaque(") &&
+      home.includes("filtroTax") &&
+      buscarPage.includes("buscarCatalogoFiltrado("),
   );
   check(
-    "17. busca ordena por economia real — sem ranking mock",
+    "17. busca ordena por economia real; perto de mim usa geo do dispositivo",
     buscarClient.includes("Maior economia") &&
       buscarClient.includes("b.economia - a.economia") &&
       !buscarClient.includes("Melhor avaliados") &&
-      !buscarClient.includes("Mais próximos") &&
-      !buscarClient.includes("a.distanciaKm"),
+      buscarClient.includes("Perto de mim") &&
+      buscarClient.includes("TEXTO_GEO_NEGADO"),
   );
   check("18. busca textual tem aria-label", buscarClient.includes('aria-label="Pesquisar cupom"'));
   check(
@@ -275,10 +276,13 @@ function main(): number {
       !pagtoPage.includes("Cartão cadastrado") &&
       pagtoPage.includes("Nenhum cartão cadastrado"),
   );
+  const prefForm = le("src/app/m/perfil/preferencias/preferencias-form.tsx");
   check(
-    "40. preferências não usam catálogo mock nem fingem gravar",
+    "40. preferências persistem de verdade, sem mock",
     !prefPage.includes('from "@/lib/mock-data"') &&
-      !prefPage.includes("Preferências salvas"),
+      prefForm.includes("salvarPreferenciasAction") &&
+      prefForm.includes("Preferências salvas") &&
+      prefPage.includes("buscarPreferenciasDaSessao"),
   );
   check(
     "41. href da lista de estabelecimentos reusa slugs, sem UUID",
@@ -308,11 +312,13 @@ function main(): number {
       adminFin.includes("ainda não estão no ar"),
   );
   check(
-    "43. portal estabelecimento não usa identidade hardcoded",
+    "43. portal estabelecimento persiste a sessão, sem identidade hardcoded",
     !portalEst.includes("Sabor & Cia") &&
       !portalEst.includes('from "@/lib/mock-data"') &&
-      !portalEst.includes("Salvar alterações") &&
-      portalEst.includes("buscarEstabelecimentoDaSessao"),
+      portalEst.includes("buscarEstabelecimentoDaSessao") &&
+      le("src/app/portal/(painel)/estabelecimento/estabelecimento-form.tsx").includes(
+        "salvarPerfilEstabAction",
+      ),
   );
   check(
     "44. estabelecimento do portal vem da sessão (owner_id)",

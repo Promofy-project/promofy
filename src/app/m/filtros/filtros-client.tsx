@@ -13,6 +13,13 @@ import {
   nomeDoSegmento,
 } from "@/lib/taxonomia-url";
 import { DIAS_SEMANA } from "@/lib/dias";
+import { TIPOS_PROMOCAO } from "@/lib/tipo-promocao";
+import { FORMAS_CONSUMO } from "@/lib/cupom-campos";
+import {
+  extraDeFiltro,
+  SENTINELA_MIN_SEM_LIMITE,
+  type FiltroConsumidor,
+} from "@/lib/filtros-consumidor";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -24,21 +31,36 @@ export function FiltrosClient({
   filtroInicial,
   diaHoje,
   diaInicial,
+  locais,
+  filtroConsInicial,
 }: {
   catalogo: CatalogoUrl;
   catalogoVazio: boolean;
   filtroInicial: FiltroUrl;
   diaHoje: string;
   diaInicial?: string;
+  locais: { cidades: string[]; bairrosPorCidade: Record<string, string[]> };
+  filtroConsInicial: FiltroConsumidor;
 }) {
   const router = useRouter();
   const [aberta, setAberta] = React.useState<string | null>(null);
   const [filtro, setFiltro] = React.useState<FiltroUrl>(filtroInicial);
   const [dia, setDia] = React.useState<string>(diaInicial ?? TODOS);
+  const [cidade, setCidade] = React.useState(filtroConsInicial.cidade ?? TODOS);
+  const [bairro, setBairro] = React.useState(filtroConsInicial.bairro ?? TODOS);
+  const [promo, setPromo] = React.useState(filtroConsInicial.tipoPromocao ?? TODOS);
+  const [consumo, setConsumo] = React.useState(filtroConsInicial.consumo ?? TODOS);
+  const [minSlider, setMinSlider] = React.useState(
+    filtroConsInicial.minCompra === SENTINELA_MIN_SEM_LIMITE ||
+      filtroConsInicial.minCompra == null
+      ? 200
+      : Math.min(200, filtroConsInicial.minCompra),
+  );
 
   const folhas = folhasAtivasDoSegmento(filtro.seg, catalogo);
   const labelSeg = nomeDoSegmento(filtro.seg, catalogo) ?? TODOS;
   const labelCat = nomeDaFolha(filtro, catalogo) ?? "Todas as categorias";
+  const bairros = cidade !== TODOS ? (locais.bairrosPorCidade[cidade] ?? []) : [];
 
   function escolherSeg(slug: string) {
     if (slug === TODOS) setFiltro({});
@@ -52,7 +74,16 @@ export function FiltrosClient({
   }
 
   const aplicar = () => {
-    router.push(hrefBusca(filtro, { dia: dia === TODOS ? undefined : dia }));
+    const cons: FiltroConsumidor = {
+      cidade: cidade === TODOS ? undefined : cidade,
+      bairro: bairro === TODOS ? undefined : bairro,
+      tipoPromocao: promo === TODOS ? undefined : (promo as FiltroConsumidor["tipoPromocao"]),
+      consumo: consumo === TODOS ? undefined : (consumo as FiltroConsumidor["consumo"]),
+      minCompra: minSlider >= 200 ? SENTINELA_MIN_SEM_LIMITE : minSlider,
+    };
+    router.push(
+      hrefBusca(filtro, extraDeFiltro(cons, dia === TODOS ? undefined : dia)),
+    );
   };
 
   return (
@@ -134,6 +165,97 @@ export function FiltrosClient({
           selecionado={dia}
           selecionar={setDia}
         />
+
+        <Secao
+          id="cidade"
+          label="Cidade"
+          valorLabel={cidade}
+          aberta={aberta === "cidade"}
+          onToggle={() => setAberta(aberta === "cidade" ? null : "cidade")}
+          opcoes={[
+            { valor: TODOS, label: TODOS },
+            ...locais.cidades.map((c) => ({ valor: c, label: c })),
+          ]}
+          selecionado={cidade}
+          selecionar={(v) => {
+            setCidade(v);
+            setBairro(TODOS);
+          }}
+        />
+
+        <Secao
+          id="bairro"
+          label="Bairro"
+          valorLabel={cidade === TODOS ? "Escolha uma cidade" : bairro}
+          aberta={aberta === "bairro"}
+          onToggle={() => setAberta(aberta === "bairro" ? null : "bairro")}
+          opcoes={
+            cidade === TODOS
+              ? []
+              : [
+                  { valor: TODOS, label: TODOS },
+                  ...bairros.map((b) => ({ valor: b, label: b })),
+                ]
+          }
+          selecionado={bairro}
+          selecionar={setBairro}
+          vazio="Primeiro escolha uma cidade — os bairros vêm do cadastro real."
+        />
+
+        <Secao
+          id="promo"
+          label="Tipo de promoção"
+          valorLabel={
+            promo === TODOS
+              ? TODOS
+              : (TIPOS_PROMOCAO.find((t) => t.id === promo)?.label ?? promo)
+          }
+          aberta={aberta === "promo"}
+          onToggle={() => setAberta(aberta === "promo" ? null : "promo")}
+          opcoes={[
+            { valor: TODOS, label: TODOS },
+            ...TIPOS_PROMOCAO.map((t) => ({ valor: t.id, label: t.label })),
+          ]}
+          selecionado={promo}
+          selecionar={setPromo}
+        />
+
+        <Secao
+          id="consumo"
+          label="Tipo de consumo"
+          valorLabel={
+            consumo === TODOS
+              ? TODOS
+              : (FORMAS_CONSUMO.find((f) => f.id === consumo)?.label ?? consumo)
+          }
+          aberta={aberta === "consumo"}
+          onToggle={() => setAberta(aberta === "consumo" ? null : "consumo")}
+          opcoes={[
+            { valor: TODOS, label: TODOS },
+            ...FORMAS_CONSUMO.map((f) => ({ valor: f.id, label: f.label })),
+          ]}
+          selecionado={consumo}
+          selecionar={setConsumo}
+        />
+
+        <div className="rounded-card border border-border bg-surface px-4 py-3.5 shadow-card">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold">Valor mínimo de compra</span>
+            <span className="text-sm font-semibold text-muted-foreground">
+              {minSlider >= 200 ? "Sem limite" : `até R$ ${minSlider}`}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            step={10}
+            value={minSlider}
+            onChange={(e) => setMinSlider(Number(e.target.value))}
+            className="mt-3 w-full accent-primary"
+            aria-label="Valor mínimo de compra"
+          />
+        </div>
       </div>
 
       <div className="sticky bottom-0 bg-gradient-to-t from-yellow via-yellow to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6">

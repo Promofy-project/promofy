@@ -1714,6 +1714,21 @@ deploy neste trabalho. Confirmações:
   `show log_statement`); nenhum insert/update/delete/DDL.
 - **O CONTRACT FINAL NÃO REMOVEU NENHUMA ESTRUTURA LEGADA.**
 
+---
+
+## CLIENT-RETURNS-01 — logo do estabelecimento + edição admin de cupom
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 36 | `20260902120000_cr01_estab_logo.sql` | Coluna `estabelecimentos.logo` (path no bucket `cupom-imagens`, mesmo contrato de `cupons.imagem`) + `grant update (logo)`. |
+| 37 | `20260902130000_cr01_admin_editar_cupom.sql` | RPC `admin_editar_cupom(text, jsonb)` — admin corrige campos permitidos; recusa `estabelecimento_id`/`status`/`categoria_id`/`moderacao_historico`; append `editado_admin`. |
+
+> **Obs. 36:** nome e cidade já eram graváveis (migration 12). A logo reusa o bucket e as policies da Fase 7 — pasta por `estabelecimento_id`, magic bytes na Action. Galeria (várias fotos) ficou de fora: exigiria ordem/legenda/lugar×produto.
+
+> **Obs. 37:** admin não tem policy de UPDATE em `cupons`. O trigger `checar_edicao_cupom` isenta admin e portanto não grava histórico — a RPC grava à mão. Não rebaixa para pendente: o admin é o revisor (pedido do cliente era corrigir sem rejeitar e recriar). `categoria_id` legado continua congelado.
+
+> **Não hospedada neste WP.** Local only até autorização de deploy.
+
 ### Preflight de hospedagem — read-only, aguardando autorização
 
 Rodado depois das duas correções documentais acima e da adição da postcondition do Gate 8. Tudo
@@ -1733,3 +1748,15 @@ read-only contra o hospedado; nada aplicado.
 - **Runtime em produção:** `dpl_8mhXYvQhQPUTR2PGmmeGMSG2LGt3` continua `READY`, `production`, commit
   `038fac4`/`main` — sem novo deployment desde o Marco 2A. Não foi feito novo smoke de escrita (só
   confirmação de saúde/identidade do deployment).
+
+---
+
+## CLIENT-RETURNS-02 — descoberta do consumidor (filtros, geo, preferências, planos)
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 38 | `20260902140000_cr02_descoberta_consumidor.sql` | Enum `tipo_promocao` + `cupons.valor_compra_minimo`; `estabelecimentos.bairro/latitude/longitude` (par + range); tabelas `preferencias_usuario`, `consentimentos_usuario`, `aceites_documento` (RLS dono); `handle_new_user` grava aceite versionado; RPCs batch `sinais_descoberta` / `estoque_cupons`; `checar_edicao_cupom` e `admin_editar_cupom` passam a enxergar tipo/mínimo. |
+
+> **Obs. 38:** lat/lng do **consumidor** não entram no banco — só as coordenadas públicas do ponto de venda. Default `tipo_promocao='desconto'` é o tipo genérico do schema (janela código-antigo), não adivinhação de título. `valor_compra_minimo` NULL = sem piso. Consentimento é `(usuario, finalidade, versao, concedido_em, revogado_em)`, não um boolean solto. Recusar personalização não bloqueia o app.
+
+> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita `20260902120000` nem `20260902130000`.
