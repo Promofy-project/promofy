@@ -240,7 +240,7 @@ async function main(): Promise<number> {
     const { data, error } = await lojista
       .from("cupons")
       .update({ beneficio: "hack" })
-      .eq("id", "c05") // cupom do e3 (outro dono)
+      .eq("id", "c03") // cupom do e2 (lojista2) — e3..e6 passam a ser do lojista (PRE-CALL-FIX-02)
       .select();
     check("lojista NÃO edita cupom alheio (0 linhas)", !error && data?.length === 0, error?.message);
   }

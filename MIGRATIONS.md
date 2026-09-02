@@ -1759,4 +1759,14 @@ read-only contra o hospedado; nada aplicado.
 
 > **Obs. 38:** lat/lng do **consumidor** não entram no banco — só as coordenadas públicas do ponto de venda. Default `tipo_promocao='desconto'` é o tipo genérico do schema (janela código-antigo), não adivinhação de título. `valor_compra_minimo` NULL = sem piso. Consentimento é `(usuario, finalidade, versao, concedido_em, revogado_em)`, não um boolean solto. Recusar personalização não bloqueia o app.
 
-> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita `20260902120000` nem `20260902130000`.
+---
+
+## PRE-CALL-FIX-02 — paridade validação código ↔ CPF
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 39 | `20260902160000_pre_call_validacao_cpf.sql` | `validar_cupom`: autoridade com `owner_id is distinct from uid` (NULL deixa de falhar aberto). Backfill `e3..e6.owner_id ← e1.owner_id` quando e1 já tem dono. |
+
+> **Obs. 39:** Causa raiz do sintoma "CPF não acha / código valida": órfãos e3..e6 + `<>` vs NULL. `buscar_ativacoes_por_cpf` não muda — já usava `estabs_do_dono()`. Seed-users passa a ligar e3..e6 ao lojista no reset local. **Obrigação CRM:** a migration local `20260902150000_product_complete_web_crm.sql` (ainda não hospedada) deve ser RENUMERADA para depois de `160000` no rebase da branch CRM, se este fix publicar antes.
+
+> **Não publicar ainda** neste WP — só implementação/teste local no lote pré-call.
