@@ -40,7 +40,9 @@ comment on table private.crm_exportacoes is
   'CRM-01: auditoria de exportacoes do portal. Metadados apenas — sem PII, sem arquivo.';
 
 -- ------------------------------------------------------------
--- Helper: estabelecimento do lojista autenticado (posse pela sessão)
+-- Helper: estabelecimento do lojista autenticado (posse pela sessão).
+-- `order by id` é determinístico quando o seed liga vários estabs ao
+-- mesmo owner (FIX-02: e1+e3..e6). Não aceita estabelecimento_id do browser.
 -- ------------------------------------------------------------
 create or replace function private.crm_estab_da_sessao()
 returns text
@@ -52,6 +54,7 @@ as $$
   select e.id
     from public.estabelecimentos e
    where e.owner_id = (select auth.uid())
+   order by e.id
    limit 1;
 $$;
 

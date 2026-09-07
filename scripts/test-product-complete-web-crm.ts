@@ -90,6 +90,10 @@ function testarPuros() {
   check("escapa +", escaparCelulaExcel("+1+1") === "'+1+1");
   check("escapa -", escaparCelulaExcel("-1") === "'-1");
   check("escapa @", escaparCelulaExcel("@SUM(A1)") === "'@SUM(A1)");
+  check("escapa =2+2", escaparCelulaExcel("=2+2") === "'=2+2");
+  check("escapa +SUM", escaparCelulaExcel("+SUM(A1:A2)") === "'+SUM(A1:A2)");
+  check("escapa -10+20", escaparCelulaExcel("-10+20") === "'-10+20");
+  check("escapa @SUM range", escaparCelulaExcel("@SUM(A1:A2)") === "'@SUM(A1:A2)");
   check("não altera texto normal", escaparCelulaExcel("Maria") === "Maria");
   check("vazio permanece vazio", escaparCelulaExcel("") === "");
 
@@ -99,12 +103,27 @@ function testarPuros() {
     .replace(/^\s*\/\/.*$/gm, "");
   const routesSrc = readFileSync(join(ROOT, "src/lib/crm-export-routes.ts"), "utf8");
   const migSrc = readFileSync(
-    join(ROOT, "supabase/migrations/20260902150000_product_complete_web_crm.sql"),
+    join(ROOT, "supabase/migrations/20260907130000_product_complete_web_crm.sql"),
     "utf8",
   );
+  const crmDataSrc = readFileSync(join(ROOT, "src/lib/data/crm.ts"), "utf8");
   check("export builders não mencionam cpf", !/\bcpf\b/i.test(exportSrc));
   check("rotas de export devolvem 401 sem sessão", /status:\s*401/.test(routesSrc));
   check("migration CRM não seleciona profiles.cpf", !/p\.cpf|\.cpf\b/.test(migSrc.replace(/--.*$/gm, "")));
+  check(
+    "CRM não consome indicadores_vitrine (catálogo público)",
+    !/indicadores_vitrine/.test(crmDataSrc) && !/indicadores_vitrine/.test(exportSrc),
+  );
+  check(
+    "migration CRM só conta status validado",
+    /cu\.status = 'validado'/.test(migSrc) &&
+      !/cu\.status = 'ativo'/.test(migSrc) &&
+      !/cu\.status = 'expirado'/.test(migSrc),
+  );
+  check(
+    "crm_estab_da_sessao é determinístico (order by id)",
+    /order by e\.id/.test(migSrc) && !/p_estabelecimento/.test(migSrc),
+  );
   check("sidebar tem item Clientes após Cupons", (() => {
     const side = readFileSync(join(ROOT, "src/components/sidebar.tsx"), "utf8");
     const cupons = side.indexOf('href: "/portal/cupons"');
@@ -115,6 +134,7 @@ function testarPuros() {
 
 async function main(): Promise<number> {
   const contas: ContaQa[] = [];
+  const cupomIds: string[] = [];
   try {
     testarPuros();
 
@@ -132,7 +152,35 @@ async function main(): Promise<number> {
     const qaA = await criarContaQa(svc, "crm-a", { nome: "Ana CRM Silva" });
     const qaB = await criarContaQa(svc, "crm-b", { nome: "Bruno CRM" });
     const qaSoAtivo = await criarContaQa(svc, "crm-ativo", { nome: "Carlos Só Ativo" });
-    contas.push(qaA, qaB, qaSoAtivo);
+    const qaC = await criarContaQa(svc, "crm-c", { nome: "Carla Só E2" });
+    const qaE = await criarContaQa(svc, "crm-e", { nome: "Eva Ativo Pausado" });
+    const qaF = await criarContaQa(svc, "crm-f", { nome: "Fernanda Validou Pausado" });
+    const qaReat = await criarContaQa(svc, "crm-reat", { nome: "Rita Reativada" });
+    contas.push(qaA, qaB, qaSoAtivo, qaC, qaE, qaF, qaReat);
+
+    const { data: e1meta } = await svc
+      .from("estabelecimentos")
+      .select("categoria_id, categoria_principal_id")
+      .eq("id", "e1")
+      .maybeSingle();
+    const criarCupomE1 = async (id: string, extra: Record<string, unknown> = {}) => {
+      cupomIds.push(id);
+      await svc.from("cupons").delete().eq("id", id);
+      const { error } = await svc.from("cupons").insert({
+        id,
+        titulo: id,
+        estabelecimento_id: "e1",
+        categoria_id: e1meta!.categoria_id,
+        categoria_nova_id: e1meta!.categoria_principal_id,
+        economia: 10,
+        status: "ativo",
+        validade_fim: "2035-12-31",
+        beneficio: "CRM suíte",
+        horarios: { descricao: "todos", dias: [] as string[], inicio: "00:00", fim: "23:59" },
+        ...extra,
+      });
+      if (error) throw new Error(`criar cupom ${id}: ${error.message}`);
+    };
 
     await svc
       .from("profiles")
@@ -306,6 +354,114 @@ async function main(): Promise<number> {
       "NPS opcional presente quando gravado",
       hist.some((h) => h.nps === 9 || h.nps === 8),
     );
+    check(
+      "CRM do lojista ancora em e1 (order by id após FIX-02)",
+      lista?.estabelecimento_id === "e1",
+      String(lista?.estabelecimento_id),
+    );
+
+    // ---- Cliente C só no tenant B; E/F pausa; reativação ----
+    console.log("\n[RPC] Pausa, elegibilidade e campanha reativada");
+    if (cuponsE2[0]) {
+      await inserirCupomUsuario({
+        usuarioId: qaC.id,
+        cupomId: cuponsE2[0].id,
+        status: "validado",
+        codigo: "PRMF-CRM-C-E2",
+        validadoEm: agora.toISOString(),
+      });
+    }
+    const listaAposC = (await lojista.rpc("crm_clientes", {
+      p_filtro: "todos",
+      p_pagina: 1,
+      p_por_pagina: 50,
+    })).data as Record<string, unknown>;
+    const idsAposC = ((listaAposC?.clientes as { usuario_id?: string }[]) ?? []).map(
+      (c) => c.usuario_id,
+    );
+    check("cliente C (só e2) NÃO aparece no CRM de A", !idsAposC.includes(qaC.id));
+    const listaE2c = (await lojista2.rpc("crm_clientes", {})).data as Record<string, unknown>;
+    const idsE2c = ((listaE2c?.clientes as { usuario_id?: string }[]) ?? []).map(
+      (c) => c.usuario_id,
+    );
+    check(
+      "cliente C aparece só no CRM de B",
+      cuponsE2[0] ? idsE2c.includes(qaC.id) : true,
+    );
+
+    await criarCupomE1("crm-pause-e");
+    await inserirCupomUsuario({
+      usuarioId: qaE.id,
+      cupomId: "crm-pause-e",
+      status: "ativo",
+      codigo: "PRMF-CRM-E-ATIVO",
+    });
+    const pauE = (await lojista.rpc("pausar_cupom", { p_cupom_id: "crm-pause-e" })).data as {
+      ok?: boolean;
+    };
+    check("pausar cupom de E ok", pauE?.ok === true, JSON.stringify(pauE));
+    const listaE = (await lojista.rpc("crm_clientes", {
+      p_q: "Eva Ativo",
+    })).data as Record<string, unknown>;
+    check(
+      "ativação + pausa sem validação NÃO cria CRM",
+      !((listaE?.clientes as { usuario_id?: string }[]) ?? []).some((c) => c.usuario_id === qaE.id),
+    );
+
+    await criarCupomE1("crm-pause-f");
+    await inserirCupomUsuario({
+      usuarioId: qaF.id,
+      cupomId: "crm-pause-f",
+      status: "validado",
+      codigo: "PRMF-CRM-F-VAL",
+      validadoEm: agora.toISOString(),
+    });
+    const pauF = (await lojista.rpc("pausar_cupom", { p_cupom_id: "crm-pause-f" })).data as {
+      ok?: boolean;
+    };
+    check("pausar cupom já validado ok", pauF?.ok === true, JSON.stringify(pauF));
+    const listaF = (await lojista.rpc("crm_clientes", { p_q: "Fernanda" })).data as Record<
+      string,
+      unknown
+    >;
+    const fernanda = ((listaF?.clientes as { usuario_id?: string; total_resgates?: number }[]) ??
+      []).find((c) => c.usuario_id === qaF.id);
+    check("validado + pausa posterior MANTÉM cliente no CRM", Boolean(fernanda));
+
+    await criarCupomE1("crm-old-camp", { limite_total: 1, limite_por_usuario: 1 });
+    await inserirCupomUsuario({
+      usuarioId: qaReat.id,
+      cupomId: "crm-old-camp",
+      status: "validado",
+      codigo: "PRMF-CRM-REAT-1",
+      validadoEm: ha40d,
+    });
+    await svc.from("cupons").update({ status: "esgotado" }).eq("id", "crm-old-camp");
+    await criarCupomE1("crm-new-camp", { status: "pendente", limite_total: 1 });
+    await svc.from("cupons").update({ status: "ativo" }).eq("id", "crm-new-camp");
+    await inserirCupomUsuario({
+      usuarioId: qaReat.id,
+      cupomId: "crm-new-camp",
+      status: "validado",
+      codigo: "PRMF-CRM-REAT-2",
+      validadoEm: agora.toISOString(),
+    });
+    const listaReat = (await lojista.rpc("crm_clientes", { p_q: "Rita Reativada" })).data as Record<
+      string,
+      unknown
+    >;
+    const ritas = ((listaReat?.clientes as { usuario_id?: string; total_resgates?: number }[]) ??
+      []).filter((c) => c.usuario_id === qaReat.id);
+    check("reativação não duplica cliente", ritas.length === 1, String(ritas.length));
+    check("reativação agrega 2 resgates", Number(ritas[0]?.total_resgates) === 2, String(ritas[0]?.total_resgates));
+    const detReat = (await lojista.rpc("crm_cliente_detalhe", {
+      p_usuario_id: qaReat.id,
+    })).data as Record<string, unknown>;
+    check(
+      "histórico da campanha reativada tem 2 linhas",
+      ((detReat?.historico as unknown[]) ?? []).length === 2,
+      String((detReat?.historico as unknown[])?.length),
+    );
 
     // ---- Paginação ----
     console.log("\n[RPC] Paginação");
@@ -422,6 +578,15 @@ async function main(): Promise<number> {
       historico: histExp,
     });
     check("pdf começa com %PDF", pdfBuf.slice(0, 4).toString("utf8") === "%PDF");
+    const pdfTxt = pdfBuf.toString("latin1");
+    const saborUtf16be = Buffer.from([0x00, 0x53, 0x00, 0x61, 0x00, 0x62, 0x00, 0x6f, 0x00, 0x72]);
+    const saborUtf16le = Buffer.from([0x53, 0x00, 0x61, 0x00, 0x62, 0x00, 0x6f, 0x00, 0x72, 0x00]);
+    check("pdf contém Promofy", pdfTxt.includes("Promofy"));
+    check(
+      "pdf contém nome do estabelecimento",
+      pdfTxt.includes("Sabor") || pdfBuf.includes(saborUtf16be) || pdfBuf.includes(saborUtf16le),
+    );
+    check("pdf não contém cpf", !/\bcpf\b/i.test(pdfTxt));
 
     // ---- Auditoria ----
     console.log("\n[RPC] Auditoria de exportação");
@@ -494,6 +659,10 @@ async function main(): Promise<number> {
     failed++;
     return encerrar(passed, failed);
   } finally {
+    for (const id of cupomIds) {
+      await svc.from("cupons_usuario").delete().eq("cupom_id", id);
+      await svc.from("cupons").delete().eq("id", id);
+    }
     for (const c of contas) await destruirContaQa(svc, c.id);
   }
 }
