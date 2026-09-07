@@ -14,6 +14,7 @@ import { Icon } from "@/components/icon";
 import { FavoriteButton } from "@/components/favorite-button";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { ehEscassez } from "@/lib/descoberta";
+import { CupomSinais } from "@/components/cupom-sinais";
 
 export function CouponCard({
   cupom,
@@ -51,7 +52,7 @@ export function CouponCard({
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   );
   const indisponivel = cupom.status === "indisponivel";
-  const linkable = Boolean(href) && !indisponivel && !showcase;
+  const linkable = Boolean(href) && !showcase;
 
   return (
     <article
@@ -116,7 +117,7 @@ export function CouponCard({
         {indisponivel && (
           <div className="absolute inset-0 grid place-items-center bg-foreground/55">
             <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-danger">
-              Indisponível
+              Temporariamente indisponível
             </span>
           </div>
         )}
@@ -191,15 +192,26 @@ export function CouponCard({
           </p>
         )}
 
-        <div className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
-          <CalendarClock className="h-3.5 w-3.5" />
-          Válido até {formatShortDate(cupom.validade)}
+        <div className="mt-auto flex flex-col gap-1.5 pt-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarClock className="h-3.5 w-3.5" />
+            Válido até {formatShortDate(cupom.validade)}
+          </div>
+          <CupomSinais cupom={cupom} compact={compact} />
         </div>
 
         {showcase ? (
           /* Vitrine da landing: sem resgate — CTA leva ao app */
           <Button asChild variant="secondary" className="relative z-[2] mt-3 w-full">
             <Link href="/m">Baixe o app para resgatar</Link>
+          </Button>
+        ) : indisponivel ? (
+          <Button
+            className="relative z-[2] mt-3 w-full"
+            disabled
+            variant="outline"
+          >
+            Temporariamente indisponível
           </Button>
         ) : linkable ? (
           <Button asChild className="relative z-[2] mt-3 w-full">
@@ -209,13 +221,7 @@ export function CouponCard({
             </Link>
           </Button>
         ) : (
-          <Button
-            className="relative z-[2] mt-3 w-full"
-            disabled={indisponivel}
-            variant={indisponivel ? "outline" : "default"}
-          >
-            {indisponivel ? "Indisponível" : ctaLabel}
-          </Button>
+          <Button className="relative z-[2] mt-3 w-full">{ctaLabel}</Button>
         )}
       </div>
 

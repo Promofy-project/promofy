@@ -3,6 +3,8 @@ import { ArrowLeft } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { buscarCategoriasEstab, type CategoriaEstab } from "@/lib/data/estab";
+import { buscarCupomParaEdicao } from "@/lib/data/cupons";
+import { COPY_REATIVAR_HISTORICO } from "@/lib/cupom-indicadores";
 import { NovoCupomForm } from "./novo-cupom-form";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +15,17 @@ export const dynamic = "force-dynamic";
  * pré-selecionada. Campos avançados (agendamento, horários) ficam só na
  * plataforma web. Reusa criarCupomAction.
  */
-export default async function NovoCupomPage() {
+export default async function NovoCupomPage({
+  searchParams,
+}: {
+  searchParams?: { de?: string };
+}) {
   const supabase = createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const uid = claims?.claims?.sub;
+
+  const origemId = typeof searchParams?.de === "string" ? searchParams.de : "";
+  const cupomOrigem = origemId ? await buscarCupomParaEdicao(origemId) : null;
 
   let categorias: CategoriaEstab[] = [];
   let categoriaPrincipal: string | null = null;
@@ -50,13 +59,21 @@ export default async function NovoCupomPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-extrabold">Novo cupom</h1>
+        <h1 className="text-xl font-extrabold">
+          {cupomOrigem ? "Reativar cupom" : "Novo cupom"}
+        </h1>
       </header>
+
+      {cupomOrigem && (
+        <p className="mb-4 text-sm text-muted-foreground">{COPY_REATIVAR_HISTORICO}</p>
+      )}
 
       <NovoCupomForm
         categorias={categorias}
         categoriaPrincipal={categoriaPrincipal}
         estabelecimentoId={estabelecimentoId}
+        cupomInicial={cupomOrigem ?? undefined}
+        duplicar={Boolean(cupomOrigem)}
       />
     </div>
   );

@@ -19,7 +19,7 @@ const MENSAGEM_ERRO: Record<string, string> = {
   esgotado: "Este cupom está esgotado.",
   fora_da_validade: "Este cupom está fora da validade.",
   fora_da_janela: FORA_DA_JANELA,
-  indisponivel: "Cupom indisponível no momento.",
+  indisponivel: "Temporariamente indisponível.",
   nao_encontrado: "Cupom indisponível no momento.",
   sem_sessao: "Entre para usar o cupom.",
 };
@@ -101,7 +101,7 @@ export function CupomAcaoUsar({
   if (indisponivel) {
     return (
       <Button size={size} variant="outline" disabled className={cn(width, className)}>
-        Indisponível
+        Temporariamente indisponível
       </Button>
     );
   }

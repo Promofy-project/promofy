@@ -89,6 +89,8 @@ export interface Cupom {
   valorCompraMinimo?: number | null;
   limiteTotal?: number | null;
   restantes?: number | null;
+  /** Validações confirmadas (nunca ativações vigentes). Omitir 0 na UI. */
+  resgatesConfirmados?: number | null;
   publicadoEm?: string | null;
   categoriaFolhaSlug?: string;
 }
@@ -163,6 +165,7 @@ export interface MetricasCupom {
  */
 export type StatusCupomPortal =
   | "ativo"
+  | "pausado"
   | "expirado"
   | "esgotado"
   | "pendente"

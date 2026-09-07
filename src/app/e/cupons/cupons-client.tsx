@@ -8,6 +8,8 @@ import type { ItemCupomPortal } from "@/components/portal/cupons-seed";
 import { Button } from "@/components/ui/button";
 import { ReenviarCupomButton } from "@/components/estab/reenviar-cupom-button";
 import { ExcluirCupomButton } from "@/components/estab/excluir-cupom-button";
+import { PausarCupomButton } from "@/components/estab/pausar-cupom-button";
+import { COPY_REATIVAR_HISTORICO } from "@/lib/cupom-indicadores";
 import { cn, formatBRLValue, formatShortDate } from "@/lib/utils";
 import {
   FORMAS_CONSUMO,
@@ -27,6 +29,7 @@ import { abaEfetiva, contarPorAba } from "@/lib/portal-listagem";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   ativo: { label: "Ativo", cls: "bg-success-soft text-success" },
+  pausado: { label: "Pausado", cls: "bg-muted text-muted-foreground" },
   pendente: { label: "Em análise", cls: "bg-yellow/25 text-foreground" },
   rejeitado: { label: "Rejeitado", cls: "bg-danger-soft text-danger" },
   esgotado: { label: "Esgotado", cls: "bg-muted text-muted-foreground" },
@@ -36,6 +39,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 const FILTROS_STATUS = [
   { id: "ativo", label: "Ativos" },
+  { id: "pausado", label: "Pausados" },
   { id: "pendente", label: "Em análise" },
   { id: "rejeitado", label: "Rejeitados" },
   { id: "esgotado", label: "Esgotados" },
@@ -241,19 +245,39 @@ export function CuponsEstabClient({ itens }: { itens: ItemCupomPortal[] }) {
 
                 {it.statusPortal === "esgotado" && (
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Campanha encerrada. Para oferecer de novo, crie um cupom novo.
+                    Campanha encerrada. {COPY_REATIVAR_HISTORICO}
                   </p>
                 )}
 
                 {it.statusPortal !== "excluido" && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {it.statusPortal !== "esgotado" && (
+                    {it.statusPortal === "esgotado" ? (
+                      <Button asChild size="sm">
+                        <Link href={`/e/cupom/novo?de=${it.cupom.id}`}>
+                          Reativar cupom
+                        </Link>
+                      </Button>
+                    ) : (
                       <Button asChild size="sm" variant="outline">
                         <Link href={`/e/cupom/${it.cupom.id}/editar`}>
                           <Pencil className="h-4 w-4" />{" "}
                           {it.statusPortal === "expirado" ? "Prorrogar" : "Editar"}
                         </Link>
                       </Button>
+                    )}
+                    {it.statusPortal === "ativo" && (
+                      <PausarCupomButton
+                        cupomId={it.cupom.id}
+                        titulo={it.cupom.titulo}
+                        modo="pausar"
+                      />
+                    )}
+                    {it.statusPortal === "pausado" && (
+                      <PausarCupomButton
+                        cupomId={it.cupom.id}
+                        titulo={it.cupom.titulo}
+                        modo="retomar"
+                      />
                     )}
                     {it.statusPortal === "rejeitado" && (
                       <ReenviarCupomButton

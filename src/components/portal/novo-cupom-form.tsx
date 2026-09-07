@@ -292,7 +292,7 @@ export function NovoCupomForm({
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {duplicar
-            ? "Os dados vieram da campanha anterior — ajuste o que precisar. Ao salvar, nasce um cupom novo, com contadores zerados, e ele vai para análise."
+            ? "Os dados vieram da campanha anterior — ajuste o que precisar. Ao salvar, nasce um cupom novo, com contadores zerados, e ele vai para análise. A campanha anterior e seu histórico serão preservados."
             : "Preencha os campos — a pré-visualização atualiza em tempo real."}
         </p>
 

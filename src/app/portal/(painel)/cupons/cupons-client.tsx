@@ -16,8 +16,11 @@ import type { CategoriaVisual } from "@/lib/categoria-visual";
 import {
   carregarCupomParaEdicaoAction,
   excluirCupomAction,
+  pausarCupomAction,
   reenviarCupomAction,
+  retomarCupomAction,
 } from "@/lib/actions/cupons";
+import { COPY_CONFIRMAR_PAUSA } from "@/lib/cupom-indicadores";
 import { cn } from "@/lib/utils";
 import { abaEfetiva, contarPorAba } from "@/lib/portal-listagem";
 import {
@@ -39,6 +42,7 @@ import { FORMAS_CONSUMO } from "@/lib/cupom-campos";
  */
 const FILTROS_STATUS = [
   { id: "ativo", label: "Ativos" },
+  { id: "pausado", label: "Pausados" },
   { id: "pendente", label: "Em análise" },
   { id: "rejeitado", label: "Rejeitados" },
   { id: "esgotado", label: "Esgotados" },
@@ -106,6 +110,8 @@ export function CuponsClient({
    */
   const [prorrogandoExpirado, setProrrogandoExpirado] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
+  const [pausando, setPausando] = React.useState<string | null>(null);
+  const [retomando, setRetomando] = React.useState<string | null>(null);
   const [filtrosAtributo, setFiltrosAtributo] =
     React.useState<FiltrosAtributoLojista>(FILTROS_ATRIBUTO_VAZIOS);
 
@@ -210,6 +216,42 @@ export function CuponsClient({
     setSucesso(
       `Cupom “${item.cupom.titulo}” excluído. O histórico foi preservado — ele continua em “Excluídos”.`,
     );
+  };
+
+  const pausar = async (item: ItemCupomPortal) => {
+    setErro(null);
+    const ok = window.confirm(`Pausar “${item.cupom.titulo}”?\n\n${COPY_CONFIRMAR_PAUSA}`);
+    if (!ok) return;
+    setPausando(item.cupom.id);
+    const r = await pausarCupomAction(item.cupom.id);
+    setPausando(null);
+    if (!r.ok) {
+      setErro(r.erro);
+      return;
+    }
+    setLista((prev) =>
+      prev.map((i) =>
+        i.cupom.id === item.cupom.id ? { ...i, statusPortal: "pausado" } : i,
+      ),
+    );
+    setSucesso(`Cupom “${item.cupom.titulo}” pausado. Quem já ativou continua podendo usar.`);
+  };
+
+  const retomar = async (item: ItemCupomPortal) => {
+    setErro(null);
+    setRetomando(item.cupom.id);
+    const r = await retomarCupomAction(item.cupom.id);
+    setRetomando(null);
+    if (!r.ok) {
+      setErro(r.erro);
+      return;
+    }
+    setLista((prev) =>
+      prev.map((i) =>
+        i.cupom.id === item.cupom.id ? { ...i, statusPortal: "ativo" } : i,
+      ),
+    );
+    setSucesso(`Cupom “${item.cupom.titulo}” retomado. Novas ativações voltam a ser aceitas.`);
   };
 
   React.useEffect(() => {
@@ -457,8 +499,12 @@ export function CuponsClient({
                 onReenviar={reenviar}
                 onExcluir={excluir}
                 onNovaCampanha={carregando ? undefined : abrirNovaCampanha}
+                onPausar={pausar}
+                onRetomar={retomar}
                 excluindo={excluindo === item.cupom.id}
                 reenviando={reenviando === item.cupom.id}
+                pausando={pausando === item.cupom.id}
+                retomando={retomando === item.cupom.id}
                 carregando={carregando === item.cupom.id}
               />
             ))}

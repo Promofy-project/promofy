@@ -50,13 +50,31 @@ function desde7d(): string {
 export interface SinaisCatalogo {
   eventos: Map<string, SinalEventos>;
   restantes: Map<string, number | null>;
+  resgates: Map<string, number>;
+}
+
+type IndicadorVitrine = {
+  cupom_id: string;
+  limite_total: number | null;
+  ocupados: number | null;
+  disponiveis: number | null;
+  resgates_confirmados: number | null;
+};
+
+export function comIndicadores(cupom: Cupom, sinais: SinaisCatalogo): Cupom {
+  return {
+    ...cupom,
+    restantes:
+      cupom.limiteTotal == null ? null : (sinais.restantes.get(cupom.id) ?? cupom.limiteTotal),
+    resgatesConfirmados: sinais.resgates.get(cupom.id) ?? cupom.resgatesConfirmados ?? 0,
+  };
 }
 
 export async function buscarSinaisCatalogo(): Promise<SinaisCatalogo> {
   const supabase = createClient();
-  const [{ data: evs }, { data: estq }] = await Promise.all([
+  const [{ data: evs }, { data: inds }] = await Promise.all([
     supabase.rpc("sinais_descoberta", { p_desde: desde7d() }),
-    supabase.rpc("estoque_cupons"),
+    supabase.rpc("indicadores_vitrine_cupons"),
   ]);
 
   const eventos = new Map<string, SinalEventos>();
@@ -67,17 +85,23 @@ export async function buscarSinaisCatalogo(): Promise<SinaisCatalogo> {
     });
   }
   const restantes = new Map<string, number | null>();
-  for (const r of (estq ?? []) as { cupom_id: string; limite_total: number; consumidos: number }[]) {
-    restantes.set(r.cupom_id, restantesDe(r.limite_total, Number(r.consumidos)));
+  const resgates = new Map<string, number>();
+  for (const r of (inds ?? []) as IndicadorVitrine[]) {
+    if (r.limite_total != null) {
+      restantes.set(
+        r.cupom_id,
+        r.disponiveis != null
+          ? Math.max(0, Number(r.disponiveis))
+          : restantesDe(r.limite_total, Number(r.ocupados ?? 0)),
+      );
+    }
+    resgates.set(r.cupom_id, Number(r.resgates_confirmados ?? 0));
   }
-  return { eventos, restantes };
+  return { eventos, restantes, resgates };
 }
 
 function aplicarEstoque(cupons: Cupom[], sinais: SinaisCatalogo): Cupom[] {
-  return cupons.map((c) => ({
-    ...c,
-    restantes: c.limiteTotal == null ? null : (sinais.restantes.get(c.id) ?? c.limiteTotal),
-  }));
+  return cupons.map((c) => comIndicadores(c, sinais));
 }
 
 export async function buscarCatalogoFiltrado(
@@ -155,7 +179,15 @@ export async function buscarTrilhosDescoberta(
         !(row.ocultar_ate_inicio && row.validade_inicio && row.validade_inicio > hoje),
     )
     .map((row) =>
-      linhaCatalogoParaCupom(row, filtro, sinais.restantes.get(row.id) ?? null),
+      comIndicadores(
+        linhaCatalogoParaCupom(
+          row,
+          filtro,
+          sinais.restantes.get(row.id) ?? null,
+          sinais.resgates.get(row.id) ?? null,
+        ),
+        sinais,
+      ),
     );
 
   const novos = visiveis.filter((c) => ehNovoDoDia(dataBrt(c.publicadoEm), hoje));
@@ -239,16 +271,19 @@ export async function buscarGradeDestaque(
     buscarSinaisPessoais(),
   ]);
   const hoje = hojeBrt();
-  const itens: ItemHome[] = cupons.map((c) => ({
-    ...c,
-    segmentoSlug: c.categoria,
-    categoriaFolhaSlug: c.categoriaFolhaSlug,
-    publicadoYmd: dataBrt(c.publicadoEm),
-    eventos: sinais.eventos.get(c.id) ?? { validacoes7d: 0, ativacoes7d: 0 },
-    favorito: pessoais.favoritos.has(c.estabelecimentoId),
-    resgatadoPeloUsuario: pessoais.resgatados.has(c.id),
-    visitadoPeloUsuario: pessoais.visitados.has(c.estabelecimentoId),
-  }));
+  const itens: ItemHome[] = cupons.map((c) => {
+    const com = comIndicadores(c, sinais);
+    return {
+      ...com,
+      segmentoSlug: com.categoria,
+      categoriaFolhaSlug: com.categoriaFolhaSlug,
+      publicadoYmd: dataBrt(com.publicadoEm),
+      eventos: sinais.eventos.get(com.id) ?? { validacoes7d: 0, ativacoes7d: 0 },
+      favorito: pessoais.favoritos.has(com.estabelecimentoId),
+      resgatadoPeloUsuario: pessoais.resgatados.has(com.id),
+      visitadoPeloUsuario: pessoais.visitados.has(com.estabelecimentoId),
+    };
+  });
   const ranked = ordenarRecomendacao(itens, {
     consentimentoPersonalizacao: consent,
     perfil: { segmentos: prefs.segmentos, categorias: prefs.categorias },
