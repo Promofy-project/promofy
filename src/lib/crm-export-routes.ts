@@ -119,14 +119,19 @@ export async function GET_pdf(request: NextRequest) {
     .filter(Boolean)
     .join(" · ");
 
-  const buffer = await buildPdfBuffer({
-    estabelecimentoNome: ctx.nome ?? "",
-    geradoEm: new Date(),
-    filtrosLabel,
-    resumo,
-    clientes: dados.clientes,
-    historico: dados.historico,
-  });
+  let buffer: Buffer;
+  try {
+    buffer = await buildPdfBuffer({
+      estabelecimentoNome: ctx.nome ?? "",
+      geradoEm: new Date(),
+      filtrosLabel,
+      resumo,
+      clientes: dados.clientes,
+      historico: dados.historico,
+    });
+  } catch {
+    return NextResponse.json({ ok: false, motivo: "erro_pdf" }, { status: 500 });
+  }
 
   await registrarCrmExportacao({
     formato: "pdf",

@@ -16,6 +16,20 @@ const nextConfig = {
        */
       bodySizeLimit: "3mb",
     },
+    /**
+     * pdfkit 0.20 carrega Helvetica via createRequire('#standard-fonts/…').
+     * O tracer do Next omite esses módulos no bundle serverless da Vercel —
+     * o GET /portal/clientes/exportar.pdf devolve 500 vazio. Externalizar o
+     * pacote e incluir a árvore no trace mantém o import map do package.json.
+     */
+    serverComponentsExternalPackages: ["pdfkit", "fontkit", "linebreak"],
+    outputFileTracingIncludes: {
+      "/portal/clientes/exportar.pdf": [
+        "./node_modules/pdfkit/**",
+        "./node_modules/fontkit/**",
+        "./node_modules/linebreak/**",
+      ],
+    },
   },
 };
 

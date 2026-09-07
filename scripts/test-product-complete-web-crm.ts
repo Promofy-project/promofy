@@ -108,6 +108,7 @@ function testarPuros() {
     "utf8",
   );
   const crmDataSrc = readFileSync(join(ROOT, "src/lib/data/crm.ts"), "utf8");
+  const nextCfg = readFileSync(join(ROOT, "next.config.mjs"), "utf8");
   check("export builders não mencionam cpf", !/\bcpf\b/i.test(exportSrc));
   check("rotas de export devolvem 401 sem sessão", /status:\s*401/.test(routesSrc));
   check("migration CRM não seleciona profiles.cpf", !/p\.cpf|\.cpf\b/.test(migSrc.replace(/--.*$/gm, "")));
@@ -156,6 +157,16 @@ function testarPuros() {
     /tem_busca/.test(migSrc) &&
       /ordenacao/.test(migSrc) &&
       /crm_contexto_sessao/.test(migSrc),
+  );
+  check(
+    "next.config externaliza pdfkit no servidor",
+    /serverComponentsExternalPackages/.test(nextCfg) && /"pdfkit"/.test(nextCfg),
+  );
+  check(
+    "next.config inclui fontes pdfkit no trace da rota PDF",
+    /outputFileTracingIncludes/.test(nextCfg) &&
+      /exportar\.pdf/.test(nextCfg) &&
+      /node_modules\/pdfkit/.test(nextCfg),
   );
 
   console.log("\n[puro] Metadados de audit sem texto livre");
