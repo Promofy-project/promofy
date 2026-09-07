@@ -1328,6 +1328,30 @@ export type Database = {
       avisos_nao_lidos: { Args: never; Returns: number }
       buscar_ativacoes_por_cpf: { Args: { p_cpf: string }; Returns: Json }
       cpf_dv_valido: { Args: { p_cpf: string }; Returns: boolean }
+      crm_cliente_detalhe: { Args: { p_usuario_id: string }; Returns: Json }
+      crm_clientes: {
+        Args: {
+          p_filtro?: string
+          p_pagina?: number
+          p_por_pagina?: number
+          p_q?: string
+        }
+        Returns: Json
+      }
+      crm_contexto_sessao: { Args: never; Returns: Json }
+      crm_export_dados: {
+        Args: { p_filtro?: string; p_q?: string }
+        Returns: Json
+      }
+      crm_registrar_exportacao: {
+        Args: {
+          p_filtros?: Json
+          p_formato: string
+          p_linhas_clientes: number
+          p_linhas_historico: number
+        }
+        Returns: Json
+      }
       definir_status_estabelecimento: {
         Args: { p_est_id: string; p_status: string }
         Returns: Json
@@ -1353,22 +1377,21 @@ export type Database = {
         }[]
       }
       excluir_cupom: { Args: { p_cupom_id: string }; Returns: Json }
-      indicadores_vitrine_cupons: {
-        Args: never
-        Returns: {
-          cupom_id: string
-          disponiveis: number | null
-          limite_total: number | null
-          ocupados: number | null
-          resgates_confirmados: number
-        }[]
-      }
-      pausar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       favoritar_estabelecimento: { Args: { p_est_id: string }; Returns: Json }
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
       hora_ou_null: { Args: { p_hora: string }; Returns: string }
       indicadores_estabelecimento: { Args: never; Returns: Json }
+      indicadores_vitrine_cupons: {
+        Args: never
+        Returns: {
+          cupom_id: string
+          disponiveis: number
+          limite_total: number
+          ocupados: number
+          resgates_confirmados: number
+        }[]
+      }
       janela_alcance: {
         Args: { p_horarios: Json; p_prazo_horas: number }
         Returns: Json
@@ -1378,6 +1401,7 @@ export type Database = {
       mascarar_cpf: { Args: { p_cpf: string }; Returns: string }
       meu_estado_consumidor: { Args: never; Returns: Json }
       novidades_favoritos: { Args: never; Returns: Json }
+      pausar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       recusar_nps: { Args: { p_row_id: number }; Returns: Json }
       reenviar_cupom_moderacao: { Args: { p_cupom_id: string }; Returns: Json }
       registrar_evento_cupom: {
