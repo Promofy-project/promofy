@@ -1787,9 +1787,9 @@ read-only contra o hospedado; nada aplicado.
 
 | # | Arquivo | O que faz |
 |---|---|---|
-| 41 | `20260907130000_product_complete_web_crm.sql` | Índice parcial `cupons_usuario` (validado); `private.crm_exportacoes` (auditoria sem PII); RPCs `crm_clientes`, `crm_cliente_detalhe`, `crm_export_dados`, `crm_registrar_exportacao` (SECURITY DEFINER, posse via `owner_id = auth.uid()`, e-mail só via `auth.users`, sem CPF). |
+| 41 | `20260907130000_product_complete_web_crm.sql` | Índice parcial `cupons_usuario` (validado); `private.crm_exportacoes` (auditoria sem PII); RPCs `crm_clientes`, `crm_cliente_detalhe`, `crm_export_dados`, `crm_contexto_sessao`, `crm_registrar_exportacao` (SECURITY DEFINER, posse via `owner_id = auth.uid()`, e-mail só via `auth.users`, sem CPF). |
 
-> **Obs. 41:** relação CRM = só `cupons_usuario.status = 'validado'` nos cupons do estabelecimento da sessão. Ativo/expirado sem validação não entra. Sem tabela desnormalizada de clientes. Exportação xlsx/pdf no app; a tabela private só guarda metadados (formato, contagens, filtros não-PII). Renumerada de `20260902150000` (nunca hospedada) para depois de `20260907120000`. `crm_estab_da_sessao` escolhe `order by id limit 1` — alinhado a `estabs_do_dono()` após o seed multi-estab do FIX-02.
+> **Obs. 41:** relação CRM = só `cupons_usuario.status = 'validado'` nos cupons do estabelecimento da sessão. Ativo/expirado sem validação não entra. Sem tabela desnormalizada de clientes. Exportação xlsx/pdf no app; a tabela private só guarda metadados (formato, contagens, `{tem_busca, filtro, ordenacao}` — sem texto livre de busca). Renumerada de `20260902150000` (nunca hospedada) para depois de `20260907120000`. `crm_estab_da_sessao` / `crm_contexto_sessao` escolhem `order by id limit 1` — lista, detalhe, XLSX, PDF e audit usam o mesmo contexto. HTTP de export não usa `maybeSingle()` do portal.
 
 > **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260907120000`.
 

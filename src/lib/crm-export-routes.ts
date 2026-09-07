@@ -6,21 +6,18 @@ import {
   labelFiltroCrm,
   nomeArquivoExport,
 } from "@/lib/crm-export";
-import { buscarCrmExportDados, registrarCrmExportacao } from "@/lib/data/crm";
+import {
+  buscarContextoCrmDaSessao,
+  buscarCrmExportDados,
+  registrarCrmExportacao,
+} from "@/lib/data/crm";
 import type { CrmFiltro, CrmResumo } from "@/lib/crm-tipos";
-import { buscarEstabelecimentoDaSessao } from "@/lib/data/estab";
 
 const FILTROS: CrmFiltro[] = ["todos", "recentes", "recorrentes", "periodo_90d"];
 
 function lerFiltro(raw: string | null): CrmFiltro {
   if (raw && (FILTROS as string[]).includes(raw)) return raw as CrmFiltro;
   return "todos";
-}
-
-async function garantirLojista() {
-  const est = await buscarEstabelecimentoDaSessao();
-  if (!est) return null;
-  return est;
 }
 
 function headersAnexo(filename: string, contentType: string): HeadersInit {
@@ -31,9 +28,19 @@ function headersAnexo(filename: string, contentType: string): HeadersInit {
   };
 }
 
+/**
+ * Contexto CRM = `crm_contexto_sessao` (= `private.crm_estab_da_sessao`).
+ * Query/body/header `estabelecimento_id` não é autoridade — nem é lido.
+ */
+async function garantirContextoCrm() {
+  const ctx = await buscarContextoCrmDaSessao();
+  if (!ctx.ok || !ctx.estabelecimentoId) return null;
+  return ctx;
+}
+
 export async function GET_xlsx(request: NextRequest) {
-  const est = await garantirLojista();
-  if (!est) {
+  const ctx = await garantirContextoCrm();
+  if (!ctx) {
     return NextResponse.json({ ok: false, motivo: "nao_autorizado" }, { status: 401 });
   }
 
@@ -48,13 +55,17 @@ export async function GET_xlsx(request: NextRequest) {
       { status: 403 },
     );
   }
+  if (dados.estabelecimentoId !== ctx.estabelecimentoId) {
+    return NextResponse.json({ ok: false, motivo: "contexto_divergente" }, { status: 403 });
+  }
 
   const buffer = await buildXlsxBuffer(dados.clientes, dados.historico);
   await registrarCrmExportacao({
     formato: "xlsx",
     linhasClientes: dados.clientes.length,
     linhasHistorico: dados.historico.length,
-    filtros: { q: q ?? null, filtro },
+    q,
+    filtro,
   });
 
   const filename = nomeArquivoExport("xlsx");
@@ -68,8 +79,8 @@ export async function GET_xlsx(request: NextRequest) {
 }
 
 export async function GET_pdf(request: NextRequest) {
-  const est = await garantirLojista();
-  if (!est) {
+  const ctx = await garantirContextoCrm();
+  if (!ctx) {
     return NextResponse.json({ ok: false, motivo: "nao_autorizado" }, { status: 401 });
   }
 
@@ -83,6 +94,9 @@ export async function GET_pdf(request: NextRequest) {
       { ok: false, motivo: dados.motivo ?? "erro" },
       { status: 403 },
     );
+  }
+  if (dados.estabelecimentoId !== ctx.estabelecimentoId) {
+    return NextResponse.json({ ok: false, motivo: "contexto_divergente" }, { status: 403 });
   }
 
   // Resumo derivado dos dados exportados (honestos; sem ticket/receita/LTV).
@@ -97,6 +111,7 @@ export async function GET_pdf(request: NextRequest) {
     resgatesConfirmados: dados.historico.length,
   };
 
+  // Label do arquivo (não vai para o audit).
   const filtrosLabel = [
     labelFiltroCrm(filtro),
     q?.trim() ? `busca “${q.trim()}”` : null,
@@ -105,7 +120,7 @@ export async function GET_pdf(request: NextRequest) {
     .join(" · ");
 
   const buffer = await buildPdfBuffer({
-    estabelecimentoNome: est.nome,
+    estabelecimentoNome: ctx.nome ?? "",
     geradoEm: new Date(),
     filtrosLabel,
     resumo,
@@ -117,7 +132,8 @@ export async function GET_pdf(request: NextRequest) {
     formato: "pdf",
     linhasClientes: dados.clientes.length,
     linhasHistorico: dados.historico.length,
-    filtros: { q: q ?? null, filtro },
+    q,
+    filtro,
   });
 
   const filename = nomeArquivoExport("pdf");

@@ -492,7 +492,53 @@ revoke execute on function public.crm_export_dados(text, text) from public, anon
 grant  execute on function public.crm_export_dados(text, text) to authenticated;
 
 -- ------------------------------------------------------------
--- crm_registrar_exportacao — auditoria sem PII
+-- crm_contexto_sessao — mesmo estabelecimento que as demais RPCs CRM
+-- ------------------------------------------------------------
+create or replace function public.crm_contexto_sessao()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid    uuid := (select auth.uid());
+  v_estab  text;
+  v_nome   text;
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'motivo', 'sem_sessao');
+  end if;
+
+  v_estab := private.crm_estab_da_sessao();
+  if v_estab is null then
+    return jsonb_build_object(
+      'ok', true,
+      'estabelecimento_id', null,
+      'nome', null
+    );
+  end if;
+
+  select e.nome into v_nome
+    from public.estabelecimentos e
+   where e.id = v_estab;
+
+  return jsonb_build_object(
+    'ok', true,
+    'estabelecimento_id', v_estab,
+    'nome', v_nome
+  );
+end;
+$$;
+
+comment on function public.crm_contexto_sessao() is
+  'CRM-01H: estabelecimento da sessao (private.crm_estab_da_sessao). Sem parametro de id.';
+
+revoke execute on function public.crm_contexto_sessao() from public, anon;
+grant  execute on function public.crm_contexto_sessao() to authenticated;
+
+-- ------------------------------------------------------------
+-- crm_registrar_exportacao — auditoria sem PII (filtros sanitizados)
 -- ------------------------------------------------------------
 create or replace function public.crm_registrar_exportacao(
   p_formato text,
@@ -507,10 +553,14 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_uid    uuid := (select auth.uid());
-  v_estab  text;
-  v_fmt    text := lower(trim(coalesce(p_formato, '')));
-  v_id     bigint;
+  v_uid        uuid := (select auth.uid());
+  v_estab      text;
+  v_fmt        text := lower(trim(coalesce(p_formato, '')));
+  v_id         bigint;
+  v_in         jsonb := coalesce(p_filtros, '{}'::jsonb);
+  v_filtro     text := coalesce(nullif(trim(v_in->>'filtro'), ''), 'todos');
+  v_tem_busca  boolean;
+  v_filtros    jsonb;
 begin
   if v_uid is null then
     return jsonb_build_object('ok', false, 'motivo', 'sem_sessao');
@@ -525,6 +575,22 @@ begin
     return jsonb_build_object('ok', false, 'motivo', 'formato_invalido');
   end if;
 
+  if v_filtro not in ('todos', 'recentes', 'recorrentes', 'periodo_90d') then
+    v_filtro := 'todos';
+  end if;
+
+  -- Flag apenas. Qualquer texto livre (q/search) é descartado.
+  v_tem_busca := lower(coalesce(v_in->>'tem_busca', '')) in ('true', 't', '1');
+  if nullif(trim(coalesce(v_in->>'q', v_in->>'search', '')), '') is not null then
+    v_tem_busca := true;
+  end if;
+
+  v_filtros := jsonb_build_object(
+    'tem_busca', v_tem_busca,
+    'filtro', v_filtro,
+    'ordenacao', 'ultimo_resgate_desc'
+  );
+
   insert into private.crm_exportacoes (
     estabelecimento_id, ator_id, formato,
     linhas_clientes, linhas_historico, filtros
@@ -534,7 +600,7 @@ begin
     v_fmt,
     greatest(coalesce(p_linhas_clientes, 0), 0),
     greatest(coalesce(p_linhas_historico, 0), 0),
-    coalesce(p_filtros, '{}'::jsonb)
+    v_filtros
   )
   returning id into v_id;
 
@@ -543,7 +609,7 @@ end;
 $$;
 
 comment on function public.crm_registrar_exportacao(text, int, int, jsonb) is
-  'CRM-01: registra exportacao (metadados). Sem PII na linha de auditoria.';
+  'CRM-01H: registra exportacao. filtros = {tem_busca, filtro, ordenacao}. Sem texto livre.';
 
 revoke execute on function public.crm_registrar_exportacao(text, int, int, jsonb)
   from public, anon;

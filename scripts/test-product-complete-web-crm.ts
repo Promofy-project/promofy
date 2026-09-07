@@ -3,7 +3,7 @@
  *
  * Prova: relação CRM só com validado; isolamento por estabelecimento;
  * busca; agregação; detalhe; export xlsx/pdf sem CPF; formula injection;
- * auditoria sem PII; consumidor sem estab; paginação.
+ * auditoria sem PII (sem q bruto); contexto único multi-estab; paginação.
  *
  * Contas qa-* efêmeras. consumidor@ / convidado@ nunca tocados.
  */
@@ -16,6 +16,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { resolverAlvo } from "./_alvo";
 import { criarContaQa, destruirContaQa, encerrar, type ContaQa } from "./_qa-conta";
+import { filtrosAuditCrm } from "../src/lib/crm-audit-filtros";
 import { buildPdfBuffer, buildXlsxBuffer } from "../src/lib/crm-export";
 import { escaparCelulaExcel } from "../src/lib/crm-xlsx-sanitize";
 import type { CrmClienteResumo, CrmExportHistoricoItem, CrmResumo } from "../src/lib/crm-tipos";
@@ -130,6 +131,53 @@ function testarPuros() {
     const clientes = side.indexOf('href: "/portal/clientes"');
     return cupons >= 0 && clientes > cupons;
   })());
+  check(
+    "export HTTP não usa buscarEstabelecimentoDaSessao/maybeSingle",
+    !/buscarEstabelecimentoDaSessao/.test(routesSrc) && !/maybeSingle/.test(routesSrc),
+  );
+  check(
+    "export HTTP resolve contexto via buscarContextoCrmDaSessao",
+    /buscarContextoCrmDaSessao/.test(routesSrc),
+  );
+  check(
+    "export HTTP não lê estabelecimento_id da query",
+    !/sp\.get\(\s*["']estabelecimento/.test(routesSrc),
+  );
+  check(
+    "export HTTP não persiste q bruto no registrar",
+    !/filtros:\s*\{[^}]*\bq\b/.test(routesSrc) && /registrarCrmExportacao/.test(routesSrc),
+  );
+  check(
+    "crm.ts registra só filtrosAuditCrm (sem Record livre)",
+    /filtrosAuditCrm/.test(crmDataSrc) && /crm_contexto_sessao/.test(crmDataSrc),
+  );
+  check(
+    "migration sanitiza filtros para tem_busca/filtro/ordenacao",
+    /tem_busca/.test(migSrc) &&
+      /ordenacao/.test(migSrc) &&
+      /crm_contexto_sessao/.test(migSrc),
+  );
+
+  console.log("\n[puro] Metadados de audit sem texto livre");
+  const audNome = filtrosAuditCrm("Helena Silva", "todos");
+  check("filtrosAuditCrm tem_busca=true com q", audNome.tem_busca === true);
+  check("filtrosAuditCrm não inclui chave q", !("q" in audNome) && !("search" in audNome));
+  check(
+    "filtrosAuditCrm serializado sem Helena",
+    !/Helena|Silva/i.test(JSON.stringify(audNome)),
+  );
+  const audVazio = filtrosAuditCrm("   ", "recentes");
+  check("filtrosAuditCrm tem_busca=false sem q", audVazio.tem_busca === false);
+  check("filtrosAuditCrm filtro whitelist", audVazio.filtro === "recentes");
+  check(
+    "filtrosAuditCrm ignora filtro livre (PII)",
+    filtrosAuditCrm(null, "Helena Silva").filtro === "todos",
+  );
+  check(
+    "filtrosAuditCrm chaves só metadados",
+    JSON.stringify(Object.keys(audNome).sort()) ===
+      JSON.stringify(["filtro", "ordenacao", "tem_busca"]),
+  );
 }
 
 async function main(): Promise<number> {
@@ -491,12 +539,177 @@ async function main(): Promise<number> {
         ((consLista?.clientes as unknown[]) ?? []).length === 0,
       JSON.stringify(consLista)?.slice(0, 120),
     );
+    const consCtx = (await consumidor.rpc("crm_contexto_sessao")).data as Record<
+      string,
+      unknown
+    >;
+    check(
+      "consumidor sem contexto CRM (estabelecimento null)",
+      consCtx?.ok === true && consCtx?.estabelecimento_id == null,
+      JSON.stringify(consCtx)?.slice(0, 120),
+    );
+    const consExp = (await consumidor.rpc("crm_export_dados", {})).data as Record<
+      string,
+      unknown
+    >;
+    check(
+      "consumidor não exporta clientes",
+      consExp?.ok === true &&
+        ((consExp?.clientes as unknown[]) ?? []).length === 0 &&
+        consExp?.estabelecimento_id == null,
+      JSON.stringify(consExp)?.slice(0, 120),
+    );
+    const consReg = (await consumidor.rpc("crm_registrar_exportacao", {
+      p_formato: "xlsx",
+      p_linhas_clientes: 1,
+      p_linhas_historico: 0,
+      p_filtros: { q: "nao-deve-gravar", filtro: "todos" },
+    })).data as Record<string, unknown>;
+    check(
+      "consumidor não registra audit de export",
+      consReg?.ok === false && consReg?.motivo === "sem_estabelecimento",
+      JSON.stringify(consReg),
+    );
+
+    // ---- Contexto único (1-estab vs multi-estab) ----
+    console.log("\n[RPC] Contexto de estabelecimento (CRM-01H)");
+    const uidLojista = (await lojista.auth.getUser()).data.user?.id ?? "";
+    const uidLojista2 = (await lojista2.auth.getUser()).data.user?.id ?? "";
+    const { data: estabsL } = await svc
+      .from("estabelecimentos")
+      .select("id")
+      .eq("owner_id", uidLojista)
+      .order("id");
+    const idsLojista = (estabsL ?? []).map((e) => e.id);
+    check(
+      "lojista@ é multi-estab (e1 + e3–e6)",
+      idsLojista.includes("e1") &&
+        idsLojista.includes("e3") &&
+        idsLojista.includes("e4") &&
+        idsLojista.includes("e5") &&
+        idsLojista.includes("e6") &&
+        idsLojista[0] === "e1",
+      idsLojista.join(","),
+    );
+    const { data: estabsL2 } = await svc
+      .from("estabelecimentos")
+      .select("id")
+      .eq("owner_id", uidLojista2)
+      .order("id");
+    const idsLojista2 = (estabsL2 ?? []).map((e) => e.id);
+    check(
+      "lojista2@ é 1-estab (só e2)",
+      idsLojista2.length === 1 && idsLojista2[0] === "e2",
+      idsLojista2.join(","),
+    );
+
+    const ctxA = (await lojista.rpc("crm_contexto_sessao")).data as Record<string, unknown>;
+    const ctxB = (await lojista2.rpc("crm_contexto_sessao")).data as Record<string, unknown>;
+    check("contexto multi-estab = e1 (order by id)", ctxA?.estabelecimento_id === "e1", String(ctxA?.estabelecimento_id));
+    check("contexto 1-estab = e2", ctxB?.estabelecimento_id === "e2", String(ctxB?.estabelecimento_id));
+    check("contexto multi-estab nome = Sabor & Cia", ctxA?.nome === "Sabor & Cia", String(ctxA?.nome));
+    check("contexto 1-estab nome = PowerFit Academia", ctxB?.nome === "PowerFit Academia", String(ctxB?.nome));
+
+    const listaCtx = (await lojista.rpc("crm_clientes", {})).data as Record<string, unknown>;
+    const detCtx = (await lojista.rpc("crm_cliente_detalhe", {
+      p_usuario_id: qaA.id,
+    })).data as Record<string, unknown>;
+    const expCtx = (await lojista.rpc("crm_export_dados", {})).data as Record<string, unknown>;
+    check(
+      "lista multi-estab = mesmo contexto",
+      listaCtx?.estabelecimento_id === ctxA?.estabelecimento_id,
+      String(listaCtx?.estabelecimento_id),
+    );
+    check(
+      "detalhe multi-estab = mesmo contexto",
+      detCtx?.estabelecimento_id === ctxA?.estabelecimento_id,
+      String(detCtx?.estabelecimento_id),
+    );
+    check(
+      "export multi-estab = mesmo contexto da lista",
+      expCtx?.estabelecimento_id === listaCtx?.estabelecimento_id &&
+        expCtx?.estabelecimento_id === "e1",
+      String(expCtx?.estabelecimento_id),
+    );
+
+    const listaB = (await lojista2.rpc("crm_clientes", {})).data as Record<string, unknown>;
+    const expB = (await lojista2.rpc("crm_export_dados", {})).data as Record<string, unknown>;
+    check(
+      "owner 1-estab: lista = export = e2",
+      listaB?.estabelecimento_id === "e2" && expB?.estabelecimento_id === "e2",
+      `${listaB?.estabelecimento_id}/${expB?.estabelecimento_id}`,
+    );
+    check(
+      "tenant B não herda contexto de A",
+      ctxB?.estabelecimento_id !== ctxA?.estabelecimento_id,
+    );
+
+    const injLista = await lojista.rpc("crm_clientes", {
+      p_filtro: "todos",
+      estabelecimento_id: "e2",
+    } as never);
+    const injListaData = injLista.data as Record<string, unknown> | null;
+    check(
+      "estabelecimento_id injetado na lista é ignorado ou rejeitado",
+      Boolean(injLista.error) || injListaData?.estabelecimento_id === "e1",
+      JSON.stringify(injLista.error ?? injListaData)?.slice(0, 160),
+    );
+    const injExp = await lojista.rpc("crm_export_dados", {
+      p_filtro: "todos",
+      p_estabelecimento_id: "e2",
+    } as never);
+    const injExpData = injExp.data as Record<string, unknown> | null;
+    check(
+      "estabelecimento_id injetado no export é ignorado ou rejeitado",
+      Boolean(injExp.error) || injExpData?.estabelecimento_id === "e1",
+      JSON.stringify(injExp.error ?? injExpData)?.slice(0, 160),
+    );
+
+    const anon = createClient(alvo.url, alvo.anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const recusaSemSessao = (
+      res: { data: unknown; error: { message?: string } | null },
+    ) => {
+      const d = res.data as Record<string, unknown> | null;
+      return (
+        Boolean(res.error) ||
+        (d?.ok === false && d?.motivo === "sem_sessao")
+      );
+    };
+    const anonCtx = await anon.rpc("crm_contexto_sessao");
+    const anonExp = await anon.rpc("crm_export_dados", {});
+    const anonReg = await anon.rpc("crm_registrar_exportacao", {
+      p_formato: "pdf",
+      p_linhas_clientes: 0,
+      p_linhas_historico: 0,
+    });
+    check(
+      "sem sessão: contexto recusa",
+      recusaSemSessao(anonCtx),
+      JSON.stringify(anonCtx.error ?? anonCtx.data),
+    );
+    check(
+      "sem sessão: export recusa",
+      recusaSemSessao(anonExp),
+      JSON.stringify(anonExp.error ?? anonExp.data),
+    );
+    check(
+      "sem sessão: audit recusa",
+      recusaSemSessao(anonReg),
+      JSON.stringify(anonReg.error ?? anonReg.data),
+    );
 
     // ---- Export dados + builders ----
     console.log("\n[export] Dados + xlsx + pdf");
     const exp = (await lojista.rpc("crm_export_dados", {})).data as Record<string, unknown>;
     check("crm_export_dados ok", exp?.ok === true);
     check("export JSON sem cpf", !/\bcpf\b/i.test(JSON.stringify(exp)));
+    check(
+      "XLSX/RPC multi-estab ancora em e1 (mesmo da lista)",
+      exp?.estabelecimento_id === "e1" && exp?.estabelecimento_id === lista?.estabelecimento_id,
+      String(exp?.estabelecimento_id),
+    );
 
     const clientesExp = ((exp?.clientes as Record<string, unknown>[]) ?? []).map(
       (c): CrmClienteResumo => ({
@@ -560,6 +773,26 @@ async function main(): Promise<number> {
       if (nome === "'=1+1" || nome.startsWith("'=")) formulaEscapada = true;
     });
     check("fórmula injetada escapada no xlsx", formulaEscapada);
+    const idsExp = clientesExp.map((c) => c.usuarioId);
+    check("xlsx/RPC multi-estab não inclui cliente só-e2 (Carla)", !idsExp.includes(qaC.id));
+    const cupomIdsHist = Array.from(
+      new Set(histExp.map((h) => h.cupomId).filter(Boolean)),
+    );
+    if (cupomIdsHist.length > 0) {
+      const { data: cuponsHist } = await svc
+        .from("cupons")
+        .select("id, estabelecimento_id")
+        .in("id", cupomIdsHist);
+      check(
+        "histórico do export multi-estab é só do contexto e1",
+        (cuponsHist ?? []).every((c) => c.estabelecimento_id === "e1"),
+        JSON.stringify(cuponsHist ?? []),
+      );
+    } else {
+      check("histórico do export multi-estab é só do contexto e1", false, "sem histórico");
+    }
+    const idsExpB = ((expB?.clientes as { usuario_id?: string }[]) ?? []).map((c) => c.usuario_id);
+    check("export 1-estab (e2) não inclui Bruno (só e1)", !idsExpB.includes(qaB.id));
 
     const resumoPdf: CrmResumo = {
       clientesUnicos: Number((lista?.resumo as Record<string, unknown>)?.clientes_unicos ?? 0),
@@ -587,6 +820,40 @@ async function main(): Promise<number> {
       pdfTxt.includes("Sabor") || pdfBuf.includes(saborUtf16be) || pdfBuf.includes(saborUtf16le),
     );
     check("pdf não contém cpf", !/\bcpf\b/i.test(pdfTxt));
+    const pdfB = await buildPdfBuffer({
+      estabelecimentoNome: String(ctxB?.nome ?? ""),
+      geradoEm: new Date(),
+      filtrosLabel: "Todos",
+      resumo: {
+        clientesUnicos: ((expB?.clientes as unknown[]) ?? []).length,
+        novos30d: 0,
+        recorrentes: 0,
+        resgatesConfirmados: ((expB?.historico as unknown[]) ?? []).length,
+      },
+      clientes: ((expB?.clientes as Record<string, unknown>[]) ?? []).map(
+        (c): CrmClienteResumo => ({
+          usuarioId: String(c.usuario_id),
+          nome: (c.nome as string) ?? null,
+          email: (c.email as string) ?? null,
+          telefone: (c.telefone as string) ?? null,
+          nascimento: (c.nascimento as string) ?? null,
+          totalResgates: Number(c.total_resgates ?? 0),
+          primeiroResgate: (c.primeiro_resgate as string) ?? null,
+          ultimoResgate: (c.ultimo_resgate as string) ?? null,
+        }),
+      ),
+      historico: [],
+    });
+    check("pdf 1-estab começa com %PDF", pdfB.slice(0, 4).toString("utf8") === "%PDF");
+    const powerUtf16be = Buffer.from([0x00, 0x50, 0x00, 0x6f, 0x00, 0x77, 0x00, 0x65, 0x00, 0x72]);
+    check(
+      "pdf 1-estab contém PowerFit (contexto e2)",
+      pdfB.toString("latin1").includes("Power") || pdfB.includes(powerUtf16be),
+    );
+    check(
+      "pdf multi-estab não contém PowerFit (tenant errado)",
+      !pdfTxt.includes("PowerFit") && !pdfBuf.includes(powerUtf16be),
+    );
 
     // ---- Auditoria ----
     console.log("\n[RPC] Auditoria de exportação");
@@ -597,6 +864,31 @@ async function main(): Promise<number> {
       p_filtros: { q: null, filtro: "todos" },
     })).data as Record<string, unknown>;
     check("crm_registrar_exportacao ok", reg?.ok === true, JSON.stringify(reg));
+
+    const registrarVeneno = async (q: string, filtro = "todos") => {
+      return (await lojista.rpc("crm_registrar_exportacao", {
+        p_formato: "pdf",
+        p_linhas_clientes: 0,
+        p_linhas_historico: 0,
+        p_filtros: { q, search: q, filtro, extra: q },
+      })).data as Record<string, unknown>;
+    };
+
+    const regNome = await registrarVeneno("Helena Silva", "recentes");
+    const regEmail = await registrarVeneno("helena@example.com");
+    const regTel = await registrarVeneno("11999999999", "periodo_90d");
+    const regFormula = await registrarVeneno("=2+2");
+    const regSemQ = (await lojista.rpc("crm_registrar_exportacao", {
+      p_formato: "xlsx",
+      p_linhas_clientes: 0,
+      p_linhas_historico: 0,
+      p_filtros: { tem_busca: false, filtro: "todos" },
+    })).data as Record<string, unknown>;
+    check("registrar com q nome ok", regNome?.ok === true, JSON.stringify(regNome));
+    check("registrar com q email ok", regEmail?.ok === true, JSON.stringify(regEmail));
+    check("registrar com q telefone ok", regTel?.ok === true, JSON.stringify(regTel));
+    check("registrar com q fórmula ok", regFormula?.ok === true, JSON.stringify(regFormula));
+    check("registrar sem q ok", regSemQ?.ok === true, JSON.stringify(regSemQ));
 
     if (alvo.nome === "local") {
       const cols = psql(
@@ -616,6 +908,78 @@ async function main(): Promise<number> {
         linha,
       );
       check("linha registra formato xlsx", linha.startsWith("xlsx|"));
+      const estabAudit = psql(
+        `select estabelecimento_id from private.crm_exportacoes where id = ${Number(reg?.id)}`,
+      );
+      check(
+        "audit multi-estab registra o mesmo estabelecimento da lista",
+        estabAudit === "e1" && estabAudit === String(lista?.estabelecimento_id),
+        estabAudit,
+      );
+      const atorAudit = psql(
+        `select ator_id::text from private.crm_exportacoes where id = ${Number(reg?.id)}`,
+      );
+      check("audit registra ator da sessão", atorAudit === uidLojista, atorAudit);
+
+      const dump = (id: unknown) =>
+        psql(
+          `select coalesce(filtros::text,'') || '|' || estabelecimento_id from private.crm_exportacoes where id = ${Number(id)}`,
+        );
+      const parseF = (id: unknown) =>
+        JSON.parse(psql(`select filtros::text from private.crm_exportacoes where id = ${Number(id)}`)) as Record<
+          string,
+          unknown
+        >;
+
+      const fNome = parseF(regNome?.id);
+      const dNome = dump(regNome?.id);
+      check("q nome não persiste (Helena/Silva ausentes)", !/Helena|Silva/i.test(dNome), dNome);
+      check("tem_busca=true quando q nome usado", fNome.tem_busca === true, JSON.stringify(fNome));
+      check("filtro recentes preservado sem texto livre", fNome.filtro === "recentes");
+
+      const dEmail = dump(regEmail?.id);
+      const fEmail = parseF(regEmail?.id);
+      check("q email não persiste (helena/@example.com ausentes)", !/helena|@example\.com/i.test(dEmail), dEmail);
+      check("tem_busca=true quando q email usado", fEmail.tem_busca === true);
+
+      const dTel = dump(regTel?.id);
+      const fTel = parseF(regTel?.id);
+      check("q telefone não persiste (11999999999 ausente)", !/11999999999/.test(dTel), dTel);
+      check("tem_busca=true quando q telefone usado", fTel.tem_busca === true);
+      check("filtro periodo_90d preservado", fTel.filtro === "periodo_90d");
+
+      const dFormula = dump(regFormula?.id);
+      const fFormula = parseF(regFormula?.id);
+      check("q fórmula não persiste (=2+2 ausente)", !/=2\+2/.test(dFormula), dFormula);
+      check("tem_busca=true quando q fórmula usado", fFormula.tem_busca === true);
+
+      const fSem = parseF(regSemQ?.id);
+      check("tem_busca=false sem q", fSem.tem_busca === false, JSON.stringify(fSem));
+      check(
+        "audit só tem metadados não identificáveis",
+        JSON.stringify(Object.keys(fNome).sort()) ===
+          JSON.stringify(["filtro", "ordenacao", "tem_busca"]) &&
+          fNome.ordenacao === "ultimo_resgate_desc" &&
+          !("q" in fNome) &&
+          !("search" in fNome) &&
+          !("extra" in fNome),
+        JSON.stringify(fNome),
+      );
+      const venenoCount = psql(
+        `select count(*) from private.crm_exportacoes where filtros::text ~* 'Helena|Silva|helena@example.com|11999999999|=2\\+2'`,
+      );
+      check("tabela de audit sem ocorrência dos textos de busca", venenoCount === "0", venenoCount);
+
+      const regB = (await lojista2.rpc("crm_registrar_exportacao", {
+        p_formato: "pdf",
+        p_linhas_clientes: 0,
+        p_linhas_historico: 0,
+        p_filtros: { filtro: "todos" },
+      })).data as Record<string, unknown>;
+      const estabB = psql(
+        `select estabelecimento_id from private.crm_exportacoes where id = ${Number(regB?.id)}`,
+      );
+      check("audit 1-estab registra e2 (não e1)", estabB === "e2", estabB);
     } else {
       console.log("  ----  auditoria private via psql — só no alvo local");
     }

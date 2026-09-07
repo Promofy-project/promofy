@@ -1338,6 +1338,7 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_contexto_sessao: { Args: never; Returns: Json }
       crm_export_dados: {
         Args: { p_filtro?: string; p_q?: string }
         Returns: Json

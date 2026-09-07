@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+import { filtrosAuditCrm } from "@/lib/crm-audit-filtros";
 import type {
   CrmClienteResumo,
   CrmFiltro,
@@ -46,6 +47,13 @@ export interface CrmExportDados {
   historico: CrmExportHistoricoItem[];
 }
 
+export interface CrmContextoSessao {
+  ok: boolean;
+  motivo?: string;
+  estabelecimentoId: string | null;
+  nome: string | null;
+}
+
 const RESUMO_VAZIO: CrmResumo = {
   clientesUnicos: 0,
   novos30d: 0,
@@ -76,6 +84,37 @@ function mapHistorico(raw: Record<string, unknown>): CrmHistoricoItem {
     validadoEm: (raw.validado_em as string | null) ?? null,
     status: String(raw.status ?? ""),
     nps: raw.nps == null ? null : Number(raw.nps),
+  };
+}
+
+/** Mesma regra que as RPCs CRM: `private.crm_estab_da_sessao` (order by id). */
+export async function buscarContextoCrmDaSessao(): Promise<CrmContextoSessao> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("crm_contexto_sessao");
+
+  if (error) {
+    return {
+      ok: false,
+      motivo: error.message,
+      estabelecimentoId: null,
+      nome: null,
+    };
+  }
+
+  const r = data as Record<string, unknown> | null;
+  if (!r || r.ok !== true) {
+    return {
+      ok: false,
+      motivo: String(r?.motivo ?? "erro"),
+      estabelecimentoId: null,
+      nome: null,
+    };
+  }
+
+  return {
+    ok: true,
+    estabelecimentoId: (r.estabelecimento_id as string | null) ?? null,
+    nome: (r.nome as string | null) ?? null,
   };
 }
 
@@ -227,14 +266,15 @@ export async function registrarCrmExportacao(opts: {
   formato: "xlsx" | "pdf";
   linhasClientes: number;
   linhasHistorico: number;
-  filtros: Record<string, unknown>;
+  q?: string | null;
+  filtro?: CrmFiltro | string | null;
 }): Promise<{ ok: boolean; motivo?: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("crm_registrar_exportacao", {
     p_formato: opts.formato,
     p_linhas_clientes: opts.linhasClientes,
     p_linhas_historico: opts.linhasHistorico,
-    p_filtros: opts.filtros as Json,
+    p_filtros: filtrosAuditCrm(opts.q, opts.filtro) as unknown as Json,
   });
 
   if (error) return { ok: false, motivo: error.message };
