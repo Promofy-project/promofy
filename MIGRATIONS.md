@@ -1770,3 +1770,13 @@ read-only contra o hospedado; nada aplicado.
 > **Obs. 39:** Causa raiz do sintoma "CPF não acha / código valida": órfãos e3..e6 + `<>` vs NULL. `buscar_ativacoes_por_cpf` não muda — já usava `estabs_do_dono()`. Seed-users passa a ligar e3..e6 ao lojista no reset local. **Obrigação CRM:** a migration local `20260902150000_product_complete_web_crm.sql` (ainda não hospedada) deve ser RENUMERADA para depois de `160000` no rebase da branch CRM, se este fix publicar antes.
 
 > **Não publicar ainda** neste WP — só implementação/teste local no lote pré-call.
+
+---
+
+## CLIENT-CALL-CLOSURE-01 — pausa, indicadores de vitrine, UX de reativação
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 40 | `20260907120000_client_call_coupon_pause_metrics.sql` | RPCs `pausar_cupom` / `retomar_cupom` (owner only, `indisponivel` = pausado); RPC batch `indicadores_vitrine_cupons` (ocupados/disponíveis/resgates confirmados, sem PII); `ativar_cupom` trava a linha sempre (fronteira pausa×ativação); `validar_cupom` carimba `esgotado` também a partir de pausado. |
+
+> **Obs. 40:** Não reescreve `janela_alcance` nem a conta de reserva (`validado + ativo vigente`). A pausa não invalida códigos já emitidos. Retomar recusa expirado/esgotado/excluído/pendente/rejeitado — não pula moderação nem validade. **Obrigação CRM:** a migration local `20260902150000_product_complete_web_crm.sql` (ainda não hospedada) deve ser RENUMERADA para depois de `20260907120000` no rebase da branch CRM.

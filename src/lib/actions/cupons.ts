@@ -835,3 +835,57 @@ export async function excluirCupomAction(cupomId: string): Promise<ExcluirResult
     return { ok: false, erro: "Não foi possível excluir o cupom." };
   }
 }
+
+type PausarRetomarResult =
+  | { ok: true; jaFeito: boolean }
+  | { ok: false; erro: string };
+
+const MSG_PAUSA: Record<string, string> = {
+  sem_sessao: "Sessão expirada. Entre novamente.",
+  nao_autorizado: "Este cupom não é do seu estabelecimento.",
+  nao_encontrado: "Cupom não encontrado.",
+  excluido: "Cupom excluído não pode ser pausado.",
+  esgotado: "Campanha esgotada não pode ser pausada.",
+  pendente: "Cupom em análise não pode ser pausado.",
+  rejeitado: "Cupom rejeitado não pode ser pausado.",
+  expirado: "A validade acabou. Use prorrogar para reenviar à análise.",
+  nao_operacional: "Este cupom não está no ar para pausar.",
+};
+
+const MSG_RETORNO: Record<string, string> = {
+  sem_sessao: "Sessão expirada. Entre novamente.",
+  nao_autorizado: "Este cupom não é do seu estabelecimento.",
+  nao_encontrado: "Cupom não encontrado.",
+  excluido: "Cupom excluído não pode ser retomado.",
+  esgotado: "Campanha esgotada não volta ao ar. Crie uma campanha nova.",
+  pendente: "Cupom em análise não pode ser retomado.",
+  rejeitado: "Cupom rejeitado não pode ser retomado.",
+  expirado: "A validade acabou. Use prorrogar para reenviar à análise.",
+  nao_pausado: "Este cupom não está pausado.",
+};
+
+export async function pausarCupomAction(cupomId: string): Promise<PausarRetomarResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("pausar_cupom", { p_cupom_id: cupomId });
+    if (error) return { ok: false, erro: "Não foi possível pausar o cupom." };
+    const r = data as unknown as { ok?: boolean; motivo?: string; ja_pausado?: boolean } | null;
+    if (r?.ok) return { ok: true, jaFeito: r.ja_pausado === true };
+    return { ok: false, erro: MSG_PAUSA[r?.motivo ?? ""] ?? "Não foi possível pausar o cupom." };
+  } catch {
+    return { ok: false, erro: "Não foi possível pausar o cupom." };
+  }
+}
+
+export async function retomarCupomAction(cupomId: string): Promise<PausarRetomarResult> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("retomar_cupom", { p_cupom_id: cupomId });
+    if (error) return { ok: false, erro: "Não foi possível retomar o cupom." };
+    const r = data as unknown as { ok?: boolean; motivo?: string; ja_retomado?: boolean } | null;
+    if (r?.ok) return { ok: true, jaFeito: r.ja_retomado === true };
+    return { ok: false, erro: MSG_RETORNO[r?.motivo ?? ""] ?? "Não foi possível retomar o cupom." };
+  } catch {
+    return { ok: false, erro: "Não foi possível retomar o cupom." };
+  }
+}

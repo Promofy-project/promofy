@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, Copy, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Copy, Pause, Pencil, Play, RotateCcw, Trash2 } from "lucide-react";
 
 import { CATEGORIA_VISUAL_FALLBACK } from "@/lib/categoria-visual";
 import { cn, formatNumber } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { urlPublicaImagem } from "@/lib/imagem-cupom";
 
 const STATUS_BADGE = {
   ativo: { variant: "success" as const, label: "Ativo" },
+  pausado: { variant: "muted" as const, label: "Pausado" },
   esgotado: { variant: "yellow-soft" as const, label: "Esgotado" },
   expirado: { variant: "danger" as const, label: "Expirado" },
   pendente: { variant: "yellow-soft" as const, label: "Em análise" },
@@ -30,6 +31,10 @@ export function CouponPortalCard({
   onExcluir,
   excluindo,
   onNovaCampanha,
+  onPausar,
+  onRetomar,
+  pausando,
+  retomando,
   carregando,
 }: {
   item: ItemCupomPortal;
@@ -47,6 +52,10 @@ export function CouponPortalCard({
    * registro só nasce quando o lojista salva.
    */
   onNovaCampanha?: (item: ItemCupomPortal) => void;
+  onPausar?: (item: ItemCupomPortal) => void;
+  onRetomar?: (item: ItemCupomPortal) => void;
+  pausando?: boolean;
+  retomando?: boolean;
   /** Busca do cupom no servidor em curso (editar ou duplicar). */
   carregando?: boolean;
 }) {
@@ -157,12 +166,12 @@ export function CouponPortalCard({
       {(statusPortal === "esgotado" || statusPortal === "expirado") && (onEditar || onNovaCampanha) && (
         <p className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           {statusPortal === "esgotado"
-            ? "Esta campanha atingiu o limite de resgates. Os números dela ficam no histórico — para oferecer de novo, crie uma campanha nova a partir dela."
+            ? "Esta campanha atingiu o limite de resgates. A campanha anterior e seu histórico serão preservados. Para oferecer de novo, reative a partir dela — nasce uma campanha nova."
             : "A validade desta campanha terminou. Ao definir uma nova data, ela volta para análise e só fica disponível depois de aprovada."}
         </p>
       )}
 
-      {(onEditar || onReenviar || onExcluir || onNovaCampanha) && statusPortal !== "excluido" && (
+      {(onEditar || onReenviar || onExcluir || onNovaCampanha || onPausar || onRetomar) && statusPortal !== "excluido" && (
         <div className="mt-4 flex flex-wrap gap-2">
           {/* Fase 9/D1 — ESGOTADO É CAMPANHA ENCERRADA.
               Não se edita o que já cumpriu o limite: reabrir o mesmo cupom
@@ -173,7 +182,7 @@ export function CouponPortalCard({
             onNovaCampanha && (
               <Button size="sm" onClick={() => onNovaCampanha(item)} disabled={carregando}>
                 <Copy className="h-4 w-4" />
-                {carregando ? "Abrindo…" : "Criar nova campanha"}
+                {carregando ? "Abrindo…" : "Reativar cupom"}
               </Button>
             )
           ) : onEditar ? (
@@ -190,6 +199,18 @@ export function CouponPortalCard({
               )}
             </Button>
           ) : null}
+          {onPausar && statusPortal === "ativo" && (
+            <Button size="sm" variant="outline" onClick={() => onPausar(item)} disabled={pausando}>
+              <Pause className="h-4 w-4" />
+              {pausando ? "Pausando…" : "Pausar"}
+            </Button>
+          )}
+          {onRetomar && statusPortal === "pausado" && (
+            <Button size="sm" onClick={() => onRetomar(item)} disabled={retomando}>
+              <Play className="h-4 w-4" />
+              {retomando ? "Retomando…" : "Retomar"}
+            </Button>
+          )}
           {onReenviar && statusPortal === "rejeitado" && (
             <Button size="sm" onClick={() => onReenviar(item)} disabled={reenviando}>
               <RotateCcw className="h-4 w-4" />

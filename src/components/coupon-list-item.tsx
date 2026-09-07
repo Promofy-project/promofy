@@ -6,6 +6,7 @@ import { cn, formatBRLValue } from "@/lib/utils";
 import { rotuloEconomia } from "@/lib/cupom-campos";
 import { Icon } from "@/components/icon";
 import { FavoriteButton } from "@/components/favorite-button";
+import { CupomSinais } from "@/components/cupom-sinais";
 
 export function CouponListItem({
   cupom,
@@ -73,9 +74,10 @@ export function CouponListItem({
                 indisponivel ? "bg-danger" : "bg-success",
               )}
             />
-            {indisponivel ? "Indisponível" : "Ativo"}
+            {indisponivel ? "Temporariamente indisponível" : "Ativo"}
           </span>
         </p>
+        <CupomSinais cupom={cupom} compact className="mt-0.5" />
       </div>
 
       <FavoriteButton

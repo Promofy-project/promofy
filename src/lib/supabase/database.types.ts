@@ -1353,6 +1353,17 @@ export type Database = {
         }[]
       }
       excluir_cupom: { Args: { p_cupom_id: string }; Returns: Json }
+      indicadores_vitrine_cupons: {
+        Args: never
+        Returns: {
+          cupom_id: string
+          disponiveis: number | null
+          limite_total: number | null
+          ocupados: number | null
+          resgates_confirmados: number
+        }[]
+      }
+      pausar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       favoritar_estabelecimento: { Args: { p_est_id: string }; Returns: Json }
       gerar_codigo_cupom: { Args: never; Returns: string }
       hoje_brt: { Args: never; Returns: string }
@@ -1381,6 +1392,7 @@ export type Database = {
         Args: { p_nota: number; p_row_id: number }
         Returns: Json
       }
+      retomar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       saldo_pontos: { Args: never; Returns: number }
       sinais_descoberta: {
         Args: { p_desde: string }

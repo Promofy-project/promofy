@@ -122,7 +122,7 @@ function testarListagemC5() {
   // --- invariantes ---
   check("C5: 'excluido' é o status arquivado", ehArquivado("excluido"));
   check("C5: nenhum status operacional é arquivado",
-    !["ativo", "pendente", "rejeitado", "esgotado", "expirado"].some(ehArquivado));
+    !["ativo", "pausado", "pendente", "rejeitado", "esgotado", "expirado"].some(ehArquivado));
   check("C5: a lista operacional não muda a lista de origem",
     listaOperacional(lista).length === 2 && lista.length === 3);
   check("C5: sem excluídos, 'Todos' continua sendo a lista inteira",

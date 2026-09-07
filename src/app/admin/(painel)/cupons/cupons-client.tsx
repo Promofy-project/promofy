@@ -26,7 +26,7 @@ import {
 
 const STATUS: Record<string, { variant: BadgeProps["variant"]; label: string }> = {
   ativo: { variant: "success", label: "Ativo" },
-  indisponivel: { variant: "muted", label: "Indisponível" },
+  indisponivel: { variant: "muted", label: "Pausado" },
   pendente: { variant: "yellow-soft", label: "Pendente" },
   rejeitado: { variant: "danger", label: "Rejeitado" },
   esgotado: { variant: "muted", label: "Esgotado" },

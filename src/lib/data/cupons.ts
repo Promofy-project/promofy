@@ -93,6 +93,32 @@ type CupomRowCr02 = CupomRow & {
 export const SELECT_CUPOM_CATALOGO =
   "*, estabelecimentos(nome, cidade, bairro, latitude, longitude)";
 
+async function buscarMapasIndicadores(): Promise<{
+  restantes: Map<string, number | null>;
+  resgates: Map<string, number>;
+}> {
+  const supabase = createClient();
+  const { data } = await supabase.rpc("indicadores_vitrine_cupons");
+  const restantes = new Map<string, number | null>();
+  const resgates = new Map<string, number>();
+  for (const r of (data ?? []) as {
+    cupom_id: string;
+    limite_total: number | null;
+    ocupados: number | null;
+    disponiveis: number | null;
+    resgates_confirmados: number | null;
+  }[]) {
+    if (r.limite_total != null) {
+      restantes.set(
+        r.cupom_id,
+        r.disponiveis != null ? Math.max(0, Number(r.disponiveis)) : null,
+      );
+    }
+    resgates.set(r.cupom_id, Number(r.resgates_confirmados ?? 0));
+  }
+  return { restantes, resgates };
+}
+
 function estabDe(row: CupomRowCr02): EstabJoin | null {
   const e = row.estabelecimentos;
   if (!e) return null;
@@ -109,6 +135,7 @@ export function linhaParaCupom(
     latitude?: number | null;
     longitude?: number | null;
     restantes?: number | null;
+    resgatesConfirmados?: number | null;
   },
 ): Cupom {
   const cr = row as CupomRowCr02;
@@ -138,6 +165,7 @@ export function linhaParaCupom(
     valorCompraMinimo: sanearValorCompraMinimo(cr.valor_compra_minimo),
     limiteTotal: row.limite_total,
     restantes: est.restantes ?? null,
+    resgatesConfirmados: est.resgatesConfirmados ?? null,
     publicadoEm: cr.publicado_em ?? null,
     categoriaFolhaSlug: folhaSlug,
     rating: Number(row.rating ?? 0),
@@ -159,6 +187,7 @@ export function linhaCatalogoParaCupom(
   row: CupomRowCr02,
   filtro: FiltroTaxonomia,
   restantes?: number | null,
+  resgatesConfirmados?: number | null,
 ): Cupom {
   const est = estabDe(row);
   return linhaParaCupom(
@@ -171,6 +200,7 @@ export function linhaCatalogoParaCupom(
       latitude: est?.latitude != null ? Number(est.latitude) : null,
       longitude: est?.longitude != null ? Number(est.longitude) : null,
       restantes: restantes ?? null,
+      resgatesConfirmados: resgatesConfirmados ?? null,
     },
   );
 }
@@ -242,9 +272,17 @@ export async function buscarCuponsHome(
           ...visiveis.filter((r) => !favSet.has(r.estabelecimento_id)),
         ]
       : visiveis;
+  const inds = await buscarMapasIndicadores();
   return ordenados
     .slice(0, limite)
-    .map((row) => linhaCatalogoParaCupom(row, filtro));
+    .map((row) =>
+      linhaCatalogoParaCupom(
+        row,
+        filtro,
+        inds.restantes.get(row.id) ?? null,
+        inds.resgates.get(row.id) ?? null,
+      ),
+    );
 }
 
 // Retorno da RPC novidades_favoritos (predicado num lugar só: cupom
@@ -280,10 +318,16 @@ export async function buscarCuponsNovidades(): Promise<Cupom[]> {
     buscarFiltrosTaxonomia(),
   ]);
 
+  const inds = await buscarMapasIndicadores();
   const porId = new Map(
     (rows ?? []).map((row) => [
       row.id,
-      linhaCatalogoParaCupom(row, filtro),
+      linhaCatalogoParaCupom(
+        row,
+        filtro,
+        inds.restantes.get(row.id) ?? null,
+        inds.resgates.get(row.id) ?? null,
+      ),
     ]),
   );
   return ids.map((id) => porId.get(id)).filter((c): c is Cupom => Boolean(c));
@@ -307,7 +351,13 @@ export async function buscarCupomPorId(id: string): Promise<Cupom | null> {
   ]);
   if (!data) return null;
   if (filtrarVisiveis([data], hojeBrt()).length === 0) return null;
-  return linhaCatalogoParaCupom(data, filtro);
+  const inds = await buscarMapasIndicadores();
+  return linhaCatalogoParaCupom(
+    data,
+    filtro,
+    inds.restantes.get(data.id) ?? null,
+    inds.resgates.get(data.id) ?? null,
+  );
 }
 
 /**
@@ -424,8 +474,14 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
     throw new Error(`Falha ao buscar cupons dos favoritos: ${error.message}`);
   }
 
+  const inds = await buscarMapasIndicadores();
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaCatalogoParaCupom(row, filtro),
+    linhaCatalogoParaCupom(
+      row,
+      filtro,
+      inds.restantes.get(row.id) ?? null,
+      inds.resgates.get(row.id) ?? null,
+    ),
   );
 }
 
@@ -460,8 +516,14 @@ export async function buscarCuponsBusca(
     throw new Error(`Falha ao buscar cupons da busca: ${error.message}`);
   }
 
+  const inds = await buscarMapasIndicadores();
   return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
-    linhaCatalogoParaCupom(row, filtro),
+    linhaCatalogoParaCupom(
+      row,
+      filtro,
+      inds.restantes.get(row.id) ?? null,
+      inds.resgates.get(row.id) ?? null,
+    ),
   );
 }
 

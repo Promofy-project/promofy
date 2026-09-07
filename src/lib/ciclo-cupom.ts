@@ -35,9 +35,8 @@ export type StatusCupomBanco =
 /**
  * O status que o lojista vê.
  *
- * `indisponivel` colapsa em "ativo" (é oscilação operacional, não fim de
- * campanha) e um `ativo` com validade vencida aparece como "expirado" — a
- * tradução que a D1 acrescentou.
+ * `indisponivel` é o estado operacional "Pausado" (CLIENT-CALL-CLOSURE-01).
+ * Um `ativo`/`indisponivel` com validade vencida aparece como "expirado".
  *
  * `hoje` entra como parâmetro em vez de ser lido aqui: quem sabe qual é o
  * "hoje do negócio" (BRT) é o chamador, e uma função que consulta o relógio
@@ -59,8 +58,10 @@ export function statusPortalDe(
       return "pendente";
     case "rejeitado":
       return "rejeitado";
+    case "indisponivel":
+      return validadeFim && validadeFim < hoje ? "expirado" : "pausado";
     default:
-      // ativo | indisponivel — só a data separa "no ar" de "encerrado".
+      // ativo — só a data separa "no ar" de "encerrado".
       return validadeFim && validadeFim < hoje ? "expirado" : "ativo";
   }
 }
@@ -93,7 +94,14 @@ export function podeProrrogar(
  * vidas do mesmo cupom (decisão de produto da D1). `expirado` é a MESMA
  * campanha continuando, então prorroga no lugar.
  */
-export type AcaoCiclo = "editar" | "reenviar" | "prorrogar" | "nova_campanha" | "nenhuma";
+export type AcaoCiclo =
+  | "editar"
+  | "reenviar"
+  | "prorrogar"
+  | "nova_campanha"
+  | "pausar"
+  | "retomar"
+  | "nenhuma";
 
 export function acoesDoCard(statusPortal: StatusCupomPortal): AcaoCiclo[] {
   switch (statusPortal) {
@@ -105,6 +113,10 @@ export function acoesDoCard(statusPortal: StatusCupomPortal): AcaoCiclo[] {
       return ["prorrogar"];
     case "rejeitado":
       return ["editar", "reenviar"];
+    case "pausado":
+      return ["editar", "retomar"];
+    case "ativo":
+      return ["editar", "pausar"];
     default:
       return ["editar"];
   }

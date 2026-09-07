@@ -26,6 +26,7 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { BotaoCompartilhar } from "@/components/botao-compartilhar";
 import { RegistrarVisualizacao } from "@/components/registrar-visualizacao";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
+import { CupomSinais } from "@/components/cupom-sinais";
 
 // O /m inteiro já é dinâmico (o layout lê cookies); o detalhe deixa de
 // ser SSG do mock para poder cair no banco quando o id não está no mock
@@ -110,6 +111,7 @@ export default async function CupomDetalhe({
             Estou economizando{" "}
             {rotuloEconomia(formatBRL(cupom.economia), cupom.economiaVariavel)}
           </p>
+          <CupomSinais cupom={cupom} className="mt-3" />
         </div>
 
         {/* Benefícios Exclusivos */}

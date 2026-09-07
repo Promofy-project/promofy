@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { criarCupomAction, editarCupomAction } from "@/lib/actions/cupons";
+import { COPY_REATIVAR_HISTORICO } from "@/lib/cupom-indicadores";
 import type { CupomParaEdicao } from "@/lib/data/cupons";
 import { SeletorCategoriaEstab } from "@/components/seletor-categoria-estab";
 import {
@@ -80,6 +81,7 @@ export function NovoCupomForm({
   categoriaPrincipal,
   cupomInicial,
   estabelecimentoId,
+  duplicar = false,
 }: {
   categorias: {
     id: string;
@@ -90,16 +92,16 @@ export function NovoCupomForm({
   }[];
   categoriaPrincipal: string | null;
   /**
-   * Presente = modo EDITAR (edição rápida). Este form é um SUBCONJUNTO
-   * declarado: os campos que ele não controla (janela, agendamento, prazo)
-   * são exibidos como leitura e NUNCA entram no payload.
+   * Presente = modo EDITAR (edição rápida), salvo quando `duplicar`.
    */
   cupomInicial?: CupomParaEdicao;
   /** Fase 7/C4: pasta do bucket e validação da URL de exibição. */
   estabelecimentoId?: string | null;
+  /** Reativar esgotado: form pré-preenchido que CRIA campanha nova. */
+  duplicar?: boolean;
 }) {
   const router = useRouter();
-  const editando = Boolean(cupomInicial);
+  const editando = Boolean(cupomInicial) && !duplicar;
   const [titulo, setTitulo] = React.useState(cupomInicial?.titulo ?? "");
   const [beneficio, setBeneficio] = React.useState(cupomInicial?.beneficio ?? "");
   const [regrasTexto, setRegrasTexto] = React.useState(
@@ -126,7 +128,9 @@ export function NovoCupomForm({
   );
   // `undefined` = o usuário não mexeu na imagem. Nunca vira "" sozinho: era
   // assim que o form reduzido apagaria a foto em silêncio (Fase 6.5).
-  const [imagem, setImagem] = React.useState<string | undefined>(undefined);
+  const [imagem, setImagem] = React.useState<string | undefined>(
+    duplicar ? cupomInicial?.imagem : undefined,
+  );
   const [taxas, setTaxas] = React.useState<string[]>(cupomInicial?.taxas ?? []);
   const [validade, setValidade] = React.useState(cupomInicial?.validadeFim ?? "");
   const [limiteUsuario, setLimiteUsuario] = React.useState(
@@ -236,7 +240,7 @@ export function NovoCupomForm({
       horaFim,
     };
 
-    const r = cupomInicial
+    const r = editando && cupomInicial
       ? await editarCupomAction({
           id: cupomInicial.id,
           ...controlados,
@@ -504,12 +508,20 @@ export function NovoCupomForm({
 
       <div className="mt-auto pt-4">
         <Button type="submit" size="lg" className="w-full" disabled={salvando}>
-          {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Criar cupom"}
+          {salvando
+            ? "Salvando…"
+            : editando
+              ? "Salvar alterações"
+              : duplicar
+                ? "Reativar campanha"
+                : "Criar cupom"}
         </Button>
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {editando
             ? "Alterações relevantes fazem o cupom voltar para análise."
-            : "O cupom passa por análise antes de aparecer no app."}
+            : duplicar
+              ? COPY_REATIVAR_HISTORICO + " A nova campanha passa por análise."
+              : "O cupom passa por análise antes de aparecer no app."}
         </p>
       </div>
     </form>
