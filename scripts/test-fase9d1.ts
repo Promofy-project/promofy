@@ -81,8 +81,8 @@ function testarModuloPuro() {
     statusPortalDe("ativo", "2026-08-18", hoje) === "expirado");
   check("D1: validade == hoje ainda é ativo (o último dia vale inteiro)",
     statusPortalDe("ativo", hoje, hoje) === "ativo");
-  check("D1: indisponivel colapsa em ativo, não em expirado",
-    statusPortalDe("indisponivel", "2026-12-31", hoje) === "ativo");
+  check("D1: indisponivel é pausado (oscilação operacional), não expirado",
+    statusPortalDe("indisponivel", "2026-12-31", hoje) === "pausado");
   check("D1: indisponivel vencido também vira expirado",
     statusPortalDe("indisponivel", "2026-01-01", hoje) === "expirado");
   check("D1: esgotado do banco é respeitado, mesmo com validade futura",
@@ -550,8 +550,8 @@ async function main(): Promise<number> {
     // ============================================================
 
     const fonteCard = fonteSemComentarios("src/components/portal/coupon-portal-card.tsx");
-    check("D1: o card oferece 'Criar nova campanha' ao esgotado",
-      /onNovaCampanha/.test(fonteCard) && /nova campanha/i.test(fonteCard));
+    check("D1: o card oferece reativar (nova campanha) ao esgotado",
+      /onNovaCampanha/.test(fonteCard) && /Reativar cupom/i.test(fonteCard));
     check("D1: …e conduz o expirado à edição da validade",
       /Prorrogar e reenviar/i.test(fonteCard));
     check("D1: o card avisa que a campanha não volta ao ar sozinha",
