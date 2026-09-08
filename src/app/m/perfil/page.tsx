@@ -6,6 +6,7 @@ import {
   User,
   Gift,
   SlidersHorizontal,
+  ShieldCheck,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const opcoes: {
   { href: "/m/perfil/dados", icon: User, titulo: "Meus dados", sub: "Minhas informações da conta" },
   { href: "/m/perfil/convide", icon: Gift, titulo: "Convide seus amigos", sub: "Ganhe com indicações" },
   { href: "/m/perfil/preferencias", icon: SlidersHorizontal, titulo: "Preferências de cupons", sub: "Configure suas preferências" },
+  { href: "/m/perfil/privacidade", icon: ShieldCheck, titulo: "Privacidade e dados", sub: "Termos, exportar ou excluir sua conta" },
 ];
 
 export default function PerfilPage() {

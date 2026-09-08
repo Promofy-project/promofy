@@ -246,30 +246,41 @@ const CTA_NUMEROS = [
 
 const SOCIAIS: LucideIcon[] = [AtSign, Send, MessageCircle, Globe, Share2];
 
-const FOOTER_COLS: { titulo: string; links: string[] }[] = [
+const FOOTER_COLS: { titulo: string; links: { label: string; href: string }[] }[] = [
   {
     titulo: "Produto",
-    links: ["Para você", "Para empresas", "Planos", "Como funciona"],
+    links: [
+      { label: "Para você", href: "/para-voce" },
+      { label: "Para empresas", href: "/para-empresas" },
+      { label: "Planos", href: "#" },
+      { label: "Como funciona", href: "#" },
+    ],
   },
   {
     titulo: "Empresa",
-    links: ["Sobre a Promofy", "Seja parceiro", "Blog", "Trabalhe conosco"],
+    links: [
+      { label: "Sobre a Promofy", href: "#" },
+      { label: "Seja parceiro", href: "#" },
+      { label: "Blog", href: "#" },
+      { label: "Trabalhe conosco", href: "#" },
+    ],
   },
   {
     titulo: "Legal",
+    // Landing de parceiro → Termos do Parceiro (não do consumidor).
     links: [
-      "Termos de Uso",
-      "Política de Privacidade",
-      "Política de Cookies",
-      "PromoPoints",
+      { label: "Termos de Uso", href: "/legal/termos-parceiro" },
+      { label: "Política de Privacidade", href: "/legal/privacidade" },
+      { label: "Política de Cookies", href: "/legal/cookies" },
+      { label: "PromoPoints", href: "/legal/promopoints" },
     ],
   },
   {
     titulo: "Contato",
     links: [
-      "contato@promofy.com.br",
-      "privacidade@promofy.com.br",
-      "Palmas – TO",
+      { label: "contato@usepromofy.com", href: "mailto:contato@usepromofy.com" },
+      { label: "privacidade@usepromofy.com", href: "mailto:privacidade@usepromofy.com" },
+      { label: "Palmas – TO", href: "#" },
     ],
   },
 ];
@@ -808,9 +819,9 @@ export default function ParaEmpresasPage() {
                   </p>
                   <ul className="mt-3 flex flex-col gap-2 text-[15px] text-white/70">
                     {col.links.map((link) => (
-                      <li key={link}>
-                        <Link href="#" className="hover:text-white">
-                          {link}
+                      <li key={link.label}>
+                        <Link href={link.href} className="hover:text-white">
+                          {link.label}
                         </Link>
                       </li>
                     ))}
