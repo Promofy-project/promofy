@@ -45,8 +45,20 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
       >
         {isYellow && <WaveBackground className="absolute inset-0 z-0 h-full w-full" />}
 
-        {/* coluna de conteúdo acima das ondas */}
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        {/* coluna de conteúdo acima das ondas. mb-[...] reserva a faixa que o
+            CookieBanner (fixed, fora deste componente) ocupa por cima de
+            tudo — sem isso, o fim de uma tela curta (ex.: confirmação de
+            encerramento em /m/perfil/privacidade) cabe exatamente atrás do
+            banner, coberto e inclicável. `margin`, não `padding`: precisa
+            encolher a ALTURA visível da coluna (e por tabela do scroll e do
+            BottomNav dentro dela), não só alongar o scroll — senão dá pra
+            rolar até a última pixel do conteúdo continuar embaixo do
+            banner. Aplicado em qualquer breakpoint: no desktop o banner é
+            fixed à janela real (não ao mockup), mas o mockup também pode
+            encostar nela dependendo da altura da janela — reservar sempre
+            é inofensivo (o mockup só ganha alguns px a mais de scroll
+            interno) e correto nos dois casos. */}
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col mb-[var(--cookie-banner-h,0px)]">
           {/* status bar (apenas no device desktop) */}
           <div className="hidden items-center justify-between px-7 pt-3 text-[11px] font-semibold text-foreground lg:flex">
             <RelogioStatusBar />
