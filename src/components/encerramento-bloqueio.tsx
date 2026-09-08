@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { cancelarEncerramentoContaAction } from "@/lib/actions/legal";
+import { EMAIL_PRIVACIDADE } from "@/lib/documentos-legais";
 
 /**
  * Bloqueio de uso enquanto a conta não está `ativo` (Fase 11/12
@@ -31,8 +32,8 @@ export function EncerramentoBloqueio({
         <p className="max-w-xs text-sm text-muted-foreground">
           Esta conta foi encerrada e seus dados pessoais foram anonimizados.
           Fale com{" "}
-          <a href="mailto:privacidade@promofy.com.br" className="underline">
-            privacidade@promofy.com.br
+          <a href={`mailto:${EMAIL_PRIVACIDADE}`} className="underline">
+            {EMAIL_PRIVACIDADE}
           </a>{" "}
           se isso não deveria ter acontecido.
         </p>

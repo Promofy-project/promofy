@@ -61,7 +61,8 @@
     "test:client-returns-consumidor": "tsx scripts/test-client-returns-consumidor.ts",
     "test:client-call-closure": "tsx scripts/test-client-call-closure.ts",
     "test:product-complete-web-crm": "tsx scripts/test-product-complete-web-crm.ts",
-    "test:legal-privacy": "tsx scripts/test-legal-privacy-data-lifecycle.ts"
+    "test:legal-privacy": "tsx scripts/test-legal-privacy-data-lifecycle.ts",
+    "anonimizar-conta": "tsx scripts/concluir-anonimizacao-conta.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.0",

@@ -192,8 +192,8 @@ const FOOTER_COLS: { titulo: string; links: { label: string; href: string }[] }[
   {
     titulo: "Contato",
     links: [
-      { label: "contato@promofy.com.br", href: "mailto:contato@promofy.com.br" },
-      { label: "privacidade@promofy.com.br", href: "mailto:privacidade@promofy.com.br" },
+      { label: "contato@usepromofy.com", href: "mailto:contato@usepromofy.com" },
+      { label: "privacidade@usepromofy.com", href: "mailto:privacidade@usepromofy.com" },
       { label: "Palmas – TO", href: "#" },
     ],
   },

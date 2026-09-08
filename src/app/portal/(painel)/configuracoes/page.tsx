@@ -9,6 +9,7 @@ import {
   DOC_TERMOS_PARCEIRO,
   DOC_PRIVACIDADE,
   DOC_COOKIES,
+  EMAIL_PRIVACIDADE,
 } from "@/lib/documentos-legais";
 
 interface Opcao {
@@ -104,8 +105,8 @@ export default async function PortalConfiguracoes() {
             outro parceiro) e não guarda CPF nem texto de busca na
             auditoria de exportação. Para encerramento de conta de
             parceiro ou solicitações sobre dados de terceiros, fale com{" "}
-            <a href="mailto:privacidade@promofy.com.br" className="underline">
-              privacidade@promofy.com.br
+            <a href={`mailto:${EMAIL_PRIVACIDADE}`} className="underline">
+              {EMAIL_PRIVACIDADE}
             </a>
             — este fluxo ainda não é self-service no portal.
           </p>

@@ -1,21 +1,33 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
-import { TODOS_DOCUMENTOS_LEGAIS } from "@/lib/documentos-legais";
+import { TODOS_DOCUMENTOS_LEGAIS, EMAIL_PRIVACIDADE } from "@/lib/documentos-legais";
+import { PARAGRAFOS_PRIVACIDADE } from "@/lib/legal-content/privacidade";
+import { PARAGRAFOS_COOKIES } from "@/lib/legal-content/cookies";
+import { PARAGRAFOS_TERMOS_CONSUMIDOR } from "@/lib/legal-content/termos-consumidor";
+import { PARAGRAFOS_TERMOS_PARCEIRO } from "@/lib/legal-content/termos-parceiro";
+import { PARAGRAFOS_PROMOPOINTS } from "@/lib/legal-content/promopoints";
 
 export function generateStaticParams() {
   return TODOS_DOCUMENTOS_LEGAIS.map((d) => ({ doc: d.slug }));
 }
 
+const CONTEUDO_POR_SLUG: Record<string, readonly string[]> = {
+  privacidade: PARAGRAFOS_PRIVACIDADE,
+  cookies: PARAGRAFOS_COOKIES,
+  "termos-consumidor": PARAGRAFOS_TERMOS_CONSUMIDOR,
+  "termos-parceiro": PARAGRAFOS_TERMOS_PARCEIRO,
+  promopoints: PARAGRAFOS_PROMOPOINTS,
+};
+
 /**
- * Fase 18/19 LEGAL-PRIVACY-01: o texto jurídico integral destes 5
- * documentos NÃO está versionado neste repositório (confirmado em
- * docs/audits/2026-09-02-final-client-audit.md §1.3 e reconfirmado em
- * docs/audits/2026-09-08-legal-privacy-gap-analysis.md). Escrever o texto
- * aqui seria inventar cláusula jurídica — a instrução deste WP proíbe
- * isso explicitamente. A rota existe (não é 404 nem link morto) e mostra
- * o estado real: pendente de publicação, com contato para quem precisar
- * do documento antes da versão final entrar no ar.
+ * Fase 4 LEGAL-PRIVACY-01H: o texto vem da fonte primária do cliente
+ * (docs/legal/source/*.docx, extraído verbatim em
+ * src/lib/legal-content/*.ts) — não é mais um placeholder. "PENDING
+ * LEGAL FINALIZATION" saiu porque a fonte existe; o que resta pendente é
+ * só a data de publicação real (os arquivos trazem "[DATA DE
+ * PUBLICAÇÃO]") — por isso o aviso de rascunho fica FORA do texto
+ * jurídico, nunca dentro dele.
  */
 export default async function DocumentoLegalPage({
   params,
@@ -24,33 +36,48 @@ export default async function DocumentoLegalPage({
 }) {
   const { doc: slug } = await params;
   const doc = TODOS_DOCUMENTOS_LEGAIS.find((d) => d.slug === slug);
-  if (!doc) notFound();
+  const paragrafos = CONTEUDO_POR_SLUG[slug];
+  if (!doc || !paragrafos) notFound();
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 px-5 py-10">
       <Link href="/legal" className="text-sm text-muted-foreground underline">
         ← Todos os documentos
       </Link>
-      <h1 className="text-2xl font-extrabold text-foreground">{doc.titulo}</h1>
-      <p className="text-sm text-muted-foreground">Versão {doc.versao}</p>
 
-      <div className="mt-2 rounded-card border border-border bg-muted p-5">
-        <p className="text-sm font-semibold text-foreground">
-          PENDING LEGAL FINALIZATION
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          O texto integral deste documento está em publicação e ainda não
-          está hospedado nesta página. A versão vigente ({doc.versao}) é a
-          que o Promofy usa hoje para registrar aceites — aceitar aqui não
-          significa que o texto completo já esteja disponível para leitura
-          nesta URL.
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Precisa do texto agora?{" "}
-          <a href="mailto:privacidade@promofy.com.br" className="underline">
-            privacidade@promofy.com.br
-          </a>
-        </p>
+      {doc.status === "draft" && (
+        <div className="rounded-card border border-yellow/40 bg-yellow-soft px-4 py-3 text-sm text-foreground">
+          <p className="font-semibold">Documento em revisão — ainda não vigente para novo aceite.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O texto abaixo é o conteúdo recebido do time jurídico, exibido na íntegra para consulta. Ele
+            ainda não tem data de publicação/vigência definida e, por isso, não é usado hoje para exigir
+            aceite de ninguém.
+          </p>
+        </div>
+      )}
+
+      <article className="flex flex-col gap-3">
+        {paragrafos.map((texto, i) => (
+          <p
+            key={i}
+            className={
+              i === 0
+                ? "text-2xl font-extrabold text-foreground"
+                : /^\d+(\.\d+)*[.\s]/.test(texto) && texto.length < 80
+                  ? "mt-2 text-base font-bold text-foreground"
+                  : "text-sm leading-relaxed text-foreground"
+            }
+          >
+            {texto}
+          </p>
+        ))}
+      </article>
+
+      <div className="mt-4 rounded-card border border-border bg-muted p-4 text-xs text-muted-foreground">
+        Dúvidas sobre este documento:{" "}
+        <a href={`mailto:${EMAIL_PRIVACIDADE}`} className="underline">
+          {EMAIL_PRIVACIDADE}
+        </a>
       </div>
     </main>
   );

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { TODOS_DOCUMENTOS_LEGAIS } from "@/lib/documentos-legais";
+import { TODOS_DOCUMENTOS_LEGAIS, documentoAceitavel } from "@/lib/documentos-legais";
 
 type Resultado = { ok: true } | { ok: false; erro: string };
 
@@ -21,6 +21,12 @@ async function uidSessao(): Promise<string | null> {
 export async function registrarAceiteAction(documento: string): Promise<Resultado> {
   const doc = TODOS_DOCUMENTOS_LEGAIS.find((d) => d.documento === documento);
   if (!doc) return { ok: false, erro: "Documento desconhecido." };
+  // P0-1 (WP 01H): mesmo que algo chame esta action fora do gate (que já
+  // não oferece checkbox para draft), a barreira real fica aqui — nenhum
+  // aceite novo é gravado para documento que ainda não está publicado.
+  if (!documentoAceitavel(doc)) {
+    return { ok: false, erro: "Este documento ainda não está publicado." };
+  }
 
   const uid = await uidSessao();
   if (!uid) return { ok: false, erro: "Sessão expirada. Entre novamente." };
