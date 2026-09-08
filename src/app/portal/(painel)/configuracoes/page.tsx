@@ -1,8 +1,15 @@
-"use client";
+import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { formatShortDate } from "@/lib/utils";
+import { buscarAceitesDaSessao } from "@/lib/data/legal";
+import {
+  DOC_TERMOS_PARCEIRO,
+  DOC_PRIVACIDADE,
+  DOC_COOKIES,
+} from "@/lib/documentos-legais";
 
 interface Opcao {
   key: string;
@@ -38,7 +45,11 @@ const SECOES: { titulo: string; descricao: string; opcoes: Opcao[] }[] = [
   },
 ];
 
-export default function PortalConfiguracoes() {
+export default async function PortalConfiguracoes() {
+  const aceites = await buscarAceitesDaSessao();
+  const aceitosPorDoc = new Map(aceites.map((a) => [a.documento, a]));
+  const docsPrivacidade = [DOC_TERMOS_PARCEIRO, DOC_PRIVACIDADE, DOC_COOKIES];
+
   return (
     <>
       <PageHeader
@@ -47,6 +58,59 @@ export default function PortalConfiguracoes() {
       />
 
       <div className="flex flex-col gap-6">
+        <Card className="p-5 lg:p-6">
+          <h2 className="text-lg font-bold">Privacidade e dados</h2>
+          <p className="text-sm text-muted-foreground">
+            Documentos que regem sua conta de parceiro Promofy.
+          </p>
+
+          <div className="mt-4 divide-y divide-border">
+            {docsPrivacidade.map((doc) => {
+              const aceito = aceitosPorDoc.get(doc.documento);
+              const emDia = aceito?.versao === doc.versao;
+              return (
+                <div
+                  key={doc.documento}
+                  className="flex items-center justify-between gap-4 py-3.5"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/legal/${doc.slug}`}
+                      target="_blank"
+                      className="text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+                    >
+                      {doc.titulo}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {aceito
+                        ? emDia
+                          ? `Aceito em ${formatShortDate(aceito.aceitoEm)} (v${aceito.versao})`
+                          : `Versão anterior aceita (v${aceito.versao}) — nova versão v${doc.versao} disponível`
+                        : `Ainda não aceito (v${doc.versao})`}
+                    </p>
+                  </div>
+                  <Badge variant={emDia ? "success" : "muted"}>
+                    {emDia ? "Em dia" : "Pendente"}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Responsabilidades do CRM: você é controlador dos dados dos
+            clientes que resgataram cupons no seu estabelecimento — o
+            Promofy isola cada estabelecimento (você nunca vê dados de
+            outro parceiro) e não guarda CPF nem texto de busca na
+            auditoria de exportação. Para encerramento de conta de
+            parceiro ou solicitações sobre dados de terceiros, fale com{" "}
+            <a href="mailto:privacidade@promofy.com.br" className="underline">
+              privacidade@promofy.com.br
+            </a>
+            — este fluxo ainda não é self-service no portal.
+          </p>
+        </Card>
+
         {SECOES.map((secao) => (
           <Card key={secao.titulo} className="p-5 lg:p-6">
             <h2 className="text-lg font-bold">{secao.titulo}</h2>

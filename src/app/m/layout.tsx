@@ -13,6 +13,10 @@ import { AuthSync } from "@/components/auth-sync";
 import { createClient } from "@/lib/supabase/server";
 import { economiaDeJson } from "@/lib/economia";
 import type { EstadoCupomDTO, UsoCupomDTO } from "@/lib/actions/cupons";
+import { GateReaceite } from "@/components/gate-reaceite";
+import { EncerramentoBloqueio } from "@/components/encerramento-bloqueio";
+import { buscarPendenciasLegais, buscarStatusContaDaSessao } from "@/lib/data/legal";
+import type { DocumentoLegal } from "@/lib/documentos-legais";
 
 const INICIAL_ANONIMO: EstadoInicial = {
   logado: false,
@@ -42,11 +46,20 @@ export default async function MobileLayout({
   let inicial = INICIAL_ANONIMO;
   let favoritos: FavoritosInicial = { logado: false, ids: [] };
   let userId: string | null = null;
+  let pendenciasLegais: DocumentoLegal[] = [];
+  let statusConta: "ativo" | "encerramento_solicitado" | "anonimizado" | null = null;
 
   try {
     const supabase = createClient();
     const { data: claims } = await supabase.auth.getClaims();
     userId = claims?.claims?.sub ?? null;
+
+    if (userId) {
+      [pendenciasLegais, statusConta] = await Promise.all([
+        buscarPendenciasLegais("consumidor"),
+        buscarStatusContaDaSessao(),
+      ]);
+    }
 
     if (userId) {
       // estado + economia + favoritos (leitura sob RLS own) numa ida só
@@ -96,6 +109,19 @@ export default async function MobileLayout({
     favoritos = { logado: false, ids: [] };
   }
 
+  // Bloqueio/gate só se aplica a sessão autenticada — navegação anônima
+  // segue livre (mesma regra do resto do arquivo).
+  const bloqueado =
+    userId && (statusConta === "encerramento_solicitado" || statusConta === "anonimizado");
+  const gated = userId && !bloqueado && pendenciasLegais.length > 0;
+
+  let miolo = children;
+  if (bloqueado) {
+    miolo = <EncerramentoBloqueio status={statusConta as "encerramento_solicitado" | "anonimizado"} />;
+  } else if (gated) {
+    miolo = <GateReaceite pendentes={pendenciasLegais} />;
+  }
+
   return (
     <MobileFlowProvider>
       {/* Fora dos providers com key={userId}: fica montado estável na sessão
@@ -104,7 +130,7 @@ export default async function MobileLayout({
       <AuthSync serverLogado={Boolean(userId)} />
       <FavoritesProvider key={userId ?? "anon"} initial={favoritos}>
         <CouponStateProvider key={userId ?? "anon"} initial={inicial}>
-          <PhoneFrame>{children}</PhoneFrame>
+          <PhoneFrame>{miolo}</PhoneFrame>
         </CouponStateProvider>
       </FavoritesProvider>
     </MobileFlowProvider>

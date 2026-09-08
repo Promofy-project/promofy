@@ -1793,3 +1793,24 @@ read-only contra o hospedado; nada aplicado.
 
 > **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260907120000`.
 
+---
+
+## LEGAL-PRIVACY-01 — encerramento/anonimização de conta do consumidor
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 42 | `20260908120000_legal_privacy_data_lifecycle.sql` | Enum `status_conta` + `profiles.status`/`encerramento_solicitado_em`/`encerramento_concluido_em`. RPCs `solicitar_encerramento_conta` (owner, só `role='consumidor'`), `cancelar_encerramento_conta` (owner, só antes de anonimizado), `concluir_anonimizacao_conta` (`service_role`-only: zera nome/cpf/telefone/nascimento/cidade de `profiles`). |
+
+> **Obs. 42:** reaceite versionado de documentos (Termos Parceiro v3, Privacidade v2, etc.) **não** precisa de
+> schema novo — `aceites_documento` (mig. 38) já tinha grant/RLS de self-insert; a versão "vigente" de cada
+> documento vive em `src/lib/documentos-legais.ts`, não no banco. Anonimização só toca `profiles`: nenhuma
+> outra tabela (`cupons_usuario`, `cupom_eventos`, `pontos_transacoes`, `favoritos`, `avaliacoes`,
+> `aceites_documento`, `crm_exportacoes`, `validacao_tentativas`) guarda PII própria — só FK para
+> `profiles.id` — então zerar `profiles` já remove a PII em toda a superfície sem apagar linha nenhuma
+> (histórico agregado do estabelecimento e trilha de auditoria sobrevivem). Escopo só consumidor:
+> encerramento de conta de **parceiro** cascateia para clientes de terceiros e fica de fora (decisão de
+> produto separada). O texto jurídico integral dos 5 documentos segue ausente deste repositório — ver
+> `docs/audits/2026-09-08-legal-privacy-gap-analysis.md`.
+
+> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260907130000`.
+

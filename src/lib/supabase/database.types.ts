@@ -1115,10 +1115,13 @@ export type Database = {
           cidade: string | null
           cpf: string | null
           criado_em: string
+          encerramento_concluido_em: string | null
+          encerramento_solicitado_em: string | null
           id: string
           nascimento: string | null
           nome: string
           role: Database["public"]["Enums"]["papel_usuario"]
+          status: Database["public"]["Enums"]["status_conta"]
           telefone: string | null
         }
         Insert: {
@@ -1126,10 +1129,13 @@ export type Database = {
           cidade?: string | null
           cpf?: string | null
           criado_em?: string
+          encerramento_concluido_em?: string | null
+          encerramento_solicitado_em?: string | null
           id: string
           nascimento?: string | null
           nome?: string
           role?: Database["public"]["Enums"]["papel_usuario"]
+          status?: Database["public"]["Enums"]["status_conta"]
           telefone?: string | null
         }
         Update: {
@@ -1137,10 +1143,13 @@ export type Database = {
           cidade?: string | null
           cpf?: string | null
           criado_em?: string
+          encerramento_concluido_em?: string | null
+          encerramento_solicitado_em?: string | null
           id?: string
           nascimento?: string | null
           nome?: string
           role?: Database["public"]["Enums"]["papel_usuario"]
+          status?: Database["public"]["Enums"]["status_conta"]
           telefone?: string | null
         }
         Relationships: []
@@ -1327,6 +1336,11 @@ export type Database = {
       ativar_cupom: { Args: { p_cupom_id: string }; Returns: Json }
       avisos_nao_lidos: { Args: never; Returns: number }
       buscar_ativacoes_por_cpf: { Args: { p_cpf: string }; Returns: Json }
+      cancelar_encerramento_conta: { Args: never; Returns: Json }
+      concluir_anonimizacao_conta: {
+        Args: { p_usuario_id: string }
+        Returns: Json
+      }
       cpf_dv_valido: { Args: { p_cpf: string }; Returns: boolean }
       crm_cliente_detalhe: { Args: { p_usuario_id: string }; Returns: Json }
       crm_clientes: {
@@ -1426,6 +1440,7 @@ export type Database = {
           validacoes: number
         }[]
       }
+      solicitar_encerramento_conta: { Args: never; Returns: Json }
       validar_cupom: { Args: { p_codigo: string }; Returns: Json }
       validar_cupom_por_ativacao: {
         Args: { p_cpf: string; p_row_id: number }
@@ -1436,6 +1451,7 @@ export type Database = {
       acao_pontos: "resgate" | "nps" | "indicacao" | "visita" | "bonus"
       papel_usuario: "consumidor" | "lojista" | "admin"
       status_assinatura: "ativa" | "cancelada" | "expirada"
+      status_conta: "ativo" | "encerramento_solicitado" | "anonimizado"
       status_cupom:
         | "ativo"
         | "indisponivel"
@@ -1581,6 +1597,7 @@ export const Constants = {
       acao_pontos: ["resgate", "nps", "indicacao", "visita", "bonus"],
       papel_usuario: ["consumidor", "lojista", "admin"],
       status_assinatura: ["ativa", "cancelada", "expirada"],
+      status_conta: ["ativo", "encerramento_solicitado", "anonimizado"],
       status_cupom: [
         "ativo",
         "indisponivel",
