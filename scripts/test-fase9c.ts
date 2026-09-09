@@ -130,9 +130,15 @@ function testarListagemC5() {
 
   // --- NÃO-REGRESSÃO do consumidor (a C5 é só do portal) ---
   const fonteData = fonteSemComentarios("src/lib/data/cupons.ts");
+  // O número acompanha as queries de catálogo do consumidor. Eram 4 (home,
+  // novidades, favoritos, busca); CLIENT-RETURNS-03 acrescentou a 5ª —
+  // `buscarCuponsDoEstabelecimento`, do perfil público — e ela nasce com o
+  // MESMO filtro. O que esta asserção protege é isso: nenhuma query de
+  // consumidor perde `ativo/indisponivel`. Query nova sem o filtro derruba
+  // aqui, que é o efeito desejado.
   const filtrosConsumidor = (fonteData.match(/\.in\("status", \["ativo", "indisponivel"\]\)/g) ?? []).length;
-  check("C5: as queries do consumidor seguem filtrando ativo/indisponivel (4×)",
-    filtrosConsumidor === 4, `encontradas ${filtrosConsumidor}`);
+  check("C5: as queries do consumidor seguem filtrando ativo/indisponivel (5×)",
+    filtrosConsumidor === 5, `encontradas ${filtrosConsumidor}`);
   check("C5: a listagem do portal NÃO ganhou filtro de status no servidor — a fonte segue completa",
     !/from\("cupons"\)[\s\S]{0,400}?neq\("status", "excluido"\)/.test(fonteData));
 

@@ -71,9 +71,14 @@ export default async function CupomDetalhe({
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="flex-1 truncate text-base font-bold">
+        {/* CLIENT-RETURNS-03: o nome do estabelecimento passa a levar ao
+            PERFIL dele — que é onde a galeria de fotos do local vive. */}
+        <Link
+          href={`/m/estabelecimentos/${cupom.estabelecimentoId}`}
+          className="flex-1 truncate text-base font-bold hover:underline"
+        >
           {cupom.estabelecimento}
-        </h1>
+        </Link>
         {/* Fase 4: coração real — favorita o estabelecimento do cupom */}
         <FavoriteButton estabelecimentoId={cupom.estabelecimentoId} />
         <BotaoCompartilhar titulo={cupom.titulo} />

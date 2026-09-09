@@ -804,6 +804,41 @@ export type Database = {
           },
         ]
       }
+      estabelecimento_galeria: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          estabelecimento_id: string
+          id: string
+          imagem: string
+          ordem: number
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          estabelecimento_id: string
+          id?: string
+          imagem: string
+          ordem?: number
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          estabelecimento_id?: string
+          id?: string
+          imagem?: string
+          ordem?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estabelecimento_galeria_estabelecimento_id_fkey"
+            columns: ["estabelecimento_id"]
+            isOneToOne: false
+            referencedRelation: "estabelecimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estabelecimentos: {
         Row: {
           atualizado_em: string
@@ -1424,6 +1459,10 @@ export type Database = {
       }
       rejeitar_cupom: {
         Args: { p_cupom_id: string; p_motivo: string }
+        Returns: Json
+      }
+      reordenar_galeria_estabelecimento: {
+        Args: { p_ids: string[] }
         Returns: Json
       }
       responder_nps: {
