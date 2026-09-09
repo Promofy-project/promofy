@@ -1,9 +1,12 @@
 import { Store, MapPin, Tag } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { buscarGaleriaDaSessao } from "@/lib/data/galeria-estab";
 import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { rotuloHierarquico } from "@/lib/categoria-visual";
+import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { BotaoSair } from "@/components/botao-sair";
+import { GaleriaEstabelecimento } from "@/components/estab/galeria-estabelecimento";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +21,24 @@ export default async function PerfilPage() {
   const { data: claims } = await supabase.auth.getClaims();
   const uid = claims?.claims?.sub;
 
-  let est: { nome: string; cidade: string; status: string } | null = null;
+  let est: { id: string; nome: string; cidade: string; status: string; logo: string } | null =
+    null;
   let categoriaLabel: string | null = null;
   let segmentoLabel: string | null = null;
   if (uid) {
     const { data } = await supabase
       .from("estabelecimentos")
-      .select("nome, cidade, status, categoria_principal_id")
+      .select("id, nome, cidade, status, logo, categoria_principal_id")
       .eq("owner_id", uid)
       .maybeSingle();
     if (data) {
-      est = { nome: data.nome, cidade: data.cidade, status: data.status };
+      est = {
+        id: data.id,
+        nome: data.nome,
+        cidade: data.cidade,
+        status: data.status,
+        logo: data.logo ?? "",
+      };
       if (data.categoria_principal_id) {
         const catalogo = await buscarCatalogoResolucao();
         const vis = catalogo.find((c) => c.id === data.categoria_principal_id);
@@ -38,6 +48,16 @@ export default async function PerfilPage() {
     }
   }
 
+  // CLIENT-RETURNS-03 — PARIDADE COM O PORTAL. A galeria do perfil é
+  // gerenciável aqui também, pelo MESMO componente (`GaleriaEstabelecimento`).
+  // Deixar o Portal com galeria e o /e só de leitura seria pedir ao lojista
+  // que trocasse de aparelho para trocar uma foto do próprio balcão.
+  const galeria = est ? await buscarGaleriaDaSessao() : { imagens: [] };
+
+  const logoUrl = est
+    ? urlPublicaImagem(est.logo, est.id, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+    : null;
+
   return (
     <div className="flex flex-1 flex-col gap-5 p-5">
       <header className="pt-2">
@@ -46,9 +66,18 @@ export default async function PerfilPage() {
 
       <div className="rounded-card border border-border bg-card p-5">
         <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
-            <Store className="h-6 w-6" />
-          </div>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-xl object-cover"
+            />
+          ) : (
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Store className="h-6 w-6" />
+            </div>
+          )}
           <div className="min-w-0">
             <p className="truncate font-bold leading-tight">
               {est?.nome ?? "Estabelecimento"}
@@ -74,9 +103,19 @@ export default async function PerfilPage() {
         </dl>
       </div>
 
+      {est && (
+        <div className="rounded-card border border-border bg-card p-4">
+          <GaleriaEstabelecimento
+            nomeEstabelecimento={est.nome}
+            imagens={galeria.imagens.map((i) => ({ id: i.id, url: i.url }))}
+            compacto
+          />
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
-        Para editar dados, relatórios e campanhas, use a plataforma web do
-        estabelecimento.
+        Para editar nome, cidade, relatórios e campanhas, use a plataforma web
+        do estabelecimento.
       </p>
 
       <div className="mt-auto">

@@ -486,6 +486,42 @@ export async function buscarCuponsFavoritos(): Promise<Cupom[]> {
 }
 
 /**
+ * Cupons visíveis de UM estabelecimento (CLIENT-RETURNS-03, perfil público).
+ *
+ * Mesma visibilidade da home — `filtrarVisiveis` + os dois status do catálogo.
+ * A RLS de `cupons` já esconde cupom de estabelecimento não-ativo; o filtro
+ * aqui é o mesmo do resto do /m, para o perfil não virar uma vitrine com
+ * regra própria.
+ */
+export async function buscarCuponsDoEstabelecimento(
+  estabelecimentoId: string,
+): Promise<Cupom[]> {
+  const supabase = createClient();
+  const [{ data, error }, filtro] = await Promise.all([
+    supabase
+      .from("cupons")
+      .select(SELECT_CUPOM_CATALOGO)
+      .eq("estabelecimento_id", estabelecimentoId)
+      .in("status", ["ativo", "indisponivel"])
+      .order("ordem", { ascending: true }),
+    buscarFiltrosTaxonomia(),
+  ]);
+  if (error) {
+    throw new Error(`Falha ao buscar cupons do estabelecimento: ${error.message}`);
+  }
+
+  const inds = await buscarMapasIndicadores();
+  return filtrarVisiveis(data ?? [], hojeBrt()).map((row) =>
+    linhaCatalogoParaCupom(
+      row,
+      filtro,
+      inds.restantes.get(row.id) ?? null,
+      inds.resgates.get(row.id) ?? null,
+    ),
+  );
+}
+
+/**
  * Catálogo completo para a busca do /m (Fase 4) — mesma visibilidade da
  * home, sem limite (max_rows do PostgREST = 1000 cobre o catálogo).
  *

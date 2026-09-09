@@ -224,6 +224,53 @@ export async function buscarEstabelecimentosPublicos(
   });
 }
 
+/**
+ * Perfil público de UM estabelecimento (CLIENT-RETURNS-03).
+ *
+ * `null` quando o id não existe OU quando a RLS esconde — a página trata os
+ * dois como 404, porque distinguir "não existe" de "existe mas está suspenso"
+ * transformaria a rota num oráculo do cadastro do cliente.
+ *
+ * Sem `rating`: a coluna existe no schema mas é agregado herdado do protótipo,
+ * e avaliação de estabelecimento é decisão de produto ainda aberta (ver
+ * `/m/cupom/[id]`). Mostrar "4,8" aqui reintroduziria o número inventado que a
+ * Fase 9/Z3 tirou do app.
+ */
+export interface EstabPerfilPublico {
+  id: string;
+  nome: string;
+  cidade?: string;
+  bairro?: string;
+  logo: string;
+  categoriaVisual?: CategoriaVisual;
+}
+
+export async function buscarEstabelecimentoPublico(
+  id: string,
+): Promise<EstabPerfilPublico | null> {
+  const supabase = createClient();
+  const [{ data }, filtro] = await Promise.all([
+    supabase
+      .from("estabelecimentos")
+      .select("id, nome, cidade, bairro, logo, categoria_principal_id, status")
+      .eq("id", id)
+      .eq("status", "ativo")
+      .maybeSingle(),
+    buscarFiltrosTaxonomia(),
+  ]);
+  if (!data) return null;
+
+  const folhaId = data.categoria_principal_id ?? "";
+  return {
+    id: data.id,
+    nome: data.nome,
+    cidade: cidadeVisivel(data.cidade),
+    bairro: cidadeVisivel(data.bairro),
+    logo: data.logo ?? "",
+    categoriaVisual: folhaId ? filtro.visualDe(folhaId) : undefined,
+  };
+}
+
 /** Estabelecimento do lojista autenticado — autoridade é a sessão, não a URL. */
 export const buscarEstabelecimentoDaSessao = cache(
   async function buscarEstabelecimentoDaSessao(): Promise<{

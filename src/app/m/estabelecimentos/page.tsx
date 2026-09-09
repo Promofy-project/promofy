@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MapPin } from "lucide-react";
 
@@ -28,7 +29,15 @@ function EstabelecimentoCard({ e }: { e: EstabPublico }) {
   const categoria = e.categoriaVisual ?? CATEGORIA_VISUAL_FALLBACK;
   const rotulo = rotuloHierarquico(categoria.segmentoLabel, categoria.label);
   return (
-    <article className="flex items-start gap-3 rounded-card border border-border bg-card p-3.5 shadow-card">
+    // CLIENT-RETURNS-03: o card abre o PERFIL. O link cobre o cartão inteiro
+    // por baixo (`absolute inset-0`, mesmo padrão de `CouponListItem`) para o
+    // coração de favoritar continuar clicável por cima dele.
+    <article className="relative flex items-start gap-3 rounded-card border border-border bg-card p-3.5 shadow-card transition-shadow hover:shadow-card-hover">
+      <Link
+        href={`/m/estabelecimentos/${e.id}`}
+        aria-label={`Ver o perfil de ${e.nome}`}
+        className="absolute inset-0 z-[1] rounded-card"
+      />
       <div
         className="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
         style={{ background: categoria.gradiente }}
@@ -52,7 +61,9 @@ function EstabelecimentoCard({ e }: { e: EstabPublico }) {
         </div>
       </div>
 
-      <FavoriteButton estabelecimentoId={e.id} />
+      <span className="relative z-[2]">
+        <FavoriteButton estabelecimentoId={e.id} />
+      </span>
     </article>
   );
 }

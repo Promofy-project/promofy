@@ -1814,3 +1814,39 @@ read-only contra o hospedado; nada aplicado.
 
 > **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260907130000`.
 
+
+---
+
+## CLIENT-RETURNS-03 — galeria do PERFIL do estabelecimento
+
+| # | Arquivo | O que faz |
+|---|---|---|
+| 43 | `20260909120000_client_returns_estab_galeria.sql` | Tabela `public.estabelecimento_galeria` (`id`, `estabelecimento_id`, `imagem`, `ordem`, timestamps) com CHECK de FORMA do caminho + CHECK de PASTA PRÓPRIA + `unique (imagem)`; trigger `private.checar_limite_galeria` (guard técnico de 12); RLS (público lê de estabelecimento `ativo`, dono/admin leem a própria, dono insere/reordena/remove a própria); `revoke all` + `grant update (ordem)`; RPC `reordenar_galeria_estabelecimento(uuid[])`. |
+
+> **Obs. 43:** **Sem bucket novo e sem policy de storage nova.** A galeria reutiliza `cupom-imagens` e o
+> caminho `<estabelecimento_id>/<32 hex>.<ext>` — o mesmo contrato de `cupons.imagem` (mig. 22/23) e de
+> `estabelecimentos.logo` (mig. 37). As três policies de storage já provam posse pela pasta, e a 23 já exige
+> a forma do nome no INSERT; um bucket `galeria-*` exigiria replicar tudo isso. A migration 37 tinha adiado
+> este desenho explicitamente ("exigiria ordem, legenda e distinção lugar×produto"); é ele que chega aqui.
+>
+> **A pasta é provada duas vezes:** a policy de INSERT prova quem é dono da LINHA, e o CHECK
+> `starts_with(imagem, estabelecimento_id || '/')` prova que o ARQUIVO é da mesma pasta. Sem o segundo, um
+> dono de `e1` inseriria uma linha de `e1` apontando para `e2/<hash>.jpg` e exibiria a foto do vizinho.
+>
+> **UPDATE só de `ordem`** (`revoke update on table` + `grant update (ordem)`, nunca revoke por coluna):
+> repontar `imagem` de uma linha publicada trocaria o que o consumidor vê sem passar por lugar nenhum —
+> mesmo espírito da ausência de policy de UPDATE no storage (mig. 22). Trocar foto é remover + adicionar.
+>
+> **O reorder é RPC** e não N `PATCH`: uma falha no meio deixaria ordem parcial. A posse é derivada das
+> PRÓPRIAS LINHAS (não de `order by id limit 1` sobre a sessão, como faz o CRM), então a função não escolhe
+> um estabelecimento pelo lojista — não conserta o problema multi-estab global, mas não o amplia.
+>
+> **Ordem operacional (DB e storage não são uma transação):** adicionar = objeto → linha (insert falho
+> apaga o objeto); remover = linha → objeto (a linha é o que o consumidor vê). Quando o objeto não pode ser
+> apagado — policy da mig. 23, ou Storage fora do ar — a Action devolve `arquivoRemovido: false` e a UI diz
+> que a imagem saiu da galeria mas o arquivo ficou. Falha parcial declarada, não engolida.
+>
+> **Guard técnico de 12 imagens** — não é regra comercial e não veio do cliente. Vive no trigger (fronteira)
+> e em `src/lib/galeria-estabelecimento.ts` (mensagem), citados um no outro.
+>
+> **Não hospedada neste WP.** Local only até autorização de deploy. Não edita migrations ≤ `20260908120000`.

@@ -1,12 +1,14 @@
 import { Store, MapPin, Tag } from "lucide-react";
 
 import { buscarEstabelecimentoDaSessao } from "@/lib/data/estab";
+import { buscarGaleriaDaSessao } from "@/lib/data/galeria-estab";
 import { buscarCatalogoResolucao } from "@/lib/data/taxonomia";
 import { rotuloHierarquico } from "@/lib/categoria-visual";
 import { urlPublicaImagem } from "@/lib/imagem-cupom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { GaleriaEstabelecimento } from "@/components/estab/galeria-estabelecimento";
 import { EstabelecimentoForm } from "./estabelecimento-form";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,9 @@ const STATUS_VARIANT: Record<string, "success" | "yellow-soft" | "danger"> = {
  */
 export default async function PortalEstabelecimento() {
   const est = await buscarEstabelecimentoDaSessao();
+  // CLIENT-RETURNS-03 — galeria do PERFIL (local, ambiente, produtos,
+  // cardápio). Nada a ver com a imagem do cupom nem com a logo acima.
+  const galeria = est ? await buscarGaleriaDaSessao() : { imagens: [] };
 
   let categoriaLabel: string | null = null;
   let segmentoLabel: string | null = null;
@@ -52,7 +57,7 @@ export default async function PortalEstabelecimento() {
     <>
       <PageHeader
         title="Estabelecimento"
-        description="Dados do seu negócio. Nome, cidade e logo são gravados no cadastro."
+        description="Dados do seu negócio. Nome, cidade, logo e galeria são gravados no cadastro."
       />
 
       {!est ? (
@@ -116,9 +121,15 @@ export default async function PortalEstabelecimento() {
                 </dd>
               </div>
             </dl>
+            <div className="mt-6 border-t border-border pt-5">
+              <GaleriaEstabelecimento
+                nomeEstabelecimento={est.nome}
+                imagens={galeria.imagens.map((i) => ({ id: i.id, url: i.url }))}
+              />
+            </div>
             <p className="mt-6 text-xs text-muted-foreground">
-              Telefone, WhatsApp, Instagram, descrição e galeria ainda não
-              têm cadastro neste app.
+              Telefone, WhatsApp, Instagram e descrição ainda não têm cadastro
+              neste app.
             </p>
           </Card>
         </div>

@@ -7,9 +7,15 @@
  * app nativo este arquivo é reescrito (cropper do SO / lib nativa); a
  * geometria (`src/lib/recorte-imagem.ts`) e a Action de upload ficam.
  *
- * O que o lojista vê no quadro 2:1 é o que o card vai mostrar: pan +
- * zoom, sem biblioteca. O JPEG sai no máximo em 1200px de largura para
- * não inflar o arquivo além do que o card usa.
+ * O que o lojista vê no quadro é o que a superfície vai mostrar: pan +
+ * zoom, sem biblioteca. O JPEG sai no máximo na largura pedida, para não
+ * inflar o arquivo além do que a superfície usa.
+ *
+ * PARAMETRIZADO, NÃO DUPLICADO (CLIENT-RETURNS-03) — a galeria do perfil
+ * precisa de 4:3, o card de cupom de 2:1. Escrever um segundo cropper por
+ * causa de um número seria duplicar pan, zoom, clamp e export. `aspecto`,
+ * `larguraExport` e `titulo` são OPCIONAIS e caem exatamente nos valores do
+ * cupom quando ninguém passa nada — quem já usava não muda.
  */
 import * as React from "react";
 import { Check, X } from "lucide-react";
@@ -27,9 +33,22 @@ interface CropImagemProps {
   arquivo: File;
   onCancelar: () => void;
   onConfirmar: (arquivo: File) => void;
+  /** Largura / altura do recorte. Default: o card do cupom (2:1). */
+  aspecto?: number;
+  /** Largura máxima do JPEG exportado. Default: 1200 (card do cupom). */
+  larguraExport?: number;
+  /** Instrução no topo. Default: a do card do cupom. */
+  titulo?: string;
 }
 
-export function CropImagem({ arquivo, onCancelar, onConfirmar }: CropImagemProps) {
+export function CropImagem({
+  arquivo,
+  onCancelar,
+  onConfirmar,
+  aspecto = ASPECTO_IMAGEM_CUPOM,
+  larguraExport = LARGURA_EXPORT_IMAGEM_CUPOM,
+  titulo = "Enquadre a imagem no formato do card",
+}: CropImagemProps) {
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const imgRef = React.useRef<HTMLImageElement | null>(null);
   const [url, setUrl] = React.useState<string | null>(null);
@@ -112,8 +131,8 @@ export function CropImagem({ arquivo, onCancelar, onConfirmar }: CropImagemProps
         panY,
         zoom,
       });
-      const outW = Math.min(LARGURA_EXPORT_IMAGEM_CUPOM, Math.round(fonte.sw));
-      const outH = Math.max(1, Math.round(outW / ASPECTO_IMAGEM_CUPOM));
+      const outW = Math.min(larguraExport, Math.round(fonte.sw));
+      const outH = Math.max(1, Math.round(outW / aspecto));
       const canvas = document.createElement("canvas");
       canvas.width = outW;
       canvas.height = outH;
@@ -151,13 +170,11 @@ export function CropImagem({ arquivo, onCancelar, onConfirmar }: CropImagemProps
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-foreground/80 p-4 sm:p-6">
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3">
-        <p className="text-center text-sm font-semibold text-white">
-          Enquadre a imagem no formato do card
-        </p>
+        <p className="text-center text-sm font-semibold text-white">{titulo}</p>
         <div
           ref={viewportRef}
           className="relative w-full overflow-hidden rounded-xl bg-black touch-none"
-          style={{ aspectRatio: `${ASPECTO_IMAGEM_CUPOM} / 1` }}
+          style={{ aspectRatio: `${aspecto} / 1` }}
           onPointerDown={pointerDown}
           onPointerMove={pointerMove}
           onPointerUp={pointerUp}
