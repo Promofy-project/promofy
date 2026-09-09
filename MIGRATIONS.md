@@ -1821,7 +1821,7 @@ read-only contra o hospedado; nada aplicado.
 
 | # | Arquivo | O que faz |
 |---|---|---|
-| 43 | `20260909120000_client_returns_estab_galeria.sql` | Tabela `public.estabelecimento_galeria` (`id`, `estabelecimento_id`, `imagem`, `ordem`, timestamps) com CHECK de FORMA do caminho + CHECK de PASTA PRÓPRIA + `unique (imagem)`; trigger `private.checar_limite_galeria` (guard técnico de 12); RLS (público lê de estabelecimento `ativo`, dono/admin leem a própria, dono insere/reordena/remove a própria); `revoke all` + `grant update (ordem)`; RPC `reordenar_galeria_estabelecimento(uuid[])`. |
+| 43 | `20260909110000_client_returns_estab_galeria.sql` | Tabela `public.estabelecimento_galeria` (`id`, `estabelecimento_id`, `imagem`, `ordem`, timestamps) com CHECK de FORMA do caminho + CHECK de PASTA PRÓPRIA + `unique (imagem)`; trigger `private.checar_limite_galeria` (guard técnico de 12); RLS (público lê de estabelecimento `ativo`, dono/admin leem a própria, dono insere/reordena/remove a própria); `revoke all` + `grant update (ordem)`; RPC `reordenar_galeria_estabelecimento(uuid[])`. |
 
 > **Obs. 43:** **Sem bucket novo e sem policy de storage nova.** A galeria reutiliza `cupom-imagens` e o
 > caminho `<estabelecimento_id>/<32 hex>.<ext>` — o mesmo contrato de `cupons.imagem` (mig. 22/23) e de

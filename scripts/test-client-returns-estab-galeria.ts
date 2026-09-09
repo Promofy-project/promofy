@@ -22,7 +22,7 @@
  * Cobertura do WP:
  *   segurança  1–10 · funcional 11–20
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -209,7 +209,7 @@ function testarFonte() {
   const eperfil = fonteSemComentarios("src/app/e/perfil/page.tsx");
   const perfilConsumidor = fonteSemComentarios("src/app/m/estabelecimentos/[id]/page.tsx");
   const componente = fonteSemComentarios("src/components/estab/galeria-estabelecimento.tsx");
-  const migration = fonte("supabase/migrations/20260909120000_client_returns_estab_galeria.sql");
+  const migration = fonte("supabase/migrations/20260909110000_client_returns_estab_galeria.sql");
   const actions = fonte("src/lib/actions/galeria-estab.ts");
 
   // 16 + 17 + 12. paridade Portal ↔ /e pelo MESMO componente
@@ -238,6 +238,32 @@ function testarFonte() {
     fonteSemComentarios("src/components/galeria-perfil-estab.tsx").includes(
       "if (validas.length === 0) return null;",
     ),
+  );
+
+  // CLIENT-RETURNS-03H — versão da migration não colide com nenhuma outra
+  // no diretório local. A galeria nasceu em 20260909120000 e colidiu (em
+  // branches separadas) com duas migrations reservadas de BILLING-01
+  // (20260909120000 e 20260909130000); renumerada para 20260909110000, que
+  // fica estritamente entre a última canônica (20260908120000) e o horário
+  // antigo. Esta asserção prova que o prefixo de timestamp da galeria é
+  // ÚNICO entre os arquivos presentes NESTA árvore de trabalho — não prova
+  // ausência de colisão em branches que não existem localmente, mas prova
+  // que renumerar não introduziu uma colisão nova aqui.
+  const arquivosMigracao = readdirSync("supabase/migrations").filter((f) => f.endsWith(".sql"));
+  const prefixos = arquivosMigracao.map((f) => f.slice(0, 14));
+  const duplicados = prefixos.filter((p, i) => prefixos.indexOf(p) !== i);
+  check(
+    "versao. nenhum prefixo de timestamp de migration se repete na árvore local",
+    duplicados.length === 0,
+    JSON.stringify(Array.from(new Set(duplicados))),
+  );
+  check(
+    "versao. a migration da galeria está no novo caminho (20260909110000)",
+    arquivosMigracao.includes("20260909110000_client_returns_estab_galeria.sql"),
+  );
+  check(
+    "versao. o caminho antigo (20260909120000) não existe mais",
+    !arquivosMigracao.includes("20260909120000_client_returns_estab_galeria.sql"),
   );
 
   // Reúso de storage: sem bucket novo, sem policy de storage nova

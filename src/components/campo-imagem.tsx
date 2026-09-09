@@ -115,7 +115,19 @@ export function CampoImagem({
     <div className="space-y-2">
       <span className="text-sm font-medium text-foreground">{rotulo}</span>
 
-      <div className="flex items-start gap-3">
+      {/*
+        CLIENT-RETURNS-03H — empilha no mobile, retoma lado a lado a partir de
+        `sm:`. Medido: dentro de um Card que é ITEM DE GRID (min-width:auto por
+        padrão em grid items), a caixa de prévia (w-40) somada ao botão
+        "Escolher imagem" (whitespace-nowrap, não quebra linha) excede a
+        largura disponível em 390px — e o botão não pode encolher abaixo do
+        próprio texto. Empilhar remove a disputa por largura sem mudar nada a
+        partir de `sm:`. O mesmo componente é usado no logo
+        (/portal/estabelecimento, mesma superfície da galeria) e na imagem do
+        cupom (/portal/cupons, /e/cupom/novo) — mesma causa, corrigida aqui
+        uma única vez.
+      */}
+      <div className="flex flex-col items-start gap-3 sm:flex-row">
         <div className="grid h-20 w-40 shrink-0 place-items-center overflow-hidden rounded-xl bg-muted/70">
           {mostrando ? (
             // eslint-disable-next-line @next/next/no-img-element -- next/image não é
@@ -126,7 +138,7 @@ export function CampoImagem({
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <input
             ref={inputRef}
             type="file"
